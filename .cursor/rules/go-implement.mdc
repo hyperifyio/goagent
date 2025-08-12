@@ -1,0 +1,14 @@
+---
+description: "Drive development from FEATURE\_CHECKLIST.md: implement each item and check it off in the file once completed."
+alwaysApply: false
+---
+
+This rule makes the checklist file named FEATURE\_CHECKLIST.md the working backlog for day-to-day development. The assistant opens this file at the start of work, treats unchecked checkbox lines as actionable tasks, and proceeds item by item. A task is considered done only when its code and tests are implemented and the assistant has updated the same checklist line from an unchecked box to a checked box. The file serves as the single source of truth for progress, so the assistant keeps it accurate and synchronized with the codebase at all times.
+
+Tasks are written as GitHub-style checkbox entries with a short, imperative title and optional clarifying text on the same line. If the line contains an explicit priority indicator such as a leading bracketed number or level tag, the assistant prefers lower numbers first; otherwise it works top to bottom. When a task mentions an external issue identifier or a full URL, the assistant preserves that reference and uses it for traceability in commit messages and in any notes added to the checklist.
+
+The assistant works in small, focused increments. It selects the next highest-priority unchecked task, implements the minimal code to satisfy it, writes or updates tests to verify the behavior, and commits only the staged changes related to that task. After the implementation is complete and tests pass, the assistant edits FEATURE\_CHECKLIST.md in the same change set to flip the task’s checkbox to checked and, if helpful, appends a terse completion note such as a date or build reference. The assistant does not mark a checkbox before the behavior is actually present and verified.
+
+If the staging area unintentionally mixes changes for multiple tasks, the assistant either restages to isolate the current task or performs separate commits so that each commit corresponds to a single checklist line. The assistant avoids bulk edits to the checklist and keeps diffs minimal by modifying only the specific task line. It never pushes to any remote; publication and synchronization are out of scope for this rule.
+
+When the checklist is missing, the assistant creates a minimal FEATURE\_CHECKLIST.md at the repository root and populates it with the tasks that are currently known from the immediate scope of work so that progress can be tracked from the outset. When merge conflicts occur in the checklist, the assistant resolves them conservatively by preserving existing check states and reapplying the smallest necessary edit to the intended task line, then revalidates that the checked status matches the implemented behavior.
