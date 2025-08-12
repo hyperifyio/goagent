@@ -9,6 +9,7 @@ Badges: [MIT](LICENSE)
 - Quick start
 - Features
 - Security model
+- Sequence diagram
 - Tests
 - Roadmap and contributing
 - License and credits
@@ -46,6 +47,9 @@ Expected behavior: the model may trigger the `get_time` tool; the CLI runs `./to
 - Tool manifest `tools.json` with JSON Schema for parameters
 - Per-call timeouts; argv-only tool execution with JSON stdin/stdout
 - Deterministic error mapping for tools: `{"error":"..."}`
+
+### Sequence diagram
+See `docs/diagrams/agentcli-seq.md` for the message flow.
 
 ### Security model
 - Tools are an explicit allowlist from `tools.json`

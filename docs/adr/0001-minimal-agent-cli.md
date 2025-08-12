@@ -23,3 +23,6 @@ We want a small, non-interactive CLI that talks to an OpenAI-compatible API (Cha
 
 ## Issue
 Link to the canonical GitHub issue once created.
+
+## Diagram
+See `docs/diagrams/agentcli-seq.md` for the sequence diagram illustrating the loop.
