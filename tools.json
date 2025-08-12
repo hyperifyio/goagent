@@ -1,0 +1,17 @@
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "description": "Return the current local time for a given IANA timezone, as ISO 8601 string.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "timezone": {"type": "string", "description": "IANA TZ, e.g., Europe/Helsinki"}
+        },
+        "required": ["timezone"],
+        "additionalProperties": false
+      },
+      "command": ["./bin/timecli"]
+    }
+  ]
+}
