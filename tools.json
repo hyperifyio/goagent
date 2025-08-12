@@ -6,15 +6,15 @@
       "schema": {
         "type": "object",
         "properties": {
-          "timezone": {
+          "tz": {
             "type": "string",
             "description": "IANA timezone, e.g. Europe/Helsinki"
           }
         },
-        "required": ["timezone"],
+        "required": ["tz"],
         "additionalProperties": false
       },
-      "command": ["./bin/timecli"],
+      "command": ["./tools/get_time"],
       "timeoutSec": 5
     }
   ]

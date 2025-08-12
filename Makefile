@@ -1,33 +1,24 @@
 SHELL := /bin/bash
 
-BINDIR ?= bin
+GO ?= go
+CGO_ENABLED ?= 0
 
-GO := go
+.PHONY: tidy build build-tools test clean lint
 
-.PHONY: all build build-tools tidy test smoke fmt vet
-
-all: tidy build build-tools
-
-$(BINDIR):
-	mkdir -p $(BINDIR)
-
-build: $(BINDIR)
-	$(GO) build -o $(BINDIR)/agentcli ./cmd/agentcli
-
-build-tools: $(BINDIR)
-	$(GO) build -o $(BINDIR)/timecli ./tools/timecli
-
-fmt:
-	$(GO) fmt ./...
-
-vet:
-	$(GO) vet ./...
-
-tidy:
+ tidy:
 	$(GO) mod tidy
 
-# Basic smoke test requires a running OpenAI-compatible API at $OAI_BASE_URL or http://localhost:1234/v1
-smoke: build build-tools
-	OAI_BASE_URL=$${OAI_BASE_URL:-http://localhost:1234/v1} \
-	OAI_MODEL=$${OAI_MODEL:-openai/gpt-oss-20b} \
-	$(BINDIR)/agentcli -prompt "What's the local time in Helsinki? Use get_time." -tools ./tools.json -timeout 60s -debug
+ build:
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o bin/agentcli ./cmd/agentcli
+
+ build-tools:
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/get_time ./tools/get_time.go
+
+ test:
+	$(GO) test ./...
+
+ clean:
+	rm -rf bin tools/get_time
+
+ lint:
+	@echo "Lint placeholder: configure golangci-lint in a later step"

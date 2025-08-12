@@ -32,13 +32,14 @@ Ensure an OpenAI-compatible API is reachable, e.g. local server at `http://local
 ```bash
 export OAI_BASE_URL=http://localhost:1234/v1
 export OAI_MODEL=openai/gpt-oss-20b
+make build build-tools
 ./bin/agentcli \
-  -prompt "What's the local time in Helsinki? Use get_time." \
+  -prompt "What's the local time in Helsinki? If tools are available, call get_time." \
   -tools ./tools.json \
   -debug
 ```
 
-Expected behavior: the model triggers the `get_time` tool, the CLI runs `./bin/timecli` with JSON stdin, appends the result as a `tool` message, asks the model again, then prints a one-line final answer.
+Expected behavior: the model may trigger the `get_time` tool; the CLI runs `./tools/get_time` with JSON stdin, appends the result as a `tool` message, asks the model again, then prints a one-line final answer.
 
 ### Features
 - OpenAI-compatible `POST /v1/chat/completions` via `net/http` (no SDK)
@@ -53,9 +54,9 @@ Expected behavior: the model triggers the `get_time` tool, the CLI runs `./bin/t
 - Treat model outputs as untrusted input; never pass to a shell
 
 ### Tests
-Unit and integration tests are being added; a basic smoke path is available:
+Run the suite:
 ```bash
-make smoke
+go test ./...
 ```
 
 ### Roadmap and contributing
