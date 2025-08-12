@@ -30,4 +30,4 @@ tidy:
 smoke: build build-tools
 	OAI_BASE_URL=$${OAI_BASE_URL:-http://localhost:1234/v1} \
 	OAI_MODEL=$${OAI_MODEL:-openai/gpt-oss-20b} \
-	$(BINDIR)/agentcli -prompt "What's the local time in Helsinki? Use get_time." -tools ./tools.json -debug -model $$OAI_MODEL
+	$(BINDIR)/agentcli -prompt "What's the local time in Helsinki? Use get_time." -tools ./tools.json -timeout 60s -debug
