@@ -5,6 +5,7 @@ import (
     "errors"
     "fmt"
     "io"
+    "os"
     "os/exec"
     "time"
 )
@@ -21,7 +22,12 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	ctx, cancel := context.WithTimeout(parentCtx, to)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+    cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+    // Scrub environment to a minimal allowlist: PATH and HOME only
+    var env []string
+    if v := os.Getenv("PATH"); v != "" { env = append(env, "PATH="+v) }
+    if v := os.Getenv("HOME"); v != "" { env = append(env, "HOME="+v) }
+    cmd.Env = env
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdin pipe: %w", err)
