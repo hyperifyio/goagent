@@ -21,6 +21,7 @@ Preflight continuity (must do before any new work):
 - At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line and one `--- WORKING ON ---` banner with the exact checklist line before any commands.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
  - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, prefer RFC3339.
+ - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -53,7 +54,8 @@ Deterministic outputs to the activity log (kept concise):
 - For reads/searches, log the exact query and the count of matches, not full content.
 - For commands, log: `CMD:` abridged command, scope/package, duration, exit code, pass/fail. Redact secrets.
 - Suppress meta narration; prefer one-line operational entries that enable fast resumption.
- - Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
+- Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
+ - If output would be split into many tiny lines, buffer locally and emit a single concise line per marker. Never emit one word per line.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
 - `DATE: <UTC RFC3339>`
@@ -103,6 +105,12 @@ Suggested grep snippets (for reproducible counts):
  - SEARCH markers: `rg -n "^SEARCH:" logs/coding.log | wc -l`
  - LIST markers: `rg -n "^LIST:" logs/coding.log | wc -l`
  - Legacy noisy lines (to eliminate): `rg -n "Searched files|^Listed(\s|$)" logs/coding.log | wc -l`
+If `rg` is unavailable in the shell environment, use grep fallbacks (no installs):
+- Timeouts: `grep -Ein "timeout|timed out|Timeout after|deadline exceeded|context deadline" logs/coding.log | wc -l`
+- Success markers: `grep -En "^--- SUCCESSFUL END ---" logs/coding.log | wc -l`
+- Work banners: `grep -En "^--- WORKING ON ---" logs/coding.log | wc -l`
+- Error banners: `grep -En "^--- ERROR:.*---$" logs/coding.log | wc -l`
+- Verbose chatter: `grep -En "^(I'|I am|I'll|I'm going to)" logs/coding.log | wc -l`
 
 Quality gates to run in this order where relevant:
 - go fmt/vet/lint (or `make lint` if available).
