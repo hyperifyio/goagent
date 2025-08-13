@@ -104,11 +104,21 @@ echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/exec
 ### fs_read_file tool example
 Build the file‑read tool and read a file from the repository root (paths must be repo‑relative):
 ```bash
-go build -o tools/fs_read_file ./tools/fs_read_file.go
+make build-tools
 printf 'hello world' > tmp_readme_demo.txt
 echo '{"path":"tmp_readme_demo.txt"}' | ./tools/fs_read_file | jq .
 # => {"contentBase64":"aGVsbG8gd29ybGQ=","sizeBytes":11,"eof":true}
 rm -f tmp_readme_demo.txt
+```
+
+### fs_write_file tool example
+Atomically write a file using base64 content:
+```bash
+make build-tools
+echo -n 'hello world' | base64 > b64.txt
+echo '{"path":"tmp_write_demo.txt","contentBase64":"'"$(cat b64.txt)"'"}' | ./tools/fs_write_file | jq .
+cat tmp_write_demo.txt
+rm -f tmp_write_demo.txt b64.txt
 ```
 
 ### Features
