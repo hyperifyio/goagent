@@ -18,9 +18,9 @@ Preflight continuity (must do before any new work):
 - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
 - In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
-- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line and one `--- WORKING ON ---` banner with the exact checklist line before any commands. Do not print any lead‑in commentary before these markers.
+- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line, then `ITER_START:` (see format below), and one `--- WORKING ON ---` banner with the exact checklist line before any commands. Do not print any lead‑in commentary before these markers.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
- - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, prefer RFC3339.
+- Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, REQUIRE RFC3339 in UTC. If both appear, prefer RFC3339 for any calculations.
  - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
 
 Deterministic task selection and ordering:
@@ -31,9 +31,10 @@ Deterministic task selection and ordering:
   3) If a task risks flakiness (network/long builds), defer it behind a smaller deterministic subtask that advances the same goal (e.g., write a failing unit test first).
 - Once a task is picked, stick to it until completed, blocked by an external dependency, or timeboxed out. No oscillation between tasks.
 - If two actions seem equally valid, apply tie-breakers below immediately; do not pause to reconsider.
+ - Avoid re-scanning the entire checklist during a single iteration; read it at most once at the start of the iteration.
 
 Commit isolation and restaging discipline:
-- Before committing, ensure only files relevant to the current task are staged.
+- Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
 - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
@@ -43,7 +44,7 @@ Commit isolation and restaging discipline:
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
 
 Execution timeboxing and recovery:
-- Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer.
+- Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
 - Prefer narrowed scopes: run `go test` on touched packages first; only expand to `./...` if scope is unclear or failures span packages.
 - On timeouts:
   - Capture minimal diagnostics: command, parameters, duration, exit code, and the last 50 lines of stderr/stdout.
@@ -52,7 +53,7 @@ Execution timeboxing and recovery:
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
 
 Rerun guard (within and across iterations):
-- Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration. If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason.
+- Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration. If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason. Never repeat a full-repo grep/scan if the previous iteration already captured the exact targets.
 - Only retry once after applying a concrete mitigation (narrowed scope, adjusted flags, smaller target). Otherwise, switch to a safer subtask.
 
 Deterministic outputs to the activity log (kept concise):
@@ -67,17 +68,18 @@ Strict chatter ban (enforced examples):
 - Replace legacy noisy lines like `Searched files (...)` or `Listed <path>` with the compact `SEARCH:` and `LIST:` markers.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
-- `DATE: <UTC RFC3339>`
+- `DATE: <UTC RFC3339>` (must precede all other markers)
+- `ITER_START: <UTC RFC3339>` (mandatory)
 - `--- WORKING ON --- <exact FEATURE_CHECKLIST.md line>`
 - `TASK: <one-line subtask plan>`
 - `CMD: <command> | scope=<pkg-or-path> | exit=<code> | ms=<duration>`
 - `TEST: <scope> | pass=<n> | fail=<n> | ms=<duration>`
 - `PASS: <short reason>` or `FAIL: <short reason>`
 - `--- SUCCESSFUL END --- <line-or-id>` or `--- ERROR: <short reason> ---`
+- `ITER_END: <UTC RFC3339>` (mandatory; emit immediately before the success/error banner)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 
-Optional iteration segment markers (accepted in addition to the above for clearer boundaries):
-- `ITER_START: <RFC3339>` at the very beginning (after `DATE:`), and `ITER_END: <RFC3339>` at the end. Keep both to a single line if used.
+Iteration segment markers are mandatory (see above). They enable precise, reproducible duration calculations and prevent ambiguous parsing in the presence of streamed output.
 
 Additional lightweight markers to replace noisy chatter:
 - `SEARCH: query="<pattern>" | glob=<glob-or-none> | files=<n> | matches=<n>`
@@ -102,10 +104,10 @@ Baseline and validation (for refining this rule):
 - Before editing this rule, compute a baseline from the activity log (prefer `logs/coding.log`, else `logs/improving.log`). If both are missing/empty, state that baseline data is unavailable.
 - Use deterministic searches to gather:
   - Counts: timeouts, retries/reruns without new info, empty/no-op commits, oscillations between tasks, ambiguous restarts.
-  - Durations: if timestamps are present, estimate median and p95 iteration time between `--- WORKING ON ---` and `--- SUCCESSFUL END ---`/`--- ERROR:` markers. If timestamps are absent, record that durations are unavailable.
+  - Durations: if `ITER_START:`/`ITER_END:` are present, compute durations between them. Otherwise, estimate using the nearest `DATE:` markers adjacent to each iteration. If timestamps are absent, record that durations are unavailable.
 - In the commit message for this change, include two grep-friendly lines:
   - `Baseline: timeouts=<n>, retries=<n>, oscillations=<n>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
-  - `After: timeouts=<n>, retries=<n>, oscillations=<n>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
+  - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|unavailable>/<p95|unavailable>`
 - After editing this rule, validate by running one representative unchecked checklist item end to end (choose the smallest deterministic one per selection rules). Measure the same metrics again from the log tail. Accept the revision only if iteration time improves or remains equal with strictly preserved gates and all checks green.
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
 
