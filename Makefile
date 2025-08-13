@@ -5,7 +5,7 @@ CGO_ENABLED ?= 0
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 
-.PHONY: tidy build build-tools test clean lint
+.PHONY: tidy build build-tools test clean lint fmtcheck
 
 tidy:
 	$(GO) mod tidy
@@ -23,4 +23,19 @@ clean:
 	rm -rf bin tools/get_time
 
 lint:
-	@echo "Lint placeholder: configure golangci-lint in a later step"
+	@set -euo pipefail; \
+	if ! command -v golangci-lint >/dev/null 2>&1; then \
+		 echo "Installing golangci-lint..."; \
+		 GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1; \
+	fi; \
+	golangci-lint version; \
+	golangci-lint run --timeout=5m; \
+	$(GO) vet ./...; \
+	$(MAKE) fmtcheck
+
+fmtcheck:
+	@echo "Checking gofmt..."; \
+	files=$$(gofmt -s -l .); \
+	if [ -n "$$files" ]; then \
+		echo "Files need gofmt -s:"; echo "$$files"; exit 1; \
+	fi
