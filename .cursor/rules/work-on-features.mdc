@@ -65,12 +65,17 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
 - `--- SUCCESSFUL END --- <line-or-id>` or `--- ERROR: <short reason> ---`
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 
+Additional lightweight markers to replace noisy chatter:
+- `SEARCH: query="<pattern>" | glob=<glob-or-none> | files=<n> | matches=<n>`
+- `LIST: dir=<path> | entries=<n>`
+
 Operational output style:
 - Prefer concise bullet points and result snippets over verbose narration. Avoid meta status like “I'll scan the repository…”.
 - When reading or searching, quote exactly what you searched for and summarize findings in one line.
 - Log only high-signal evidence that helps the next iteration resume quickly (e.g., counts, key file names, pass/fail). Do not dump full content unless essential.
 - Where feasible, prefix lines with parseable tags like `TASK:`, `CMD:`, `TEST:`, `PASS:`, `FAIL:` to support fast grep-based analysis.
  - Suppress filler text in outputs (e.g., “I’m going to…”, “Then I’ll…”). Write the marker or the command/result directly.
+ - Do not emit free-form lines like `Searched files (...)` or `Listed <path>`; emit `SEARCH:` or `LIST:` markers instead with counts only.
 
 Search and tooling constraints:
 - Prefer repository-native search tools over shell processes to avoid overhead. Use ripgrep-style queries and glob filters; avoid raw `find`/`grep` shell calls.
@@ -95,6 +100,9 @@ Suggested grep snippets (for reproducible counts):
 - Verbose chatter to reduce: `rg -n "^(I'|I am|I'll|I'm going to)" logs/coding.log | wc -l`
  - No-op commit banners: `rg -n "COMMITTING UNCHANGED TO GIT" logs/coding.log | wc -l`
  - Repeated binary commits (example): `rg -n "build\(exec\): rebuild exec binary" logs/coding.log | wc -l`
+ - SEARCH markers: `rg -n "^SEARCH:" logs/coding.log | wc -l`
+ - LIST markers: `rg -n "^LIST:" logs/coding.log | wc -l`
+ - Legacy noisy lines (to eliminate): `rg -n "Searched files|^Listed(\s|$)" logs/coding.log | wc -l`
 
 Quality gates to run in this order where relevant:
 - go fmt/vet/lint (or `make lint` if available).
