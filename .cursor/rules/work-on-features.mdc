@@ -3,7 +3,7 @@ description: "Work on FEATURE_CHECKLIST.md items faster using log-tail continuit
 alwaysApply: false
 ---
 
-You are the coding assistant working inside this repository. Optimize for throughput while strictly upholding the repository’s Definition of Done (DoD), testing standards, and traceability requirements. Never relax gates. Prefer short, operational outputs over narrative text.
+You are the coding assistant working inside this repository. Optimize for throughput while strictly upholding the repository’s Definition of Done (DoD), testing standards, and traceability requirements. Never relax gates. Prefer short, operational outputs over narrative text. Reduce idle time and indecision by resuming precisely, selecting deterministically, and avoiding redundant scans or reruns.
 
 Core constraints to reaffirm (never weaken):
 - All production changes are covered by automated tests; diverse tests at appropriate layers; regressions gain protecting tests.
@@ -12,57 +12,64 @@ Core constraints to reaffirm (never weaken):
 - Backward compatibility preserved unless explicitly approved with migration plan.
 
 Preflight continuity (must do before any new work):
-- Read the recent tail of `logs/coding.log` (at least last 400 lines). Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`. Resume precisely where the last successful step ended. Do not re-discover repository state if it’s already known from the tail.
-- If the previous attempt ended with a timeout or repeated retries for the same command and inputs, do not re-run blindly. Narrow scope or choose a smaller subtask first.
+- Read only the recent tail of `logs/coding.log` (last 400–800 lines). Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`.
+- Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
+- If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
+- In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
 - Selection rule:
   1) Prefer the smallest unchecked task that is self-contained and does not require external services.
   2) If multiple qualify, pick the first unchecked task top-to-bottom in `FEATURE_CHECKLIST.md`.
-  3) If a task risks flakiness (network/long builds), defer it behind a smaller deterministic subtask that advances the same goal (e.g., write failing unit test first).
-- Never oscillate: once a task is picked, stick to it until either completed, blocked by an external dependency, or timeboxed out with diagnostics captured.
+  3) If a task risks flakiness (network/long builds), defer it behind a smaller deterministic subtask that advances the same goal (e.g., write a failing unit test first).
+- Once a task is picked, stick to it until completed, blocked by an external dependency, or timeboxed out. No oscillation between tasks.
+- If two actions seem equally valid, apply tie-breakers below immediately; do not pause to reconsider.
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged.
 - If unrelated files are staged, unstage them and stage only task-related changes.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
- - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
+- When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
+- If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer.
+- Prefer narrowed scopes: run `go test` on touched packages first; only expand to `./...` if scope is unclear or failures span packages.
 - On timeouts:
-  - Capture minimal diagnostics: command, parameters, and the last 50 lines of stderr/stdout.
+  - Capture minimal diagnostics: command, parameters, duration, exit code, and the last 50 lines of stderr/stdout.
   - Retry only once if inputs changed or you applied a concrete mitigation (e.g., limiting scope, filtering, smaller test targets).
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
 
 Operational output style:
-- Prefer concise bullet points and result snippets over verbose narration.
+- Prefer concise bullet points and result snippets over verbose narration. Avoid meta status like “I'll scan the repository…”.
 - When reading or searching, quote exactly what you searched for and summarize findings in one line.
-- Log only high-signal evidence that helps the next iteration resume quickly.
+- Log only high-signal evidence that helps the next iteration resume quickly (e.g., counts, key file names, pass/fail). Do not dump full content unless essential.
 
 Quality gates to run in this order where relevant:
 - go fmt/vet/lint (or `make lint` if available).
-- Unit tests first for changed packages: `go test ./...` is acceptable when scope is unclear, but prefer narrowed packages if you can determine them deterministically.
+- Unit tests first for changed packages: select packages deterministically from edited file paths; if uncertain, run `go test ./...`.
 - Integration/end-to-end tests when applicable to the task.
 - Security/secret checks if configured in CI; at minimum ensure no secrets are added.
 
 Continuity-driven workflow (tight loop):
-1) From `logs/coding.log` tail, identify the last selected checklist item and whether it finished. If unfinished, resume at the next smallest pending subtask.
-2) If starting fresh, select the next task deterministically (rules above) from `FEATURE_CHECKLIST.md`.
+1) From `logs/coding.log` tail, identify the last selected checklist item and whether it finished. If unfinished, resume at the next smallest pending subtask; otherwise select the next task deterministically from `FEATURE_CHECKLIST.md`.
+2) Plan one minimal subtask that moves the task forward and can complete within the timebox. State it in one line.
 3) Create or update tests first (failing) to express desired behavior. Keep test diffs minimal and focused.
 4) Implement the smallest change necessary to make the test pass.
 5) Run gates in the order above. If anything fails, fix before proceeding.
-6) Commit only related files with a concise message explaining why and linking to the issue.
-7) Record a brief operational summary in the activity log (your stdout), including elapsed times for key steps.
+6) Commit only related files with a concise message explaining why and linking to the issue. If hooks modify files, amend to include them.
+7) Record a brief operational summary in the activity log (stdout): subtask, commands run, durations, pass/fail.
 
 Traceability and evidence:
 - When using tools, record command, minimal parameters (redacting secrets), duration, and pass/fail.
 - When you skip or defer due to timeboxing, state the reason and the exact next step for the following iteration.
+- Reference the canonical GitHub issue URL in commits and in test/PR descriptions as required by DoD.
 
 Explicit anti-patterns to avoid:
 - Re-discovering repo state each loop when `logs/coding.log` already records it.
+- Re-running broad repo scans when a direct file path is already known from prior steps.
 - Repeatedly scanning the entire checklist without selecting a task.
 - Rerunning the same command after a failure without any new information.
 - Creating empty or no-op commits.
@@ -72,6 +79,7 @@ Deterministic tie-breakers for equal-priority actions:
 - Prefer actions that reduce uncertainty: reading a single most-relevant file over a broad scan; running a tight unit test over a full-suite run.
 - Prefer edits over documentation unless the task is a docs task.
 - Prefer local-only operations over network calls.
+- Prefer previously proven commands/flags recorded in `logs/coding.log` over inventing new ones.
 
 Definition of Done restated for every task:
 - Tests exist and pass; coverage not reduced; changed lines/branches exercised.
