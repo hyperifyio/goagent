@@ -17,21 +17,27 @@ Continuity and efficiency improvements: Before any action, consult the recent
 tail of `./logs/coding.log` (at least last 400 lines) to resume exactly where
 the last iteration ended and avoid redundant exploratory steps. If the file is
 missing or empty, record a baseline as "no prior runs" and proceed. Use these
-deterministic markers emitted by the automation script:
-- Most recent `DATE:` anchors the iteration start.
+deterministic markers emitted by the automation script, and ignore shell trace
+noise (lines starting with `+ ` from `set -x`):
+- Most recent `DATE:` line with a real RFC-2822 timestamp anchors the
+  iteration start (ignore `DATE: + date -R`).
 - Phase banners: `--- COMMITTING UNCHANGED TO GIT ---`, `--- WORKING ON ---`.
 - Phase outcomes: `--- SUCCESSFUL END ---` and `--- ERROR:<code> ---`.
+- Snapshot lines: `UNFINISHED_TASKS: <n>`, `FINISHED_TASKS: <n>` are used to
+  confirm progress without rescanning the repository.
 - Structured metrics (emit when possible):
   - `METRIC: phase=<commit|work|improve> start_ms=<epoch> cmd="..."`
   - `METRIC: phase=<...> end_ms=<epoch> exit=<code> duration_ms=<int>`
 Resuming rules (do not loop):
-- If the last visible phase ended with `--- SUCCESSFUL END ---` and there are no
-  new diffs (`git diff --quiet` and `git diff --cached --quiet`), skip that
+- If the last visible phase ended with `--- SUCCESSFUL END ---` and there are
+  no new diffs (`git diff --quiet` and `git diff --cached --quiet`), skip that
   phase entirely.
 - If the last visible phase ended with an error or timeout, narrow scope (see
   Timeboxing and recovery) and retry only the minimal subtask once. Only retry
   again if inputs changed (code, flags, environment) or new diagnostics were
   captured; otherwise switch to a safer subtask on the same checklist item.
+- When resuming a checklist item, prefer the last `--- WORKING ON ---` context
+  and continue the smallest unfinished step rather than re-discovering state.
 
 Each change follows strict test-driven development. For every behavior a 
 failing test is written first or in tight lockstep, then the smallest 
@@ -92,11 +98,13 @@ explicitly deferred with rationale and a linked follow-up issue.
 
 The workflow for each checklist entry is incremental and isolated.
 
-Deterministic task selection and ordering:
+Deterministic task selection and ordering (no re-scans on every loop):
 - Primary: An explicit priority indicator on a line (e.g., `[P1]`, `[1]`,
   `prio:high`) sorts before others; lower numbers mean higher priority.
 - Secondary: Otherwise process top-to-bottom as the file appears in Git HEAD.
 - Ties: Prefer the earliest unchecked item by line number; do not randomize.
+ - Cache the current task list in memory and only re-read `FEATURE_CHECKLIST.md`
+   when staging/committing or when Git HEAD changes.
 
 Execution for the selected task:
 - Write or update tests to verify intended behavior; implement only the minimal
@@ -112,11 +120,14 @@ Execution for the selected task:
   “why” and link the canonical GitHub issue URL for traceability.
 - After tests pass and behavior is verified, update `FEATURE_CHECKLIST.md` in
   the same change set to check the exact line, keeping the diff minimal.
+ - If editing only automation/rule files, ensure the commit includes only files
+   under `.cursor/rules/` (plus the checklist line if it explicitly changes);
+   restage to exclude unrelated changes.
 
 The loop continues until the checklist is fully complete. After finishing one
 entry, immediately proceed to the next unchecked entry without re-scanning the
 entire repository state; use the in-memory view of `FEATURE_CHECKLIST.md` and
-confirm it against HEAD only when committing.
+confirm it against HEAD only when committing or after external changes.
 
 Completion criteria:
 - An entry is complete only when it is checked in `FEATURE_CHECKLIST.md` and all
@@ -144,6 +155,9 @@ Timeboxing and recovery:
 - Command rerun gating: do not rerun the exact same command with the same
   inputs. Re-execute only when sources changed (files, flags, env) or when
   diagnostics indicate a different failure mode that merits a targeted retry.
+ - For long-running agent invocations, emit `METRIC` start/end lines and
+   downshift to smaller, locally verifiable steps when the 80% threshold is hit
+   instead of idling until a hard timeout.
 
 Concise operational output:
 - Prefer brief, operational status over narrative. Emit:
@@ -153,6 +167,8 @@ Concise operational output:
   - Next action. Avoid restating repository facts already visible in code.
  - Include structured metrics lines as described above to enable precise
    duration measurement without verbose chatter.
+ - Avoid repeating the same checklist scan or repository summary more than once
+   per iteration. Refer to prior metrics instead.
 
 If FEATURE_CHECKLIST.md is missing, create a minimal checklist at the 
 repository root and populate it with the tasks known from the immediate scope 
