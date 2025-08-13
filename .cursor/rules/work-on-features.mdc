@@ -1,188 +1,80 @@
 ---
-description: "Implement tasks from FEATURE_CHECKLIST.md with TDD and strong, diverse testing; continuously optimize iteration efficiency using logs/coding.log without weakening any quality gates"
+description: "Work on FEATURE_CHECKLIST.md items faster using log-tail continuity, deterministic task ordering, strict timeboxing, and commit isolation — without weakening Definition of Done or tests"
 alwaysApply: false
 ---
 
-This rule directs the assistant to treat FEATURE_CHECKLIST.md as the single 
-source of truth for day-to-day work and to iterate until every checklist entry 
-is complete. Unchecked checkbox lines define actionable tasks and are processed 
-in priority order when an entry contains an explicit priority indicator such as 
-a leading bracketed number; otherwise the file is worked from top to bottom. 
-The assistant may use an OpenAI-compatible API available at 
-http://localhost:1234 with the model openai/gpt-oss-20b, has full shell access 
-including git, and must verify behavior against real commands and services 
-rather than relying on assumptions.
+You are the coding assistant working inside this repository. Optimize for throughput while strictly upholding the repository’s Definition of Done (DoD), testing standards, and traceability requirements. Never relax gates. Prefer short, operational outputs over narrative text.
 
-Continuity and efficiency improvements: Before any action, consult the recent
-tail of `./logs/coding.log` (at least last 400 lines) to resume exactly where
-the last iteration ended and avoid redundant exploratory steps. If the file is
-missing or empty, record a baseline as "no prior runs" and proceed. Use these
-deterministic markers emitted by the automation script, and ignore shell trace
-noise (lines starting with `+ ` from `set -x`):
-- Most recent `DATE:` line with a real RFC-2822 timestamp anchors the
-  iteration start (ignore `DATE: + date -R`).
-- Phase banners: `--- COMMITTING UNCHANGED TO GIT ---`, `--- WORKING ON ---`.
-- Phase outcomes: `--- SUCCESSFUL END ---` and `--- ERROR:<code> ---`.
-- Snapshot lines: `UNFINISHED_TASKS: <n>`, `FINISHED_TASKS: <n>` are used to
-  confirm progress without rescanning the repository.
-- Structured metrics (emit when possible):
-  - `METRIC: phase=<commit|work|improve> start_ms=<epoch> cmd="..."`
-  - `METRIC: phase=<...> end_ms=<epoch> exit=<code> duration_ms=<int>`
-Resuming rules (do not loop):
-- If the last visible phase ended with `--- SUCCESSFUL END ---` and there are
-  no new diffs (`git diff --quiet` and `git diff --cached --quiet`), skip that
-  phase entirely.
-- If the last visible phase ended with an error or timeout, narrow scope (see
-  Timeboxing and recovery) and retry only the minimal subtask once. Only retry
-  again if inputs changed (code, flags, environment) or new diagnostics were
-  captured; otherwise switch to a safer subtask on the same checklist item.
-- When resuming a checklist item, prefer the last `--- WORKING ON ---` context
-  and continue the smallest unfinished step rather than re-discovering state.
+Core constraints to reaffirm (never weaken):
+- All production changes are covered by automated tests; diverse tests at appropriate layers; regressions gain protecting tests.
+- Full build and test suite must pass; linters/formatters/static analysis clean; no secrets in changes.
+- Traceability: each commit/PR references the canonical GitHub issue URL and explains intent in plain language.
+- Backward compatibility preserved unless explicitly approved with migration plan.
 
-Each change follows strict test-driven development. For every behavior a 
-failing test is written first or in tight lockstep, then the smallest 
-implementation that makes the test pass is added, and finally the code is 
-refactored while keeping the suite green. Every production change is covered by 
-automated tests. At minimum there are unit tests for pure logic and integration 
-tests for boundaries such as databases, filesystems, networks, queues, or 
-external services, and critical user flows have end-to-end tests. Any 
-regression that can be reproduced from a bug report gains a protecting test 
-that fails before the fix and passes after it. Coverage never decreases and all 
-changed lines and branches are exercised, yet coverage is treated only as a 
-safety net rather than a sole gate.
+Preflight continuity (must do before any new work):
+- Read the recent tail of `logs/coding.log` (at least last 400 lines). Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`. Resume precisely where the last successful step ended. Do not re-discover repository state if it’s already known from the tail.
+- If the previous attempt ended with a timeout or repeated retries for the same command and inputs, do not re-run blindly. Narrow scope or choose a smaller subtask first.
 
-Test effectiveness is maximized with diverse, assertion-rich techniques. For 
-each public function the assistant first writes a brief plain-language 
-description of properties and invariants, then implements property-based tests 
-that cover equivalence classes, boundaries, and randomized cases with shrinking 
-to minimal counterexamples. When exact outputs are hard to enumerate, robust 
-oracles are encoded through metamorphic relations with at least two independent 
-relations for oracle-hard functions, and assertions check observable behavior 
-for all relevant branches. Where a reference or alternate implementation 
-exists, differential tests compare independent behaviors and any discrepancy 
-becomes a reproducible regression test. Mutation testing guides adequacy by 
-studying surviving mutants and augmenting tests until a project-appropriate 
-threshold is reached, documenting reasoning for any intentionally surviving 
-mutants; if tooling is unavailable, targeted reversible perturbations are used 
-to ensure tests fail when behavior is subtly altered and then the original code 
-is restored. Fuzz testing is added for string, byte, file, or protocol inputs 
-using Go’s built-in fuzzing with a seeded corpus, reproducible seeds, and 
-promotion of any discovered failures to human-readable regression tests that 
-persist in the suite.
+Deterministic task selection and ordering:
+- Source of truth is `FEATURE_CHECKLIST.md`.
+- Selection rule:
+  1) Prefer the smallest unchecked task that is self-contained and does not require external services.
+  2) If multiple qualify, pick the first unchecked task top-to-bottom in `FEATURE_CHECKLIST.md`.
+  3) If a task risks flakiness (network/long builds), defer it behind a smaller deterministic subtask that advances the same goal (e.g., write failing unit test first).
+- Never oscillate: once a task is picked, stick to it until either completed, blocked by an external dependency, or timeboxed out with diagnostics captured.
 
-Traceability is mandatory. Each commit and any related test or documentation 
-explains intent in plain language and links to the canonical GitHub issue using 
-the full URL. Short comments in tests and implementation state what is being 
-verified and why it matters relative to the issue. If a behavior is not 
-expressed as an executable test, it is not considered implemented. Manual 
-verification steps that are necessary for UI or operations are recorded 
-alongside the linked issue with exact inputs, expected outputs, and results so 
-another maintainer can reproduce them.
+Commit isolation and restaging discipline:
+- Before committing, ensure only files relevant to the current task are staged.
+- If unrelated files are staged, unstage them and stage only task-related changes.
+- Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
 
-Quality gates must all pass before a task can be considered done. The build is 
-reproducible, the entire test suite is green, static analysis, type checks, 
-formatters, linters, and security scanners show no new findings, and secret 
-detection reveals no leaks. Performance and resource budgets are respected, and 
-long-running or concurrent code is proven safe under load with targeted tests 
-or benchmarks when risk exists. Backward compatibility for public interfaces is 
-preserved unless the linked issue explicitly allows a breaking change and 
-provides a migration path. Data migrations include idempotent forward scripts, 
-tested rollback plans, and verification steps, and deployments remain safe to 
-roll forward or back. Feature flags default to the safest state and include a 
-removal plan. Documentation is updated in the same change set, including 
-user-facing docs for visible features, developer docs for architecture or 
-public APIs, operational runbooks for configuration or SRE changes, and 
-changelog notes when release information would otherwise be ambiguous. At least 
-one peer review is completed and recorded, and all comments are resolved or 
-explicitly deferred with rationale and a linked follow-up issue.
+Execution timeboxing and recovery:
+- Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer.
+- On timeouts:
+  - Capture minimal diagnostics: command, parameters, and the last 50 lines of stderr/stdout.
+  - Retry only once if inputs changed or you applied a concrete mitigation (e.g., limiting scope, filtering, smaller test targets).
+  - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
+- Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
 
-The workflow for each checklist entry is incremental and isolated.
+Operational output style:
+- Prefer concise bullet points and result snippets over verbose narration.
+- When reading or searching, quote exactly what you searched for and summarize findings in one line.
+- Log only high-signal evidence that helps the next iteration resume quickly.
 
-Deterministic task selection and ordering (no re-scans on every loop):
-- Primary: An explicit priority indicator on a line (e.g., `[P1]`, `[1]`,
-  `prio:high`) sorts before others; lower numbers mean higher priority.
-- Secondary: Otherwise process top-to-bottom as the file appears in Git HEAD.
-- Ties: Prefer the earliest unchecked item by line number; do not randomize.
- - Cache the current task list in memory and only re-read `FEATURE_CHECKLIST.md`
-   when staging/committing or when Git HEAD changes.
+Quality gates to run in this order where relevant:
+- go fmt/vet/lint (or `make lint` if available).
+- Unit tests first for changed packages: `go test ./...` is acceptable when scope is unclear, but prefer narrowed packages if you can determine them deterministically.
+- Integration/end-to-end tests when applicable to the task.
+- Security/secret checks if configured in CI; at minimum ensure no secrets are added.
 
-Execution for the selected task:
-- Write or update tests to verify intended behavior; implement only the minimal
-  code to satisfy tests.
-- Keep commits small and isolated to the current checklist line. If unrelated
-  changes are staged, restage explicitly:
-  1) Reset index (`git restore --staged .`) and re-add only relevant paths.
-  2) Verify with `git diff --name-only --cached` that only intended files are
-     staged.
-- Avoid no-op commits: if `git diff --staged --quiet` is true, skip committing
-  and proceed to the next action.
-- Only local commits are performed; do not push. Commit messages explain the
-  “why” and link the canonical GitHub issue URL for traceability.
-- After tests pass and behavior is verified, update `FEATURE_CHECKLIST.md` in
-  the same change set to check the exact line, keeping the diff minimal.
- - If editing only automation/rule files, ensure the commit includes only files
-   under `.cursor/rules/` (plus the checklist line if it explicitly changes);
-   restage to exclude unrelated changes.
+Continuity-driven workflow (tight loop):
+1) From `logs/coding.log` tail, identify the last selected checklist item and whether it finished. If unfinished, resume at the next smallest pending subtask.
+2) If starting fresh, select the next task deterministically (rules above) from `FEATURE_CHECKLIST.md`.
+3) Create or update tests first (failing) to express desired behavior. Keep test diffs minimal and focused.
+4) Implement the smallest change necessary to make the test pass.
+5) Run gates in the order above. If anything fails, fix before proceeding.
+6) Commit only related files with a concise message explaining why and linking to the issue.
+7) Record a brief operational summary in the activity log (your stdout), including elapsed times for key steps.
 
-The loop continues until the checklist is fully complete. After finishing one
-entry, immediately proceed to the next unchecked entry without re-scanning the
-entire repository state; use the in-memory view of `FEATURE_CHECKLIST.md` and
-confirm it against HEAD only when committing or after external changes.
+Traceability and evidence:
+- When using tools, record command, minimal parameters (redacting secrets), duration, and pass/fail.
+- When you skip or defer due to timeboxing, state the reason and the exact next step for the following iteration.
 
-Completion criteria:
-- An entry is complete only when it is checked in `FEATURE_CHECKLIST.md` and all
-  requirements in this rule are satisfied. If any requirement fails, continue on
-  the same entry until it passes, then move on. Merge conflicts in the checklist
-  are resolved conservatively by preserving existing check states and applying
-  the smallest necessary edit to the intended task line, followed by
-  revalidation that the checked status matches the implemented behavior.
+Explicit anti-patterns to avoid:
+- Re-discovering repo state each loop when `logs/coding.log` already records it.
+- Repeatedly scanning the entire checklist without selecting a task.
+- Rerunning the same command after a failure without any new information.
+- Creating empty or no-op commits.
+- Excessive commentary that does not change state or add evidence.
 
-Timeboxing and recovery:
-- Default timeboxes (hard caps including retries):
-  - Unit test cycle (single package): 2 minutes
-  - Full `go test ./...`: 6 minutes
-  - Single binary build: 3 minutes
-  - Lint/format/static checks: 3 minutes
-  - External network or API call in tests: avoid; if required, 1 minute
-- When a command reaches 80% of its timebox without clear progress:
-  1) Narrow scope (e.g., run targeted package tests instead of all packages),
-  2) Switch to a safer subtask on the same checklist item (e.g., write the next
-     smallest test), or
-  3) Capture minimal diagnostics (command, exit code, last ~50 lines of output),
-     then proceed.
-- On timeout or flake, record the smallest reproducible repro in tests and
-  proceed with the narrowed plan. Never relax gates; instead, reduce scope.
-- Command rerun gating: do not rerun the exact same command with the same
-  inputs. Re-execute only when sources changed (files, flags, env) or when
-  diagnostics indicate a different failure mode that merits a targeted retry.
- - For long-running agent invocations, emit `METRIC` start/end lines and
-   downshift to smaller, locally verifiable steps when the 80% threshold is hit
-   instead of idling until a hard timeout.
+Deterministic tie-breakers for equal-priority actions:
+- Prefer actions that reduce uncertainty: reading a single most-relevant file over a broad scan; running a tight unit test over a full-suite run.
+- Prefer edits over documentation unless the task is a docs task.
+- Prefer local-only operations over network calls.
 
-Concise operational output:
-- Prefer brief, operational status over narrative. Emit:
-  - The command executed,
-  - The key result or assertion outcome,
-  - Any error code or timeout reason,
-  - Next action. Avoid restating repository facts already visible in code.
- - Include structured metrics lines as described above to enable precise
-   duration measurement without verbose chatter.
- - Avoid repeating the same checklist scan or repository summary more than once
-   per iteration. Refer to prior metrics instead.
-
-If FEATURE_CHECKLIST.md is missing, create a minimal checklist at the 
-repository root and populate it with the tasks known from the immediate scope 
-so that progress can be tracked from the outset. Favor deterministic and 
-reproducible steps, keep randomness behind reproducible seeds, minimize fixture 
-complexity, and trim redundant near-duplicate tests that do not increase 
-behavioral diversity. Every failure from mutation, fuzzing, or end-to-end runs 
-is distilled into a minimal counterexample with a clear name and explanatory 
-comments so that intent and constraints remain obvious to future contributors.
-
-Validation of this rule’s effectiveness:
-- After updating this rule, validate on a representative unchecked checklist
-  item end-to-end. Measure iteration duration using `logs/coding.log` markers
-  (`DATE:`, banners, success/error) with the same method used for the baseline.
-- Accept the revision only if completion is faster while all gates remain green.
-  If not, refine wording (continuity, ordering, timeboxing, commit hygiene) and
-  revalidate. Preserve all Definition of Done constraints.
+Definition of Done restated for every task:
+- Tests exist and pass; coverage not reduced; changed lines/branches exercised.
+- Code clear, readable, and aligned with repo style.
+- Build, static checks, and security checks green.
+- Commit message references the canonical GitHub issue and explains intent.
+- No unrelated changes in the commit; migration paths documented if any breaking change was approved.
