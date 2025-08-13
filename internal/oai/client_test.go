@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-    "strings"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,14 +21,14 @@ func TestCreateChatCompletion_Success(t *testing.T) {
 			t.Fatalf("bad json: %v", err)
 		}
 		resp := ChatCompletionsResponse{
-			ID:     "cmpl-1",
-			Object: "chat.completion",
+			ID:      "cmpl-1",
+			Object:  "chat.completion",
 			Created: time.Now().Unix(),
-			Model:  req.Model,
+			Model:   req.Model,
 			Choices: []ChatCompletionsResponseChoice{{
 				Index:        0,
 				FinishReason: "stop",
-				Message: Message{Role: RoleAssistant, Content: "hello"},
+				Message:      Message{Role: RoleAssistant, Content: "hello"},
 			}},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -62,7 +62,7 @@ func TestCreateChatCompletion_HTTPError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-    if got := err.Error(); !strings.Contains(got, "400") || !strings.Contains(got, "bad request") {
-        t.Fatalf("expected status code and body in error, got: %v", got)
-    }
+	if got := err.Error(); !strings.Contains(got, "400") || !strings.Contains(got, "bad request") {
+		t.Fatalf("expected status code and body in error, got: %v", got)
+	}
 }

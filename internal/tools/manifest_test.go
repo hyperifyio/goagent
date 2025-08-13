@@ -49,23 +49,23 @@ func TestLoadManifest_DuplicateName(t *testing.T) {
 
 // https://github.com/hyperifyio/goagent/issues/1
 func TestLoadManifest_MissingNameOrCommand(t *testing.T) {
-    dir := t.TempDir()
-    file := filepath.Join(dir, "tools.json")
-    // Missing name
-    data := `{"tools":[{"description":"x","command":["echo","{}"]}]}`
-    if err := os.WriteFile(file, []byte(data), 0o644); err != nil {
-        t.Fatalf("write: %v", err)
-    }
-    if _, _, err := LoadManifest(file); err == nil {
-        t.Fatalf("expected error for missing name")
-    }
+	dir := t.TempDir()
+	file := filepath.Join(dir, "tools.json")
+	// Missing name
+	data := `{"tools":[{"description":"x","command":["echo","{}"]}]}`
+	if err := os.WriteFile(file, []byte(data), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, err := LoadManifest(file); err == nil {
+		t.Fatalf("expected error for missing name")
+	}
 
-    // Missing command
-    data = `{"tools":[{"name":"x"}]}`
-    if err := os.WriteFile(file, []byte(data), 0o644); err != nil {
-        t.Fatalf("write: %v", err)
-    }
-    if _, _, err := LoadManifest(file); err == nil {
-        t.Fatalf("expected error for missing command")
-    }
+	// Missing command
+	data = `{"tools":[{"name":"x"}]}`
+	if err := os.WriteFile(file, []byte(data), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, err := LoadManifest(file); err == nil {
+		t.Fatalf("expected error for missing command")
+	}
 }

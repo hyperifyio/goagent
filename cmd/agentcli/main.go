@@ -1,19 +1,19 @@
 package main
 
 import (
-    "context"
-    "encoding/json"
-    "errors"
-    "flag"
-    "fmt"
-    "io"
-    "os"
-    "os/exec"
-    "strings"
-    "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
 
-    "github.com/hyperifyio/goagent/internal/oai"
-    "github.com/hyperifyio/goagent/internal/tools"
+	"github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/tools"
 )
 
 // cliConfig holds user-supplied configuration resolved from flags and env.
@@ -65,137 +65,137 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
-    cfg, exitOn := parseFlags()
-    if exitOn != 0 {
-        fmt.Fprintln(os.Stderr, "error: -prompt is required")
-        os.Exit(exitOn)
-    }
-    code := runAgent(cfg, os.Stdout, os.Stderr)
-    os.Exit(code)
+	cfg, exitOn := parseFlags()
+	if exitOn != 0 {
+		fmt.Fprintln(os.Stderr, "error: -prompt is required")
+		os.Exit(exitOn)
+	}
+	code := runAgent(cfg, os.Stdout, os.Stderr)
+	os.Exit(code)
 }
 
 // runAgent executes the non-interactive agent loop and returns a process exit code.
 func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
-    // Load tools manifest if provided
-    var (
-        toolRegistry map[string]tools.ToolSpec
-        oaiTools     []oai.Tool
-    )
-    var err error
-    if strings.TrimSpace(cfg.toolsPath) != "" {
-        toolRegistry, oaiTools, err = tools.LoadManifest(cfg.toolsPath)
-        if err != nil {
-            fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
-            return 1
-        }
-        // Validate each configured tool is available on this system before proceeding
-        for name, spec := range toolRegistry {
-            if len(spec.Command) == 0 {
-                fmt.Fprintf(stderr, "error: configured tool %q has no command\n", name)
-                return 1
-            }
-            if _, lookErr := exec.LookPath(spec.Command[0]); lookErr != nil {
-                fmt.Fprintf(stderr, "error: configured tool %q is unavailable: %v (program %q)\n", name, lookErr, spec.Command[0])
-                return 1
-            }
-        }
-    }
+	// Load tools manifest if provided
+	var (
+		toolRegistry map[string]tools.ToolSpec
+		oaiTools     []oai.Tool
+	)
+	var err error
+	if strings.TrimSpace(cfg.toolsPath) != "" {
+		toolRegistry, oaiTools, err = tools.LoadManifest(cfg.toolsPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
+			return 1
+		}
+		// Validate each configured tool is available on this system before proceeding
+		for name, spec := range toolRegistry {
+			if len(spec.Command) == 0 {
+				fmt.Fprintf(stderr, "error: configured tool %q has no command\n", name)
+				return 1
+			}
+			if _, lookErr := exec.LookPath(spec.Command[0]); lookErr != nil {
+				fmt.Fprintf(stderr, "error: configured tool %q is unavailable: %v (program %q)\n", name, lookErr, spec.Command[0])
+				return 1
+			}
+		}
+	}
 
-    httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.timeout)
+	httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.timeout)
 
-    messages := []oai.Message{
-        {Role: oai.RoleSystem, Content: cfg.systemPrompt},
-        {Role: oai.RoleUser, Content: cfg.prompt},
-    }
+	messages := []oai.Message{
+		{Role: oai.RoleSystem, Content: cfg.systemPrompt},
+		{Role: oai.RoleUser, Content: cfg.prompt},
+	}
 
-    // Loop with per-request timeouts so multi-step tool calls have full budget each time.
-    for step := 0; step < cfg.maxSteps; step++ {
-        req := oai.ChatCompletionsRequest{
-            Model:       cfg.model,
-            Messages:    messages,
-            Temperature: &cfg.temperature,
-        }
-        if len(oaiTools) > 0 {
-            req.Tools = oaiTools
-            req.ToolChoice = "auto"
-        }
+	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
+	for step := 0; step < cfg.maxSteps; step++ {
+		req := oai.ChatCompletionsRequest{
+			Model:       cfg.model,
+			Messages:    messages,
+			Temperature: &cfg.temperature,
+		}
+		if len(oaiTools) > 0 {
+			req.Tools = oaiTools
+			req.ToolChoice = "auto"
+		}
 
-        if cfg.debug {
-            dump, _ := json.MarshalIndent(req, "", "  ")
-            fmt.Fprintf(stderr, "\n--- chat.request step=%d ---\n%s\n", step+1, string(dump))
-        }
+		if cfg.debug {
+			dump, _ := json.MarshalIndent(req, "", "  ")
+			fmt.Fprintf(stderr, "\n--- chat.request step=%d ---\n%s\n", step+1, string(dump))
+		}
 
-        // Per-call context
-        callCtx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
-        resp, err := httpClient.CreateChatCompletion(callCtx, req)
-        cancel()
-        if err != nil {
-            fmt.Fprintf(stderr, "error: chat call failed: %v\n", err)
-            return 1
-        }
-        if cfg.debug {
-            dump, _ := json.MarshalIndent(resp, "", "  ")
-            fmt.Fprintf(stderr, "\n--- chat.response step=%d ---\n%s\n", step+1, string(dump))
-        }
+		// Per-call context
+		callCtx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
+		resp, err := httpClient.CreateChatCompletion(callCtx, req)
+		cancel()
+		if err != nil {
+			fmt.Fprintf(stderr, "error: chat call failed: %v\n", err)
+			return 1
+		}
+		if cfg.debug {
+			dump, _ := json.MarshalIndent(resp, "", "  ")
+			fmt.Fprintf(stderr, "\n--- chat.response step=%d ---\n%s\n", step+1, string(dump))
+		}
 
-        if len(resp.Choices) == 0 {
-            fmt.Fprintln(stderr, "error: chat response has no choices")
-            return 1
-        }
+		if len(resp.Choices) == 0 {
+			fmt.Fprintln(stderr, "error: chat response has no choices")
+			return 1
+		}
 
-        choice := resp.Choices[0]
-        msg := choice.Message
+		choice := resp.Choices[0]
+		msg := choice.Message
 
-        // If the model returned tool calls and we have a registry, execute them sequentially.
-        if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
-            for _, tc := range msg.ToolCalls {
-                spec, ok := toolRegistry[tc.Function.Name]
-                if !ok {
-                    // Append an error tool result and continue; do not exit.
-                    toolErr := map[string]string{"error": fmt.Sprintf("unknown tool: %s", tc.Function.Name)}
-                    contentBytes, _ := json.Marshal(toolErr)
-                    messages = append(messages, oai.Message{
-                        Role:       oai.RoleTool,
-                        Name:       tc.Function.Name,
-                        ToolCallID: tc.ID,
-                        Content:    string(contentBytes),
-                    })
-                    continue
-                }
+		// If the model returned tool calls and we have a registry, execute them sequentially.
+		if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
+			for _, tc := range msg.ToolCalls {
+				spec, ok := toolRegistry[tc.Function.Name]
+				if !ok {
+					// Append an error tool result and continue; do not exit.
+					toolErr := map[string]string{"error": fmt.Sprintf("unknown tool: %s", tc.Function.Name)}
+					contentBytes, _ := json.Marshal(toolErr)
+					messages = append(messages, oai.Message{
+						Role:       oai.RoleTool,
+						Name:       tc.Function.Name,
+						ToolCallID: tc.ID,
+						Content:    string(contentBytes),
+					})
+					continue
+				}
 
-                // Prepare stdin as the raw JSON args text from the model
-                argsJSON := strings.TrimSpace(tc.Function.Arguments)
-                // Guard against empty string; always provide at least {}
-                if argsJSON == "" {
-                    argsJSON = "{}"
-                }
+				// Prepare stdin as the raw JSON args text from the model
+				argsJSON := strings.TrimSpace(tc.Function.Arguments)
+				// Guard against empty string; always provide at least {}
+				if argsJSON == "" {
+					argsJSON = "{}"
+				}
 
-                // Per-tool timeout is handled inside RunToolWithJSON; pass a background parent.
-                out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.timeout)
-                content := sanitizeToolContent(out, runErr)
-                messages = append(messages, oai.Message{
-                    Role:       oai.RoleTool,
-                    Name:       tc.Function.Name,
-                    ToolCallID: tc.ID,
-                    Content:    content,
-                })
-            }
-            // Continue loop for another assistant response using appended tool outputs
-            continue
-        }
+				// Per-tool timeout is handled inside RunToolWithJSON; pass a background parent.
+				out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.timeout)
+				content := sanitizeToolContent(out, runErr)
+				messages = append(messages, oai.Message{
+					Role:       oai.RoleTool,
+					Name:       tc.Function.Name,
+					ToolCallID: tc.ID,
+					Content:    content,
+				})
+			}
+			// Continue loop for another assistant response using appended tool outputs
+			continue
+		}
 
-        // If the model returned final assistant content, print and exit 0
-        if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
-            fmt.Fprintln(stdout, strings.TrimSpace(msg.Content))
-            return 0
-        }
+		// If the model returned final assistant content, print and exit 0
+		if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
+			fmt.Fprintln(stdout, strings.TrimSpace(msg.Content))
+			return 0
+		}
 
-        // Otherwise, append message and continue (some models return assistant with empty content and no tools)
-        messages = append(messages, msg)
-    }
+		// Otherwise, append message and continue (some models return assistant with empty content and no tools)
+		messages = append(messages, msg)
+	}
 
-    fmt.Fprintln(stderr, "error: run ended without final assistant content")
-    return 1
+	fmt.Fprintln(stderr, "error: run ended without final assistant content")
+	return 1
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.

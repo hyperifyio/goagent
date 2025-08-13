@@ -1,11 +1,11 @@
 package tools
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
+	"encoding/json"
+	"fmt"
+	"os"
 
-    "github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/oai"
 )
 
 type ToolSpec struct {
@@ -17,7 +17,7 @@ type ToolSpec struct {
 }
 
 type Manifest struct {
-    Tools []ToolSpec `json:"tools"`
+	Tools []ToolSpec `json:"tools"`
 }
 
 // LoadManifest reads tools.json and returns a name->spec registry and an OpenAI-compatible tools array.
@@ -31,7 +31,7 @@ func LoadManifest(path string) (map[string]ToolSpec, []oai.Tool, error) {
 		return nil, nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	registry := make(map[string]ToolSpec)
-    var oaiTools []oai.Tool
+	var oaiTools []oai.Tool
 	nameSeen := make(map[string]struct{})
 	for i, t := range man.Tools {
 		if t.Name == "" {
@@ -46,16 +46,15 @@ func LoadManifest(path string) (map[string]ToolSpec, []oai.Tool, error) {
 		}
 		registry[t.Name] = t
 		// Build OpenAI tools entry
-        entry := oai.Tool{
-            Type: "function",
-            Function: oai.ToolFunction{
-                Name:        t.Name,
-                Description: t.Description,
-                Parameters:  t.Schema,
-            },
-        }
+		entry := oai.Tool{
+			Type: "function",
+			Function: oai.ToolFunction{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.Schema,
+			},
+		}
 		oaiTools = append(oaiTools, entry)
 	}
 	return registry, oaiTools, nil
 }
-

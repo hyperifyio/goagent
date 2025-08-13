@@ -1,14 +1,14 @@
 package tools
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "io"
-    "math/rand"
-    "os"
-    "os/exec"
-    "time"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"os/exec"
+	"time"
 )
 
 // RunToolWithJSON executes the tool command with args JSON provided on stdin.
@@ -23,12 +23,16 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	ctx, cancel := context.WithTimeout(parentCtx, to)
 	defer cancel()
 
-    cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
-    // Scrub environment to a minimal allowlist: PATH and HOME only
-    var env []string
-    if v := os.Getenv("PATH"); v != "" { env = append(env, "PATH="+v) }
-    if v := os.Getenv("HOME"); v != "" { env = append(env, "HOME="+v) }
-    cmd.Env = env
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	// Scrub environment to a minimal allowlist: PATH and HOME only
+	var env []string
+	if v := os.Getenv("PATH"); v != "" {
+		env = append(env, "PATH="+v)
+	}
+	if v := os.Getenv("HOME"); v != "" {
+		env = append(env, "HOME="+v)
+	}
+	cmd.Env = env
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdin pipe: %w", err)
@@ -55,20 +59,20 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	_ = stdin.Close()
 
 	// Read stdout and stderr fully
-    // Add jitter to avoid coordinated reads causing timing issues in tests under load
-    _ = rand.Int() // ensure rand is referenced to avoid linter complaints if not used
-    outCh := make(chan []byte, 1)
-    errCh := make(chan []byte, 1)
+	// Add jitter to avoid coordinated reads causing timing issues in tests under load
+	_ = rand.Int() // ensure rand is referenced to avoid linter complaints if not used
+	outCh := make(chan []byte, 1)
+	errCh := make(chan []byte, 1)
 	go func() { b, _ := io.ReadAll(stdout); outCh <- b }()
 	go func() { b, _ := io.ReadAll(stderr); errCh <- b }()
 
 	err = cmd.Wait()
 	out := <-outCh
 	serr := <-errCh
-    if ctx.Err() == context.DeadlineExceeded {
-        // Normalize timeout error to a deterministic string per product rules
-        return nil, errors.New("tool timed out")
-    }
+	if ctx.Err() == context.DeadlineExceeded {
+		// Normalize timeout error to a deterministic string per product rules
+		return nil, errors.New("tool timed out")
+	}
 	if err != nil {
 		// Prefer stderr text when available for context
 		msg := string(serr)

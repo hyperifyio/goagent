@@ -23,8 +23,8 @@ type Message struct {
 
 // ToolCall mirrors the OpenAI tool call structure.
 type ToolCall struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
 	Function ToolCallFunction `json:"function"`
 }
 
@@ -57,10 +57,10 @@ type ChatCompletionsRequest struct {
 
 // ChatCompletionsResponse represents the response for chat completions.
 type ChatCompletionsResponse struct {
-	ID      string                        `json:"id"`
-	Object  string                        `json:"object"`
-	Created int64                         `json:"created"`
-	Model   string                        `json:"model"`
+	ID      string                          `json:"id"`
+	Object  string                          `json:"object"`
+	Created int64                           `json:"created"`
+	Model   string                          `json:"model"`
 	Choices []ChatCompletionsResponseChoice `json:"choices"`
 }
 

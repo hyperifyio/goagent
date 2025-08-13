@@ -60,9 +60,9 @@ func runExec(t *testing.T, bin string, input any) execOutput {
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("failed to parse exec output JSON: %v; raw=%q", err, out)
 	}
-    if parsed.DurationMs < 0 {
-        t.Fatalf("durationMs must be >= 0, got %d", parsed.DurationMs)
-    }
+	if parsed.DurationMs < 0 {
+		t.Fatalf("durationMs must be >= 0, got %d", parsed.DurationMs)
+	}
 	return parsed
 }
 
