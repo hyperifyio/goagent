@@ -61,4 +61,7 @@ func TestCreateChatCompletion_HTTPError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
+    if got := err.Error(); !strings.Contains(got, "400") || !strings.Contains(got, "bad request") {
+        t.Fatalf("expected status code and body in error, got: %v", got)
+    }
 }
