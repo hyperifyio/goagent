@@ -34,6 +34,9 @@ func main(){_,_ = io.ReadAll(os.Stdin); time.Sleep(2*time.Second)}
     if err == nil {
         t.Fatalf("expected timeout error")
     }
+    if err.Error() != "tool timed out" {
+        t.Fatalf("expected 'tool timed out', got: %v", err)
+    }
 }
 
 func TestRunToolWithJSON_SuccessEcho(t *testing.T) {

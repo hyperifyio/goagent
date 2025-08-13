@@ -65,9 +65,10 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	err = cmd.Wait()
 	out := <-outCh
 	serr := <-errCh
-	if ctx.Err() == context.DeadlineExceeded {
-		return nil, context.DeadlineExceeded
-	}
+    if ctx.Err() == context.DeadlineExceeded {
+        // Normalize timeout error to a deterministic string per product rules
+        return nil, errors.New("tool timed out")
+    }
 	if err != nil {
 		// Prefer stderr text when available for context
 		msg := string(serr)
