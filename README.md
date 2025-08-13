@@ -2,7 +2,7 @@
 
 Small, vendor-agnostic CLI that calls an OpenAI-compatible Chat Completions API, executes allowed local tools (argv only, no shell), and returns the model's final answer. Works with any endpoint speaking `POST /v1/chat/completions`, including a local server at `http://localhost:1234/v1`.
 
-Badges: [MIT](LICENSE)
+Badges: [![CI](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml) [![Go Version](https://img.shields.io/github/go-mod/go-version/hyperifyio/goagent)](LICENSE) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
 
 ### Table of contents
 - Installation
@@ -65,8 +65,11 @@ go test ./...
 
 ### Roadmap and contributing
 - Add diverse tests and end-to-end fixtures against local endpoints
-- Document architecture as ADR (docs/adr/0001)
+- Document architecture as ADR (`docs/adr/0001-minimal-agent-cli.md`)
 - Contributions welcome: open an issue and PR. License: MIT.
+
+Support: please open issues in the tracker.
+Roadmap: see `docs/ROADMAP.md`.
 
 ### License and credits
 MIT. Inspired by OpenAI-compatible agent patterns.
