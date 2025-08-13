@@ -7,10 +7,12 @@ MODEL=gpt-5
 OUTPUT_FORMAT=stream-json
 LOG_DIR=./logs
 LOG_FILE="$LOG_DIR/coding.log"
+IMPROVE_LOG_FILE="$LOG_DIR/improving.log"
 COMMIT_TIMEOUT=15m
 TASK_TIMEOUT=60m
 COMMIT_MDC=.cursor/rules/go-commit.mdc
 WORK_MDC=.cursor/rules/work-on-features.mdc
+IMPROVE_MDC=.cursor/rules/improve-mdc.mdc
 
 if test -f "$LOG_FILE"; then
   :
@@ -40,7 +42,7 @@ while grep -q '\* \[ \]' FEATURE_CHECKLIST.md; do
         git add . 2>&1 | tee -a "$LOG_FILE"
 
         if timeout "$COMMIT_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" \
-            "$(cat "$COMMIT_MDC")" \
+            -- "$(cat "$COMMIT_MDC")" \
           2>&1 | tee -a "$LOG_FILE"; then
           echo 2>&1 | tee -a "$LOG_FILE"
           echo '--- SUCCESSFUL END ---' 2>&1 | tee -a "$LOG_FILE"
@@ -58,7 +60,7 @@ while grep -q '\* \[ \]' FEATURE_CHECKLIST.md; do
     echo "--- WORKING ON ---" 2>&1 | tee -a "$LOG_FILE"
     echo 2>&1 | tee -a "$LOG_FILE"
 
-    if timeout "$TASK_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" "$(cat "$WORK_MDC")" \
+    if timeout "$TASK_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" -- "$(cat "$WORK_MDC")" \
       2>&1 | tee -a "$LOG_FILE"; then
       echo 2>&1 | tee -a "$LOG_FILE"
       echo '--- SUCCESSFUL END ---' 2>&1 | tee -a "$LOG_FILE"
@@ -68,6 +70,22 @@ while grep -q '\* \[ \]' FEATURE_CHECKLIST.md; do
       echo 2>&1 | tee -a "$LOG_FILE"
       echo '--- ERROR:'"$ERRNO"' ---' 2>&1 | tee -a "$LOG_FILE"
       echo 2>&1 | tee -a "$LOG_FILE"
+    fi
+
+    echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+    echo "--- IMPROVING AND LEARNING ---" 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+    echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+
+    if timeout "$TASK_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" -- "$(cat "$IMPROVE_MDC")" \
+      2>&1 | tee -a "$IMPROVE_LOG_FILE"; then
+      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+      echo '--- SUCCESSFUL END ---' 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+    else
+      ERRNO="$?"
+      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+      echo '--- ERROR:'"$ERRNO"' ---' 2>&1 | tee -a "$IMPROVE_LOG_FILE"
+      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
     fi
 
     sleep 5

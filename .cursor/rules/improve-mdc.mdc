@@ -1,0 +1,48 @@
+---
+description: "Continuously mine logs/coding.log for bottlenecks and iteratively refine .cursor/rules/work-on-features.mdc to finish tasks faster without weakening quality gates"
+alwaysApply: false
+---
+
+This rule tasks the assistant with analyzing the accumulated execution trace in logs/coding.log to discover recurrent delays, timeouts, failure loops, and points of 
+indecision, and to use those findings to propose and implement measured refinements to .cursor/rules/work-on-features.mdc so that checklist items complete faster while 
+preserving all Definition of Done and testing standards already required elsewhere in the project.
+
+Begin by establishing a quantitative baseline from the log. Parse timestamps and markers such as date lines, iteration banners, success endings, and error notations to 
+segment work cycles and compute durations from start to completion. Derive a simple summary that captures median and p95 iteration time, frequency of errors, common failure 
+messages, and the proportion of cycles that end due to timeouts versus successful completion. Produce the baseline using deterministic shell commands so that another 
+maintainer can reproduce the numbers and store a brief plain language summary alongside the change so that context survives beyond this run.
+
+Study patterns that suggest prompt-level shortcomings rather than incidental build or test breaks. Look for repeated sequences where the assistant re-discovers repository 
+state, oscillates between tasks, commits with no substantive change, reruns the same command without new information, or stalls when deciding which unchecked item to 
+implement. Identify missing or ambiguous instructions in .cursor/rules/work-on-features.mdc that could cause these patterns, including insufficient preflight guidance, vague 
+task selection rules, unclear commit boundaries, weak handling of already-satisfied checklist lines, or lack of explicit timeboxing and fallback heuristics for flaky 
+interactions.
+
+Draft a focused textual revision of .cursor/rules/work-on-features.mdc that addresses the observed causes directly. Strengthen preflight scanning of the repository and the 
+checklist so that already-completed work is detected and marked efficiently. Clarify deterministic task ordering and tie-breaks so that the next actionable line is selected 
+without hesitation. Tighten guidance for small, isolated commits and restaging when unrelated changes slip into the index. Require consulting the recent tail of 
+logs/coding.log at the start of each iteration for continuity so that the assistant resumes exactly where it left off without repeating exploratory steps. Add explicit 
+timeboxing and recovery language for long-running commands and flaky network or build operations so that the assistant either reduces scope or switches to a safer subtask 
+rather than idling until a timeout.
+
+Ensure the revision preserves and explicitly reaffirms all quality gates and testing rigor from the existing project rules. The improved prompt must not reduce test 
+diversity, weaken property based and metamorphic checks, bypass mutation or fuzz guidance, or accept decreases in coverage or review quality. If any proposed speedup 
+conflicts with these constraints, prefer correctness, reproducibility, and safety over speed and document the rationale for rejecting the optimization within the change 
+description.
+
+Validate the revised prompt with a controlled trial. Select the smallest legitimate unchecked item from the checklist that is representative of normal work, run one full 
+iteration using the refined prompt, and measure start and end times from the log output using the same method as the baseline. Compare median-like metrics fairly by noting 
+environmental differences and ensuring that test and build caches are handled consistently. If the observed time-to-completion improves without any relaxation of gates and 
+the resulting code passes all checks, accept the change; otherwise iterate on the prompt text until the outcome is both faster and sound.
+
+Commit only the refined .cursor/rules/work-on-features.mdc and the brief baseline and after-trial summaries that explain what was changed and why it improves throughput. Keep 
+the diff minimal and descriptive so that future maintainers can trace which phrasing impacted behavior. Do not push to remotes and do not modify unrelated files. If 
+additional improvements are identified but out of scope for a single safe change, open a follow-up entry in the checklist with a concise title so that further optimization 
+continues in small increments.
+
+When merge conflicts occur in the rule file, resolve them conservatively by preserving the previously proven constraints and weaving in new clarifications one at a time, then 
+rerun the validation step to ensure that behavior remains stable. Recompute the baseline periodically after meaningful changes so that improvements remain based on evidence 
+rather than intuition.
+
+Terminate after committing the accepted refinement and recording the measured improvement, or after recording that no safe prompt-level change can improve speed under current 
+constraints. In both outcomes, leave behind clear notes in simple prose so that the next iteration starts with context rather than repeating analysis already performed.
