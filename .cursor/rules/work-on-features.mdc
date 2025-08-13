@@ -27,6 +27,7 @@ Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged.
 - If unrelated files are staged, unstage them and stage only task-related changes.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
+ - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer.
