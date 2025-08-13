@@ -1,0 +1,105 @@
+---
+description: "Implement tasks from FEATURE_CHECKLIST.md with TDD and strong, diverse testing; loop until every item satisfies the project’s Definition of Done"
+alwaysApply: false
+---
+
+This rule directs the assistant to treat FEATURE_CHECKLIST.md as the single 
+source of truth for day-to-day work and to iterate until every checklist entry 
+is complete. Unchecked checkbox lines define actionable tasks and are processed 
+in priority order when an entry contains an explicit priority indicator such as 
+a leading bracketed number; otherwise the file is worked from top to bottom. 
+The assistant may use an OpenAI-compatible API available at 
+http://localhost:1234 with the model openai/gpt-oss-20b, has full shell access 
+including git, and must verify behavior against real commands and services 
+rather than relying on assumptions. Work continues seamlessly between runs by 
+reviewing the recent history in ./logs/coding.log to understand where progress 
+last stopped.
+
+Each change follows strict test-driven development. For every behavior a 
+failing test is written first or in tight lockstep, then the smallest 
+implementation that makes the test pass is added, and finally the code is 
+refactored while keeping the suite green. Every production change is covered by 
+automated tests. At minimum there are unit tests for pure logic and integration 
+tests for boundaries such as databases, filesystems, networks, queues, or 
+external services, and critical user flows have end-to-end tests. Any 
+regression that can be reproduced from a bug report gains a protecting test 
+that fails before the fix and passes after it. Coverage never decreases and all 
+changed lines and branches are exercised, yet coverage is treated only as a 
+safety net rather than a sole gate.
+
+Test effectiveness is maximized with diverse, assertion-rich techniques. For 
+each public function the assistant first writes a brief plain-language 
+description of properties and invariants, then implements property-based tests 
+that cover equivalence classes, boundaries, and randomized cases with shrinking 
+to minimal counterexamples. When exact outputs are hard to enumerate, robust 
+oracles are encoded through metamorphic relations with at least two independent 
+relations for oracle-hard functions, and assertions check observable behavior 
+for all relevant branches. Where a reference or alternate implementation 
+exists, differential tests compare independent behaviors and any discrepancy 
+becomes a reproducible regression test. Mutation testing guides adequacy by 
+studying surviving mutants and augmenting tests until a project-appropriate 
+threshold is reached, documenting reasoning for any intentionally surviving 
+mutants; if tooling is unavailable, targeted reversible perturbations are used 
+to ensure tests fail when behavior is subtly altered and then the original code 
+is restored. Fuzz testing is added for string, byte, file, or protocol inputs 
+using Go’s built-in fuzzing with a seeded corpus, reproducible seeds, and 
+promotion of any discovered failures to human-readable regression tests that 
+persist in the suite.
+
+Traceability is mandatory. Each commit and any related test or documentation 
+explains intent in plain language and links to the canonical GitHub issue using 
+the full URL. Short comments in tests and implementation state what is being 
+verified and why it matters relative to the issue. If a behavior is not 
+expressed as an executable test, it is not considered implemented. Manual 
+verification steps that are necessary for UI or operations are recorded 
+alongside the linked issue with exact inputs, expected outputs, and results so 
+another maintainer can reproduce them.
+
+Quality gates must all pass before a task can be considered done. The build is 
+reproducible, the entire test suite is green, static analysis, type checks, 
+formatters, linters, and security scanners show no new findings, and secret 
+detection reveals no leaks. Performance and resource budgets are respected, and 
+long-running or concurrent code is proven safe under load with targeted tests 
+or benchmarks when risk exists. Backward compatibility for public interfaces is 
+preserved unless the linked issue explicitly allows a breaking change and 
+provides a migration path. Data migrations include idempotent forward scripts, 
+tested rollback plans, and verification steps, and deployments remain safe to 
+roll forward or back. Feature flags default to the safest state and include a 
+removal plan. Documentation is updated in the same change set, including 
+user-facing docs for visible features, developer docs for architecture or 
+public APIs, operational runbooks for configuration or SRE changes, and 
+changelog notes when release information would otherwise be ambiguous. At least 
+one peer review is completed and recorded, and all comments are resolved or 
+explicitly deferred with rationale and a linked follow-up issue.
+
+The workflow for each checklist entry is incremental and isolated. Select the 
+next highest-priority unchecked task, write or update tests to verify the 
+intended behavior, implement only the minimal code to satisfy the tests, and 
+commit just the staged changes related to that task. Commits are small, 
+frequent, and descriptive, and only local commits are performed; pushing to 
+remotes is out of scope. If the staging area mixes changes for multiple tasks, 
+restage to isolate the current task or split into separate commits so that each 
+commit corresponds to a single checklist line. After tests pass and the task’s 
+behavior is verified, edit FEATURE_CHECKLIST.md in the same change set to flip 
+the checkbox for that specific line to checked, optionally appending a terse 
+completion note such as a date or build reference, and keep diffs minimal by 
+modifying only the intended line.
+
+The loop continues until the checklist is fully complete. After finishing one 
+entry, rescan FEATURE_CHECKLIST.md and immediately proceed to the next 
+unchecked entry without pausing for confirmations. An entry is complete only 
+when it is checked in FEATURE_CHECKLIST.md and all requirements in this rule 
+are satisfied. If any requirement fails, continue implementing for the same 
+entry until it passes, then move on. Merge conflicts in the checklist are 
+resolved conservatively by preserving existing check states and reapplying the 
+smallest necessary edit to the intended task line, followed by revalidation 
+that the checked status matches the implemented behavior.
+
+If FEATURE_CHECKLIST.md is missing, create a minimal checklist at the 
+repository root and populate it with the tasks known from the immediate scope 
+so that progress can be tracked from the outset. Favor deterministic and 
+reproducible steps, keep randomness behind reproducible seeds, minimize fixture 
+complexity, and trim redundant near-duplicate tests that do not increase 
+behavioral diversity. Every failure from mutation, fuzzing, or end-to-end runs 
+is distilled into a minimal counterexample with a clear name and explanatory 
+comments so that intent and constraints remain obvious to future contributors.
