@@ -11,6 +11,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Usage](#usage)
+ - [Exec tool example](#exec-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -85,6 +86,19 @@ Common flags:
 -debug                 Dump request/response JSON to stderr
 ```
 You can also run `./bin/agentcli -h` to see the built‑in help.
+
+### Exec tool example
+Build the exec tool and run a simple command (Unix):
+```bash
+make build-tools
+echo '{"cmd":"/bin/echo","args":["hello"]}' | ./tools/exec
+# => {"exitCode":0,"stdout":"hello\n","stderr":"","durationMs":<n>}
+```
+Timeout example:
+```bash
+echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/exec
+# => exitCode>0 and stderr contains "timeout"
+```
 
 ### Features
 - OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
