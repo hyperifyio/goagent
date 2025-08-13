@@ -15,10 +15,12 @@ Preflight continuity (must do before any new work):
 - Read only the recent tail of `logs/coding.log` (last ~600 lines). If that file is missing or empty, fall back to `logs/improving.log`. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
+- If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
 - In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
 - At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line and one `--- WORKING ON ---` banner with the exact checklist line before any commands.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
+ - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, prefer RFC3339.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -35,6 +37,8 @@ Commit isolation and restaging discipline:
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
 - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
+ - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
+ - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer.
@@ -49,6 +53,7 @@ Deterministic outputs to the activity log (kept concise):
 - For reads/searches, log the exact query and the count of matches, not full content.
 - For commands, log: `CMD:` abridged command, scope/package, duration, exit code, pass/fail. Redact secrets.
 - Suppress meta narration; prefer one-line operational entries that enable fast resumption.
+ - Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
 - `DATE: <UTC RFC3339>`
@@ -88,6 +93,8 @@ Suggested grep snippets (for reproducible counts):
 - Work banners: `rg -n "^--- WORKING ON ---" logs/coding.log | wc -l`
 - Error banners: `rg -n "^--- ERROR:.*---$" logs/coding.log | wc -l`
 - Verbose chatter to reduce: `rg -n "^(I'|I am|I'll|I'm going to)" logs/coding.log | wc -l`
+ - No-op commit banners: `rg -n "COMMITTING UNCHANGED TO GIT" logs/coding.log | wc -l`
+ - Repeated binary commits (example): `rg -n "build\(exec\): rebuild exec binary" logs/coding.log | wc -l`
 
 Quality gates to run in this order where relevant:
 - go fmt/vet/lint (or `make lint` if available).
@@ -103,6 +110,10 @@ Continuity-driven workflow (tight loop):
 5) Run gates in the order above. If anything fails, fix before proceeding.
 6) Commit only related files with a concise message explaining why and linking to the issue. If hooks modify files, amend to include them.
 7) Record a brief operational summary in the activity log (stdout): subtask, commands run, durations, pass/fail. Include the exact checklist line text when marking completion so it’s easily grep-able later.
+
+Additional anti-chatter safeguards:
+- Before issuing any broad scans (e.g., repo-wide "Searched files"), check in-run cache and the recent `logs/coding.log` tail; skip if already performed in this iteration or unchanged since the last iteration.
+- Prefer listing or reading specific known paths captured in the log over repeating wide searches that return the same results.
 
 Stability tie-ins:
 - If the prior iteration already scanned the repo for a target and identified exact files or packages, do not rescan broadly; jump directly to those targets unless the file list changed.
