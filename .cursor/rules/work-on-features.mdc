@@ -12,10 +12,12 @@ Core constraints to reaffirm (never weaken):
 - Backward compatibility preserved unless explicitly approved with migration plan.
 
 Preflight continuity (must do before any new work):
-- Read only the recent tail of `logs/coding.log` (last 400–800 lines). If that file is missing, use `logs/improving.log`. Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`.
+- Read only the recent tail of `logs/coding.log` (last 400–800 lines). If that file is missing or empty, fall back to `logs/improving.log`. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
+- Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
 - In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
+- At the beginning of your run, emit compact markers to stdout so the next iteration can resume precisely: a single `DATE:` line, a single `--- WORKING ON ---` banner with the exact checklist line, then succinct command/result lines.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -28,7 +30,7 @@ Deterministic task selection and ordering:
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged.
-- If unrelated files are staged, unstage them and stage only task-related changes.
+- If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
 - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
@@ -42,16 +44,25 @@ Execution timeboxing and recovery:
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
 
+Deterministic outputs to the activity log (kept concise):
+- For reads/searches, log the exact query and the count of matches, not full content.
+- For commands, log: `CMD:` abridged command, scope/package, duration, exit code, pass/fail. Redact secrets.
+- Suppress meta narration; prefer one-line operational entries that enable fast resumption.
+
 Operational output style:
 - Prefer concise bullet points and result snippets over verbose narration. Avoid meta status like “I'll scan the repository…”.
 - When reading or searching, quote exactly what you searched for and summarize findings in one line.
 - Log only high-signal evidence that helps the next iteration resume quickly (e.g., counts, key file names, pass/fail). Do not dump full content unless essential.
+- Where feasible, prefix lines with parseable tags like `TASK:`, `CMD:`, `TEST:`, `PASS:`, `FAIL:` to support fast grep-based analysis.
 
 Baseline and validation (for refining this rule):
-- Before editing this rule, compute a baseline from the activity log (prefer `logs/coding.log`, else `logs/improving.log`). Use deterministic searches to gather:
+- Before editing this rule, compute a baseline from the activity log (prefer `logs/coding.log`, else `logs/improving.log`). If both are missing/empty, state that baseline data is unavailable.
+- Use deterministic searches to gather:
   - Counts: timeouts, retries/reruns without new info, empty/no-op commits, oscillations between tasks, ambiguous restarts.
   - Durations: if timestamps are present, estimate median and p95 iteration time between `--- WORKING ON ---` and `--- SUCCESSFUL END ---`/`--- ERROR:` markers. If timestamps are absent, record that durations are unavailable.
-- Record a 1–3 line baseline summary in the next commit message to preserve context.
+- In the commit message for this change, include two grep-friendly lines:
+  - `Baseline: timeouts=<n>, retries=<n>, oscillations=<n>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
+  - `After: timeouts=<n>, retries=<n>, oscillations=<n>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
 - After editing this rule, validate by running one representative unchecked checklist item end to end (choose the smallest deterministic one per selection rules). Measure the same metrics again from the log tail. Accept the revision only if iteration time improves or remains equal with strictly preserved gates and all checks green.
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
 
@@ -68,7 +79,7 @@ Continuity-driven workflow (tight loop):
 4) Implement the smallest change necessary to make the test pass.
 5) Run gates in the order above. If anything fails, fix before proceeding.
 6) Commit only related files with a concise message explaining why and linking to the issue. If hooks modify files, amend to include them.
-7) Record a brief operational summary in the activity log (stdout): subtask, commands run, durations, pass/fail.
+7) Record a brief operational summary in the activity log (stdout): subtask, commands run, durations, pass/fail. Include the exact checklist line text when marking completion so it’s easily grep-able later.
 
 Traceability and evidence:
 - When using tools, record command, minimal parameters (redacting secrets), duration, and pass/fail.
