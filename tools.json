@@ -17,5 +17,22 @@
       "command": ["./tools/get_time"],
       "timeoutSec": 5
     }
+    ,
+    {
+      "name": "fs_read_file",
+      "description": "Read a repository-relative file as base64 with optional offset and max bytes",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Repo-relative path to file"},
+          "offsetBytes": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_read_file"],
+      "timeoutSec": 5
+    }
   ]
 }

@@ -12,6 +12,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Quick start](#quick-start)
 - [Usage](#usage)
  - [Exec tool example](#exec-tool-example)
+ - [fs_read_file tool example](#fs_read_file-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -98,6 +99,16 @@ Timeout example:
 ```bash
 echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/exec
 # => exitCode>0 and stderr contains "timeout"
+```
+
+### fs_read_file tool example
+Build the file‑read tool and read a file from the repository root (paths must be repo‑relative):
+```bash
+go build -o tools/fs_read_file ./tools/fs_read_file.go
+printf 'hello world' > tmp_readme_demo.txt
+echo '{"path":"tmp_readme_demo.txt"}' | ./tools/fs_read_file | jq .
+# => {"contentBase64":"aGVsbG8gd29ybGQ=","sizeBytes":11,"eof":true}
+rm -f tmp_readme_demo.txt
 ```
 
 ### Features

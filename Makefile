@@ -16,12 +16,13 @@ build:
 build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/get_time ./tools/timecli
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/exec ./tools/exec
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_read_file ./tools/fs_read_file.go
 
 test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/get_time tools/exec
+	rm -rf bin tools/get_time tools/exec tools/fs_read_file
 
 lint:
 	@set -euo pipefail; \

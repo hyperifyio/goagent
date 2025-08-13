@@ -24,9 +24,9 @@ func buildFsReadTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-read-file")
-    // Build from within the tools package directory, targeting the single file.
-    cmd := exec.Command("go", "build", "-o", binPath, "./fs_read_file.go")
-    cmd.Dir = "."
+	// Build from within the tools package directory, targeting the single file.
+	cmd := exec.Command("go", "build", "-o", binPath, "./fs_read_file.go")
+	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build fs_read_file tool: %v\n%s", err, string(out))
