@@ -14,18 +14,24 @@ including git, and must verify behavior against real commands and services
 rather than relying on assumptions.
 
 Continuity and efficiency improvements: Before any action, consult the recent
-tail of `./logs/coding.log` to resume precisely where the last iteration ended
-and avoid redundant exploratory steps. Use these deterministic markers:
+tail of `./logs/coding.log` (at least last 400 lines) to resume exactly where
+the last iteration ended and avoid redundant exploratory steps. If the file is
+missing or empty, record a baseline as "no prior runs" and proceed. Use these
+deterministic markers emitted by the automation script:
 - Most recent `DATE:` anchors the iteration start.
 - Phase banners: `--- COMMITTING UNCHANGED TO GIT ---`, `--- WORKING ON ---`.
 - Phase outcomes: `--- SUCCESSFUL END ---` and `--- ERROR:<code> ---`.
-Rules for resuming:
+- Structured metrics (emit when possible):
+  - `METRIC: phase=<commit|work|improve> start_ms=<epoch> cmd="..."`
+  - `METRIC: phase=<...> end_ms=<epoch> exit=<code> duration_ms=<int>`
+Resuming rules (do not loop):
 - If the last visible phase ended with `--- SUCCESSFUL END ---` and there are no
-  new diffs (`git diff --quiet` and `git diff --cached --quiet`), skip repeating
-  that phase.
+  new diffs (`git diff --quiet` and `git diff --cached --quiet`), skip that
+  phase entirely.
 - If the last visible phase ended with an error or timeout, narrow scope (see
-  Timeboxing and recovery) and retry only the smallest subtask necessary to make
-  forward progress. Capture minimal diagnostics, then continue.
+  Timeboxing and recovery) and retry only the minimal subtask once. Only retry
+  again if inputs changed (code, flags, environment) or new diagnostics were
+  captured; otherwise switch to a safer subtask on the same checklist item.
 
 Each change follows strict test-driven development. For every behavior a 
 failing test is written first or in tight lockstep, then the smallest 
@@ -100,6 +106,8 @@ Execution for the selected task:
   1) Reset index (`git restore --staged .`) and re-add only relevant paths.
   2) Verify with `git diff --name-only --cached` that only intended files are
      staged.
+- Avoid no-op commits: if `git diff --staged --quiet` is true, skip committing
+  and proceed to the next action.
 - Only local commits are performed; do not push. Commit messages explain the
   “why” and link the canonical GitHub issue URL for traceability.
 - After tests pass and behavior is verified, update `FEATURE_CHECKLIST.md` in
@@ -133,6 +141,9 @@ Timeboxing and recovery:
      then proceed.
 - On timeout or flake, record the smallest reproducible repro in tests and
   proceed with the narrowed plan. Never relax gates; instead, reduce scope.
+- Command rerun gating: do not rerun the exact same command with the same
+  inputs. Re-execute only when sources changed (files, flags, env) or when
+  diagnostics indicate a different failure mode that merits a targeted retry.
 
 Concise operational output:
 - Prefer brief, operational status over narrative. Emit:
@@ -140,6 +151,8 @@ Concise operational output:
   - The key result or assertion outcome,
   - Any error code or timeout reason,
   - Next action. Avoid restating repository facts already visible in code.
+ - Include structured metrics lines as described above to enable precise
+   duration measurement without verbose chatter.
 
 If FEATURE_CHECKLIST.md is missing, create a minimal checklist at the 
 repository root and populate it with the tasks known from the immediate scope 
