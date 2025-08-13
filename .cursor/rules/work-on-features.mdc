@@ -18,7 +18,7 @@ Preflight continuity (must do before any new work):
 - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
 - In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
-- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line and one `--- WORKING ON ---` banner with the exact checklist line before any commands.
+- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line and one `--- WORKING ON ---` banner with the exact checklist line before any commands. Do not print any lead‑in commentary before these markers.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
  - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, prefer RFC3339.
  - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
@@ -35,6 +35,7 @@ Deterministic task selection and ordering:
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged.
 - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
+- Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
 - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
@@ -50,12 +51,20 @@ Execution timeboxing and recovery:
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
 
+Rerun guard (within and across iterations):
+- Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration. If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason.
+- Only retry once after applying a concrete mitigation (narrowed scope, adjusted flags, smaller target). Otherwise, switch to a safer subtask.
+
 Deterministic outputs to the activity log (kept concise):
 - For reads/searches, log the exact query and the count of matches, not full content.
 - For commands, log: `CMD:` abridged command, scope/package, duration, exit code, pass/fail. Redact secrets.
 - Suppress meta narration; prefer one-line operational entries that enable fast resumption.
 - Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
  - If output would be split into many tiny lines, buffer locally and emit a single concise line per marker. Never emit one word per line.
+
+Strict chatter ban (enforced examples):
+- Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`.
+- Replace legacy noisy lines like `Searched files (...)` or `Listed <path>` with the compact `SEARCH:` and `LIST:` markers.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
 - `DATE: <UTC RFC3339>`
@@ -66,6 +75,9 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
 - `PASS: <short reason>` or `FAIL: <short reason>`
 - `--- SUCCESSFUL END --- <line-or-id>` or `--- ERROR: <short reason> ---`
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
+
+Optional iteration segment markers (accepted in addition to the above for clearer boundaries):
+- `ITER_START: <RFC3339>` at the very beginning (after `DATE:`), and `ITER_END: <RFC3339>` at the end. Keep both to a single line if used.
 
 Additional lightweight markers to replace noisy chatter:
 - `SEARCH: query="<pattern>" | glob=<glob-or-none> | files=<n> | matches=<n>`
@@ -78,6 +90,9 @@ Operational output style:
 - Where feasible, prefix lines with parseable tags like `TASK:`, `CMD:`, `TEST:`, `PASS:`, `FAIL:` to support fast grep-based analysis.
  - Suppress filler text in outputs (e.g., “I’m going to…”, “Then I’ll…”). Write the marker or the command/result directly.
  - Do not emit free-form lines like `Searched files (...)` or `Listed <path>`; emit `SEARCH:` or `LIST:` markers instead with counts only.
+
+Discovery budget per iteration (to cap idle scans):
+- Hard cap discovery to at most 3 `SEARCH:` and 1 `LIST:` operations before producing the first `CMD:` or `TEST:` entry, unless additional discovery is strictly necessary to proceed. Use the log tail to avoid repeats.
 
 Search and tooling constraints:
 - Prefer repository-native search tools over shell processes to avoid overhead. Use ripgrep-style queries and glob filters; avoid raw `find`/`grep` shell calls.
