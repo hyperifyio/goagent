@@ -1,75 +1,121 @@
-## goagent — Minimal non-interactive agent CLI for OpenAI‑compatible APIs
+## goagent — Minimal non‑interactive agent CLI for OpenAI‑compatible APIs
 
-Small, vendor-agnostic CLI that calls an OpenAI-compatible Chat Completions API, executes allowed local tools (argv only, no shell), and returns the model's final answer. Works with any endpoint speaking `POST /v1/chat/completions`, including a local server at `http://localhost:1234/v1`.
+[![CI](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/hyperifyio/goagent)](https://github.com/hyperifyio/goagent/blob/main/go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
 
-Badges: [![CI](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml) [![Go Version](https://img.shields.io/github/go-mod/go-version/hyperifyio/goagent)](LICENSE) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
+Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions API, executes an explicit allowlist of local tools (argv only, no shell), and prints the model’s final answer. Works with any endpoint that supports `POST /v1/chat/completions`, including a local server at `http://localhost:1234/v1`.
 
 ### Table of contents
-- Installation
-- Quick start
-- Features
-- Security model
-- Sequence diagram
-- Tests
-- Roadmap and contributing
-- License and credits
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [Features](#features)
+- [Security model](#security-model)
+- [Sequence diagram](#sequence-diagram)
+- [Tests](#tests)
+- [Contributing](#contributing)
+- [Project status](#project-status)
+- [License and credits](#license-and-credits)
 
 ### Installation
-Prerequisites: Go 1.21+
+- **Prerequisites**: Go 1.21+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
 
-Commands:
+From a clean clone:
 ```bash
 make tidy build build-tools
 ```
 
-Environment (optional; flags take precedence):
+Optional environment (flags take precedence):
 - `OAI_BASE_URL` default `https://api.openai.com/v1`
 - `OAI_MODEL` default `oss-gpt-20b`
 - `OAI_API_KEY` only if your endpoint requires it
 
 ### Quick start
-Ensure an OpenAI-compatible API is reachable, e.g. local server at `http://localhost:1234/v1` with model `openai/gpt-oss-20b`.
-
+Ensure an OpenAI‑compatible API is reachable (e.g., local server at `http://localhost:1234/v1`). Build the CLI and example tool:
 ```bash
 export OAI_BASE_URL=http://localhost:1234/v1
 export OAI_MODEL=openai/gpt-oss-20b
 make build build-tools
+```
+
+Create a minimal `tools.json` next to the binary:
+```json
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "description": "Return current time for an IANA timezone (default UTC).",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "tz": {"type": "string", "description": "e.g. Europe/Helsinki"}
+        }
+      },
+      "command": ["./tools/get_time"],
+      "timeoutSec": 5
+    }
+  ]
+}
+```
+
+Run the agent:
+```bash
 ./bin/agentcli \
   -prompt "What's the local time in Helsinki? If tools are available, call get_time." \
   -tools ./tools.json \
   -debug
 ```
 
-Expected behavior: the model may trigger the `get_time` tool; the CLI runs `./tools/get_time` with JSON stdin, appends the result as a `tool` message, asks the model again, then prints a one-line final answer.
+Expected behavior: the model may call `get_time`; the CLI executes `./tools/get_time` with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a one‑line final answer.
+
+### Usage
+Common flags:
+```text
+-prompt string         User prompt (required)
+-tools string          Path to tools.json (optional)
+-system string         System prompt (default: helpful and precise)
+-base-url string       OpenAI‑compatible base URL (env OAI_BASE_URL)
+-api-key string        API key if required (env OAI_API_KEY)
+-model string          Model ID (env OAI_MODEL)
+-max-steps int         Maximum reasoning/tool steps (default 8)
+-timeout duration      HTTP and per‑tool timeout (default 30s)
+-temp float            Sampling temperature (default 0.2)
+-debug                 Dump request/response JSON to stderr
+```
+You can also run `./bin/agentcli -h` to see the built‑in help.
 
 ### Features
-- OpenAI-compatible `POST /v1/chat/completions` via `net/http` (no SDK)
-- Tool manifest `tools.json` with JSON Schema for parameters
-- Per-call timeouts; argv-only tool execution with JSON stdin/stdout
-- Deterministic error mapping for tools: `{"error":"..."}`
+- OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
+- Tool manifest `tools.json` using JSON Schema for parameters
+- Per‑call timeouts; argv‑only execution with JSON stdin/stdout
+- Deterministic tool error mapping as JSON (e.g., `{"error":"..."}`)
+
+### Security model
+- Tools are an explicit allowlist from `tools.json`
+- No shell interpretation; commands executed via argv only
+- JSON contract on stdin/stdout; strict timeouts per call
+- Treat model output as untrusted input; never pass to a shell
 
 ### Sequence diagram
 See `docs/diagrams/agentcli-seq.md` for the message flow.
 
-### Security model
-- Tools are an explicit allowlist from `tools.json`
-- No shell interpretation; commands are executed via argv only
-- JSON contract on stdin/stdout; per-call timeout enforcement
-- Treat model outputs as untrusted input; never pass to a shell
-
 ### Tests
-Run the suite:
+Run everything locally:
 ```bash
 go test ./...
 ```
+Lint, vet, and formatting checks:
+```bash
+make lint
+```
 
-### Roadmap and contributing
-- Add diverse tests and end-to-end fixtures against local endpoints
-- Document architecture as ADR (`docs/adr/0001-minimal-agent-cli.md`)
-- Contributions welcome: open an issue and PR. License: MIT.
+### Contributing
+Contributions are welcome! Please open an issue and a pull request. For larger changes, discuss first in an issue. See architecture notes in `docs/adr/0001-minimal-agent-cli.md`.
 
-Support: please open issues in the tracker.
-Roadmap: see `docs/ROADMAP.md`.
+### Project status
+Experimental, but actively maintained. Interfaces may change before a stable 1.0.
 
 ### License and credits
-MIT. Inspired by OpenAI-compatible agent patterns.
+MIT license. See `LICENSE`. Inspired by OpenAI‑compatible agent patterns.
