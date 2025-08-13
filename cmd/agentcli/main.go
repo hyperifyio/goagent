@@ -6,6 +6,7 @@ import (
     "errors"
     "flag"
     "fmt"
+    "io"
     "os"
     "strings"
     "time"
@@ -63,25 +64,30 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
-	cfg, exitOn := parseFlags()
-	if exitOn != 0 {
-		fmt.Fprintln(os.Stderr, "error: -prompt is required")
-		os.Exit(exitOn)
-	}
+    cfg, exitOn := parseFlags()
+    if exitOn != 0 {
+        fmt.Fprintln(os.Stderr, "error: -prompt is required")
+        os.Exit(exitOn)
+    }
+    code := runAgent(cfg, os.Stdout, os.Stderr)
+    os.Exit(code)
+}
 
-	// Load tools manifest if provided
-	var (
-		toolRegistry map[string]tools.ToolSpec
-		oaiTools     []oai.Tool
-	)
-	var err error
-	if strings.TrimSpace(cfg.toolsPath) != "" {
-		toolRegistry, oaiTools, err = tools.LoadManifest(cfg.toolsPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: failed to load tools manifest: %v\n", err)
-			os.Exit(1)
-		}
-	}
+// runAgent executes the non-interactive agent loop and returns a process exit code.
+func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
+    // Load tools manifest if provided
+    var (
+        toolRegistry map[string]tools.ToolSpec
+        oaiTools     []oai.Tool
+    )
+    var err error
+    if strings.TrimSpace(cfg.toolsPath) != "" {
+        toolRegistry, oaiTools, err = tools.LoadManifest(cfg.toolsPath)
+        if err != nil {
+            fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
+            return 1
+        }
+    }
 
     httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.timeout)
 
@@ -104,7 +110,7 @@ func main() {
 
         if cfg.debug {
             dump, _ := json.MarshalIndent(req, "", "  ")
-            fmt.Fprintf(os.Stderr, "\n--- chat.request step=%d ---\n%s\n", step+1, string(dump))
+            fmt.Fprintf(stderr, "\n--- chat.request step=%d ---\n%s\n", step+1, string(dump))
         }
 
         // Per-call context
@@ -112,17 +118,17 @@ func main() {
         resp, err := httpClient.CreateChatCompletion(callCtx, req)
         cancel()
         if err != nil {
-            fmt.Fprintf(os.Stderr, "error: chat call failed: %v\n", err)
-            os.Exit(1)
+            fmt.Fprintf(stderr, "error: chat call failed: %v\n", err)
+            return 1
         }
         if cfg.debug {
             dump, _ := json.MarshalIndent(resp, "", "  ")
-            fmt.Fprintf(os.Stderr, "\n--- chat.response step=%d ---\n%s\n", step+1, string(dump))
+            fmt.Fprintf(stderr, "\n--- chat.response step=%d ---\n%s\n", step+1, string(dump))
         }
 
         if len(resp.Choices) == 0 {
-            fmt.Fprintln(os.Stderr, "error: chat response has no choices")
-            os.Exit(1)
+            fmt.Fprintln(stderr, "error: chat response has no choices")
+            return 1
         }
 
         choice := resp.Choices[0]
@@ -168,16 +174,16 @@ func main() {
 
         // If the model returned final assistant content, print and exit 0
         if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
-            fmt.Println(strings.TrimSpace(msg.Content))
-            os.Exit(0)
+            fmt.Fprintln(stdout, strings.TrimSpace(msg.Content))
+            return 0
         }
 
         // Otherwise, append message and continue (some models return assistant with empty content and no tools)
         messages = append(messages, msg)
     }
 
-    fmt.Fprintln(os.Stderr, "error: run ended without final assistant content")
-    os.Exit(1)
+    fmt.Fprintln(stderr, "error: run ended without final assistant content")
+    return 1
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
