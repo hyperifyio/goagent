@@ -8,6 +8,7 @@ import (
     "fmt"
     "io"
     "os"
+    "os/exec"
     "strings"
     "time"
 
@@ -86,6 +87,17 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
         if err != nil {
             fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
             return 1
+        }
+        // Validate each configured tool is available on this system before proceeding
+        for name, spec := range toolRegistry {
+            if len(spec.Command) == 0 {
+                fmt.Fprintf(stderr, "error: configured tool %q has no command\n", name)
+                return 1
+            }
+            if _, lookErr := exec.LookPath(spec.Command[0]); lookErr != nil {
+                fmt.Fprintf(stderr, "error: configured tool %q is unavailable: %v (program %q)\n", name, lookErr, spec.Command[0])
+                return 1
+            }
         }
     }
 

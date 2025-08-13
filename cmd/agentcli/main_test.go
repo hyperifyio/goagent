@@ -9,6 +9,7 @@ import (
     "os/exec"
     "path/filepath"
     "runtime"
+    "strings"
     "testing"
     "time"
 
@@ -126,5 +127,48 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
     }
     if got := outBuf.String(); got != "done\n" {
         t.Fatalf("unexpected stdout: %q", got)
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/1
+func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
+    dir := t.TempDir()
+    // Create tools.json referencing a missing binary path
+    missing := filepath.Join(dir, "missing-tool")
+    toolsPath := filepath.Join(dir, "tools.json")
+    manifest := map[string]any{
+        "tools": []map[string]any{{
+            "name": "missing",
+            "description": "should fail if unavailable",
+            "schema": map[string]any{"type": "object"},
+            "command": []string{missing},
+            "timeoutSec": 2,
+        }},
+    }
+    b, _ := json.Marshal(manifest)
+    if err := os.WriteFile(toolsPath, b, 0o644); err != nil {
+        t.Fatalf("write manifest: %v", err)
+    }
+
+    cfg := cliConfig{
+        prompt:       "test",
+        toolsPath:    toolsPath,
+        systemPrompt: "sys",
+        baseURL:      "http://unused.local", // not contacted due to early failure
+        apiKey:       "",
+        model:        "test",
+        maxSteps:     1,
+        timeout:      1 * time.Second,
+        temperature:  0,
+        debug:        false,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit when tool is missing; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    if got := errBuf.String(); !strings.Contains(got, "unavailable") {
+        t.Fatalf("expected error mentioning unavailable tool, got: %q", got)
     }
 }
