@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// input schema per spec
 type execInput struct {
 	Cmd        string            `json:"cmd"`
 	Args       []string          `json:"args"`
@@ -55,6 +56,7 @@ func Main() {
 		writeResultAndExit(start, -1, "", fmt.Sprintf("failed to read stdin: %v", err), 2)
 	}
 	if len(data) == 0 {
+		// empty input -> treat as error
 		writeResultAndExit(start, -1, "", "empty stdin", 2)
 	}
 	if err := json.Unmarshal(data, &inp); err != nil {
@@ -64,6 +66,7 @@ func Main() {
 		writeResultAndExit(start, -1, "", "missing cmd", 2)
 	}
 
+	// Prepare context with timeout if provided
 	ctx := context.Background()
 	var cancel context.CancelFunc
 	if inp.TimeoutSec > 0 {
@@ -75,12 +78,15 @@ func Main() {
 	if inp.Cwd != "" {
 		command.Dir = inp.Cwd
 	}
-	// inherit env then override with provided
+	// Inherit minimal env plus additions
 	env := []string{}
+	// Retain current environment to avoid breaking utilities that need PATH
 	for _, e := range os.Environ() {
+		// Allow existing env, but overridden by inp.Env below
 		env = append(env, e)
 	}
 	if len(inp.Env) > 0 {
+		// Apply/override provided env
 		lookup := func(key string) int {
 			prefix := key + "="
 			for i, e := range env {
@@ -112,6 +118,7 @@ func Main() {
 	exitCode := 0
 	stderr := errBuf.String()
 	if execErr != nil {
+		// Determine exit code
 		if ctxErr := ctx.Err(); ctxErr == context.DeadlineExceeded {
 			stderr = appendMsg(stderr, "timeout")
 		}
@@ -131,6 +138,7 @@ func Main() {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(res); err != nil {
+		// As a last resort, print minimal JSON
 		fmt.Fprintf(os.Stdout, "{\"exitCode\":%d,\"stdout\":\"\",\"stderr\":\"encode error\",\"durationMs\":%d}\n", exitCode, dur.Milliseconds())
 	}
 }
