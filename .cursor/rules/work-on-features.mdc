@@ -111,6 +111,7 @@ Commit isolation and restaging discipline:
     - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the last ~200 log lines, immediately substitute a direct `rm` and record the substitution.
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
+  - Repository tool ban (clarification): do not invoke the repository’s own `fs_rm` tool (or any wrapper) to delete tracked paths or to perform version-control deletions. Use `git rm` variants for tracked paths and only plain `rm` for untracked paths as specified above.
   - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable. When substituting a prior delete tool call, also emit `SUBST: from=deleteToolCall to=<git rm|rm> path=<path>`.
   - Missing-path semantics (deterministic, non-fatal):
     - Untracked paths: prefer `rm -f -- <file>` so already-absent files resolve as success without retries; log `PASS: already-absent` and do not reattempt in this iteration.
@@ -157,6 +158,9 @@ Deterministic outputs to the activity log (kept concise):
  - At iteration end, emit a brief operational summary including the exact checklist line text, the one-line subtask description, and the result (PASS/FAIL), so the next iteration can resume deterministically.
  - If the recent log tail shows zero `SEARCH:`/`LIST:` markers historically, begin emitting them now (see Marker format) to enable deterministic continuity with concise evidence.
 
+Additional suppression:
+- Also suppress lines beginning with `Status update:`; emit concise markers instead.
+
 Strict chatter ban (enforced examples):
 - Do not emit lines beginning with any of the following: `I'll`, `I am`, `I'm going to`, `I’m going to`, `We will`, `We’re going to`, `Let’s`, `Going to`.
 - Replace legacy noisy lines like `Searched files (...)` or `Listed <path>` with the compact `SEARCH:` and `LIST:` markers.
@@ -174,6 +178,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
  - `SKIP: <short reason>` (use when skipping identical command/inputs)
  - `RETRY: <short reason>` (use for the single allowed retry after a concrete mitigation)
  - `COMMIT_SKIP: zero-staged` (use when skipping the commit phase due to no staged changes)
+ - `TEST_SKIP: <short reason>` (use when intentionally skipping tests for rules/docs-only edits per gates)
  - `BLOCKED: <one-line reason> | next=<exact deterministic step>` (mandatory when entering blocked-state)
   - `SUBST: from=<mechanism> to=<mechanism> path=<path>` (log when replacing a prior delete tool call with a deterministic deletion)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
@@ -258,7 +263,7 @@ Quality gates to run in this order where relevant:
 - Unit tests first for changed packages: select packages deterministically from edited file paths; if uncertain, run `go test ./...`.
 - Integration/end-to-end tests when applicable to the task.
 - Security/secret checks if configured in CI; at minimum ensure no secrets are added.
- - Rule/documentation-only edits: if only files under `.cursor/` or `docs/` change and no code is staged, do not run builds/tests locally; still ensure CI doc/format checks (if any) pass and that no unrelated files are staged.
+- Rule/documentation-only edits: if only files under `.cursor/` or `docs/` change and no code is staged, do not run builds/tests locally; still ensure CI doc/format checks (if any) pass and that no unrelated files are staged. When skipping tests for rules/docs-only edits, emit a single `TEST_SKIP: rules-only` marker this iteration.
 
 Continuity-driven workflow (tight loop):
 1) From `logs/coding.log` tail, identify the last selected checklist item and whether it finished. If unfinished, resume at the next smallest pending subtask; otherwise select the next task deterministically from `FEATURE_CHECKLIST.md`.
