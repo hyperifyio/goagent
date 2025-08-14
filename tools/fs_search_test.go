@@ -221,3 +221,55 @@ func TestFsSearch_Globs_Filter(t *testing.T) {
         t.Fatalf("did not expect a match in %s due to globs filter", txtRel)
     }
 }
+
+// TestFsSearch_Truncation verifies that when maxResults is reached, the tool
+// stops early, sets Truncated=true, and returns exactly maxResults matches.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Truncation(t *testing.T) {
+    // Arrange: create a repo-relative temp dir with a file containing many matches
+    tmpDirAbs, err := os.MkdirTemp(".", "fssearch-trunc-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+
+    fileRel := filepath.Join(base, "many.txt")
+    // Create a line with multiple occurrences and multiple lines to ensure >2 matches
+    content := "x x x x x\nxx xx\n"
+    if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+        t.Fatalf("write file: %v", err)
+    }
+
+    bin := buildFsSearch(t)
+
+    // Act: literal search for "x" with maxResults=2
+    out, stderr, code := runFsSearch(t, bin, map[string]any{
+        "query":      "x",
+        "regex":      false,
+        "globs":      []string{"**/*.txt"},
+        "maxResults": 2,
+    })
+
+    // Assert
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if !out.Truncated {
+        t.Fatalf("expected truncated=true when reaching maxResults, got false")
+    }
+    if len(out.Matches) != 2 {
+        t.Fatalf("expected exactly 2 matches, got %d: %+v", len(out.Matches), out.Matches)
+    }
+    for _, m := range out.Matches {
+        if m.Path != fileRel {
+            t.Fatalf("unexpected path %q (want %q)", m.Path, fileRel)
+        }
+        if m.Line <= 0 || m.Col <= 0 {
+            t.Fatalf("invalid line/col: line=%d col=%d", m.Line, m.Col)
+        }
+        if !strings.Contains(m.Preview, "x") {
+            t.Fatalf("preview should contain 'x', got %q", m.Preview)
+        }
+    }
+}
