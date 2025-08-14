@@ -10,4 +10,7 @@ This docs index helps you navigate architecture notes and diagrams.
 - Architecture: Module boundaries and allowed imports between layers.
   - Link: [docs/architecture/module-boundaries.md](architecture/module-boundaries.md)
 
+- Tools manifest reference: precise `tools.json` schema and mapping to OpenAI tools.
+  - Link: [docs/reference/tools-manifest.md](reference/tools-manifest.md)
+
 Additional guides will be added here as they are created.

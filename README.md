@@ -9,6 +9,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 
 ### Table of contents
 - [Documentation index](docs/README.md)
+- [Tools manifest reference](docs/reference/tools-manifest.md)
 - [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Installation](#installation)
 - [Quick start](#quick-start)
@@ -192,7 +193,8 @@ rm -f tmp_move_src.txt tmp_move_dst.txt
 
 ### Features
 - OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
-- Tool manifest `tools.json` using JSON Schema for parameters
+- Tool manifest `tools.json` using JSON Schema for parameters (see the
+  [tools manifest reference](docs/reference/tools-manifest.md))
 - Per‑call timeouts; argv‑only execution with JSON stdin/stdout
 - Deterministic tool error mapping as JSON (e.g., `{"error":"..."}`)
 

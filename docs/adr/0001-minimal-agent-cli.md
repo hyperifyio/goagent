@@ -28,4 +28,4 @@ Link to the canonical GitHub issue once created.
 See `docs/diagrams/agentcli-seq.md` for the sequence diagram illustrating the loop.
 
 ## Related documentation
-See the docs index at `docs/README.md` for navigation to related guides and diagrams.
+See the docs index at `docs/README.md` for navigation to related guides and diagrams. For the tool manifest contract, refer to `docs/reference/tools-manifest.md`.
