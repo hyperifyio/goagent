@@ -1,5 +1,5 @@
 ---
-description: "Repository-wide hygiene review that appends only new, non-duplicate, minimal, independent, DoD-ready tasks to FUTURE_CHECKLIST.md; each item is a single-line plain English checkbox"
+description: "Repository-wide hygiene review that appends only new, non-duplicate, minimal, independent, DoD-ready tasks to FUTURE_CHECKLIST.md; each item is a single-line plain English checkbox, and traceability links are included only when a real canonical issue URL exists"
 alwaysApply: false
 ---
 
@@ -31,21 +31,22 @@ existing when there is an unchecked checkbox line beginning with `* [ ]` or
 whitespace, collapsing multiple spaces, removing trailing punctuation and 
 emoji, and compressing repeated file paths. Consider items duplicates if their 
 normalized opening task clause matches or if they address the same primary 
-files or symbols for the same issue class. If a duplicate is found, do not add 
-a new item and do not modify existing files. Checked items never block analysis 
-but must not be recreated.
+files or symbols for the same issue class; when a canonical issue URL is 
+present on an existing item, treat an item that targets the same issue URL as a 
+duplicate. If a duplicate is found, do not add a new item and do not modify 
+existing files. Checked items never block analysis but must not be recreated.
 
 Each new checklist entry must be exactly one physical line that starts with a 
 Markdown checkbox marker `* [ ] ` followed by plain English sentences only. Do 
 not use any additional formatting, labels, lists, bullets, tables, code fences, 
 inline code, emojis, or special typography inside the line. Do not insert hard 
-line breaks within an item; a single newline ends the item. Write clear prose 
-that stands on its own without “see above” references. The sentence should 
-express, in a compact way, the task, context and evidence, the smallest 
-proposed change, affected scope, risks, effort, dependencies, a concise DoD 
-summary aligned with the project’s Definition of Done, how to verify, how to 
-rollback, and a traceability link to the canonical issue URL; use commas and 
-semicolons to keep it readable while remaining on one line.
+line breaks within an item; a single newline ends the item. The sentence must 
+express, in compact prose, the task, minimal proposed change, context and 
+evidence, affected scope, risks, effort, dependencies, a concise DoD summary 
+aligned with the project’s Definition of Done, how to verify, how to rollback, 
+and a traceability link to the canonical issue URL only when such a real URL 
+already exists; never invent or guess URLs, never create placeholders, and omit 
+the link entirely when none exists.
 
 Preventive documentation tasks are created only when a real gap exists after 
 inspecting the ./docs tree. If an existing Markdown document already explains 
@@ -63,15 +64,15 @@ updating the most authoritative document.
 
 Each item’s DoD summary inside the single line must commit to test-driven 
 development with a failing test first where applicable, no coverage regression 
-and changed lines/branches exercised, deterministic tests runnable locally and 
-in CI, all quality gates green (build reproducibility, static analysis, type 
-checks, formatting, linting, security scanning, secret detection), preserved 
-backward compatibility for public interfaces or an explicit migration plan with 
-tests and docs for approved breaking changes, idempotent and verified data 
-migrations when relevant, updated user/developer/operational docs and changelog 
-in the same change, at least one completed peer review with comments resolved 
-or explicitly deferred with rationale and a follow-up issue URL, and a clear 
-rollback note.
+and changed lines or branches exercised, deterministic tests runnable locally 
+and in CI, all quality gates green including static analysis, type checks, 
+formatting, linting, security scanning, and secret detection with no new 
+findings, preserved backward compatibility for public interfaces or an explicit 
+migration plan with tests and docs for approved breaking changes, idempotent 
+and verified data migrations when relevant, updated user, developer, and 
+operational docs and changelog in the same change, at least one completed peer 
+review with comments resolved or explicitly deferred with rationale and a 
+follow-up issue URL when such a real URL exists, and a clear rollback note.
 
 File handling is append-only to FUTURE_CHECKLIST.md. Open FUTURE_CHECKLIST.md 
 in append mode when it exists, do not rewrite or reorder existing content, and 
@@ -84,8 +85,8 @@ FUTURE_CHECKLIST.md does not exist, create it and write the heading followed by
 the single-line items. Never modify or regenerate prior content in 
 FUTURE_CHECKLIST.md or FEATURE_CHECKLIST.md.
 
-Independence and minimality are mandatory. Each item must describe a single 
-smallest change in one place and be implementable without knowledge of any 
+Independence and minimality are mandatory. Each item must describe the smallest 
+possible change in one place and be implementable without knowledge of any 
 other item. If a change requires an Architectural Decision Record, add a 
 separate single-line item that lands the ADR under ./docs/adr before any 
 implementation item. For API changes, add a separate single-line item that 
@@ -100,9 +101,7 @@ sensitive data, missing encryption in transit or at rest, unpinned or
 vulnerable dependencies, missing SBOM updates, absent correlation or trace 
 identifiers, missing idempotency on external-facing writes, and permissive IAM; 
 propose the smallest verifiable change as a one-line task with clear 
-verification and rollback notes.
-
-The deliverable from this rule is only the curated, deduplicated 
-FUTURE_CHECKLIST.md containing ready-to-execute single-line checklist items. No 
-issues are opened, no branches created, and no commits pushed as part of this 
-review.
+verification and rollback notes. The deliverable from this rule is only the 
+curated, deduplicated FUTURE_CHECKLIST.md containing ready-to-execute 
+single-line checklist items with real traceability links included only when 
+available.
