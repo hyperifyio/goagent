@@ -5,6 +5,13 @@ alwaysApply: false
 
 You are the coding assistant working inside this repository. Optimize for throughput while strictly upholding the repository’s Definition of Done (DoD), testing standards, and traceability requirements. Never relax gates. Prefer short, operational outputs over narrative text. Reduce idle time and indecision by resuming precisely, selecting deterministically, and avoiding redundant scans or reruns.
 
+Hard minimum outcome per iteration (no empty loops):
+- Each iteration must end with exactly one of the following:
+  1) A green, merged‑ready change that passes all gates for the chosen slice; or
+  2) The smallest possible failing unit test that isolates the very next behavior to implement (kept narrowly scoped to a single target).
+- If neither outcome is achieved before the wall clock elapses, immediately stop, emit `ITER_END:` followed by `--- ERROR: timebox ---`, and record the exact next deterministic step in `TASK:` along with the selected slice label. Then micro‑slice the task as described below. Empty or no‑op iterations are disallowed.
+- Cap change surface per iteration to a single focused subtask that touches the fewest practical files (preferably one code file and one test file). After the first failure, do not widen scope; instead narrow inputs or slice further.
+
 Core constraints to reaffirm (never weaken):
 - All production changes are covered by automated tests; diverse tests at appropriate layers; regressions gain protecting tests.
 - Full build and test suite must pass; linters/formatters/static analysis clean; no secrets in changes.
@@ -31,6 +38,14 @@ Preflight continuity (must do before any new work):
  - Git-state caching: capture `git status -s` and `git diff --name-only` at most once per iteration and reuse those results to avoid redundant checks.
  - Error code hygiene: when interpreting failures in logs or command results, treat exit codes 124 (GNU timeout), 137 (SIGKILL), and 130 (SIGINT) as timeouts for baseline counting; other non-zero exits are failures.
 
+Deterministic micro‑slicing (ten‑minute slices):
+- When a selected checklist line contains multiple deliverables (e.g., code, tests, docs, CI, diagrams) or is otherwise broad, immediately generate a series of follow‑up subtasks under the same theme in `FEATURE_CHECKLIST.md` using a stable naming pattern:
+  - Prefix: `[SNN]` where `NN` is a zero‑padded step index starting at 01; e.g., `[S01] stub types for fs_append_file`, `[S02] failing contract test for append`, `[S03] minimal pass for single writer`.
+  - Each subtask must be self‑contained, runnable offline, and completable within ~10 minutes.
+  - Prefer leaf work that reduces uncertainty first: stubbing files with types/signatures, writing a single failing test that encodes the contract, or implementing the smallest path to make only that test pass without broader refactors.
+- Keep the original umbrella checklist item unchecked until all generated slices are checked.
+- The current iteration must complete exactly one slice (per the minimum outcome rules) and must not silently fan‑out into multiple slices.
+
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
 - Selection rule:
@@ -43,15 +58,34 @@ Deterministic task selection and ordering:
  - Avoid re-scanning the entire checklist during a single iteration; read it at most once at the start of the iteration.
  - Git-state accelerator: If `git status` reveals untracked/modified files that clearly map to an unchecked checklist line (e.g., `tools/fs_append_file.go` alongside the unchecked item “Implement tools/fs_append_file.go”), prioritize that item immediately to eliminate rediscovery loops.
  - Redundant git checks ban: do not re-run `git status`, `git diff`, or `git ls-files` repeatedly within the same iteration unless the working tree changed due to your own successful command.
+ - Ready‑to‑finish promotion: if the working tree already contains files that clearly correspond to an unchecked item, complete that item before selecting anything else.
+ - Repository re‑scan ban: once concrete targets are known from the log tail or staged changes, do not re‑list or re‑scan the repository in the same iteration.
+
+Skeleton‑first fallback (for new tools and file ops):
+- When implementing a new tool or file operation and structure is unclear, generate a minimal deterministic scaffold that compiles (types, signatures, and stubbed main or functions).
+- Add a single narrow failing test that expresses one behavior or contract.
+- Implement the smallest code necessary to make only that test pass, without broader refactors. Defer documentation and CI updates to follow‑up slices unless trivially small.
+
+Blocked‑state protocol (prevent thrashing):
+- Detect blocked state when any of the following appear in the recent log tail for the same checklist banner without `PASS:` or `--- SUCCESSFUL END ---`:
+  - Repeated timeouts; or
+  - Identical retries (same `CMD:` and inputs); or
+  - The same `--- WORKING ON ---` banner resurfacing.
+- On detection, immediately:
+  1) Emit `BLOCKED: <one‑line reason> | next=<exact deterministic step>`;
+  2) Switch to producing the smallest failing test or minimal stub that unblocks future work;
+  3) Create a new follow‑up subtask in `FEATURE_CHECKLIST.md` (using the `[SNN]` pattern) that encodes the unblock step so subsequent iterations can resume deterministically.
+- While blocked in the current iteration: suppress rediscovery or broad scans, and forbid rerunning the last failing command without a concrete mitigation (narrowed scope, changed inputs, or new test).
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
 - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
- - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by a 1–2 sentence rationale:
-   - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
-   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>`
+ - Commit after every successful slice: end each green slice with exactly one commit containing only files for that slice. Do not batch multiple slices into one commit.
+ - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by progress metrics and a 1–2 sentence rationale:
+   - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
+   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
 - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
@@ -81,6 +115,7 @@ Deterministic outputs to the activity log (kept concise):
 - Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
  - If output would be split into many tiny lines, buffer locally and emit a single concise line per marker. Never emit one word per line.
  - Always write success markers to `logs/coding.log` (not only to improvement logs) so the main workflow can detect completion.
+ - At iteration end, emit a brief operational summary including the exact checklist line text, the one-line subtask description, and the result (PASS/FAIL), so the next iteration can resume deterministically.
 
 Strict chatter ban (enforced examples):
 - Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`.
@@ -99,6 +134,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
  - `SKIP: <short reason>` (use when skipping identical command/inputs)
  - `RETRY: <short reason>` (use for the single allowed retry after a concrete mitigation)
  - `COMMIT_SKIP: zero-staged` (use when skipping the commit phase due to no staged changes)
+ - `BLOCKED: <one-line reason> | next=<exact deterministic step>` (mandatory when entering blocked-state)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 
 Marker emission rules:
@@ -142,9 +178,9 @@ Baseline and validation (for refining this rule):
     - Oscillations: the same `--- WORKING ON ---` checklist line appearing 3+ times between two `--- SUCCESSFUL END ---` banners without an intervening `PASS:`.
     - Ambiguous restarts: an `ITER_START:` within 2 minutes of the previous `ITER_END:` with no intervening `CMD:`/`TEST:` markers or recorded file changes.
   - Durations: if `ITER_START:`/`ITER_END:` are present, compute durations between them. Otherwise, estimate using the nearest `DATE:` markers adjacent to each iteration. If timestamps are absent, record that durations are unavailable.
-- In the commit message for this change, include two grep-friendly lines:
-  - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>`
-  - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|unavailable>/<p95|unavailable>`
+ - In the commit message for this change, include two grep-friendly lines:
+  - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
+  - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
 - After editing this rule, validate by running one representative unchecked checklist item end to end (choose the smallest deterministic one per selection rules). Measure the same metrics again from the log tail. Accept the revision only if iteration time improves or remains equal with strictly preserved gates and all checks green.
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
  - Environment fallback: if ripgrep (`rg`) is unavailable, use portable `grep` pipelines shown below. If even those are unavailable or streamed output prevents reliable counting, set the affected numeric fields to `unavailable` in the commit message rather than blocking the change. Never guess.
