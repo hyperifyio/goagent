@@ -24,7 +24,7 @@
 * [ ] Implement `tools/fs_append_file.go` — stdin `{"path":"string","contentBase64":"string"}`; append (create if missing) with advisory file lock; outputs `{"bytesAppended":int}`; DoD: tests (double append, concurrent writers), docs example, CI green.
   - [x] [S01] stub types and argument validation for fs_append_file (repo-relative path, base64 decode)
   - [x] [S02] failing contract test for double append (create-if-missing, then append)
-  - [ ] [S03] minimal passing implementation for single-writer append with advisory lock (no concurrency test yet)
+  - [x] [S03] minimal passing implementation for single-writer append with advisory lock (no concurrency test yet)
   - [ ] [S04] add concurrent writers test (two goroutines append deterministically; order-agnostic content length assertion)
   - [ ] [S05] strengthen implementation to pass concurrency test and add README docs example
 * [ ] Implement `tools/fs_mkdirp.go` — stdin `{"path":"string","modeOctal?":"0755"}`; recursively create; outputs `{"created":bool}`; DoD: tests (deep path, idempotence), docs example, CI green.
