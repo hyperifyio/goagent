@@ -93,3 +93,27 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 		t.Fatalf("content mismatch: got %q want %q", string(got), string(content))
 	}
 }
+
+// TestFsMove_DestinationExists_OverwriteFalse ensures the tool refuses to
+// clobber an existing destination when overwrite is false or omitted.
+func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
+    bin := buildFsMoveTool(t)
+    dir := makeRepoRelTempDir(t, "fsmove-overlap-")
+    src := filepath.Join(dir, "a.txt")
+    dst := filepath.Join(dir, "b.txt")
+    if err := os.WriteFile(src, []byte("one"), 0o644); err != nil {
+        t.Fatalf("seed src: %v", err)
+    }
+    if err := os.WriteFile(dst, []byte("two"), 0o644); err != nil {
+        t.Fatalf("seed dst: %v", err)
+    }
+
+    // No overwrite flag provided
+    _, stderr, code := runFsMove(t, bin, map[string]any{
+        "from": src,
+        "to":   dst,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit due to destination exists, got 0; stderr=%q", stderr)
+    }
+}
