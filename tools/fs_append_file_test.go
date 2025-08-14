@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+    "sync"
 	"testing"
 )
 
@@ -172,5 +173,77 @@ func TestFsAppend_Validation_BadBase64(t *testing.T) {
     }
     if !strings.Contains(strings.ToLower(stderr), "decode base64") {
         t.Fatalf("stderr should mention base64 decode failure, got %q", stderr)
+    }
+}
+
+func TestFsAppend_ConcurrentWriters(t *testing.T) {
+    bin := buildFsAppendTool(t)
+
+    dir := makeRepoRelTempDir(t, "fsappend-concurrent-")
+    path := filepath.Join(dir, "concurrent.txt")
+
+    // Distinct payloads to allow order-agnostic verification via counts
+    partA := bytes.Repeat([]byte("A"), 10000)
+    partB := bytes.Repeat([]byte("B"), 12000)
+
+    var wg sync.WaitGroup
+    wg.Add(2)
+
+    var out1 fsAppendOutput
+    var err1 string
+    var code1 int
+    go func() {
+        defer wg.Done()
+        out1, err1, code1 = runFsAppend(t, bin, map[string]any{
+            "path":          path,
+            "contentBase64": base64.StdEncoding.EncodeToString(partA),
+        })
+    }()
+
+    var out2 fsAppendOutput
+    var err2 string
+    var code2 int
+    go func() {
+        defer wg.Done()
+        out2, err2, code2 = runFsAppend(t, bin, map[string]any{
+            "path":          path,
+            "contentBase64": base64.StdEncoding.EncodeToString(partB),
+        })
+    }()
+
+    wg.Wait()
+
+    if code1 != 0 {
+        t.Fatalf("first concurrent append expected success, got exit=%d stderr=%q", code1, err1)
+    }
+    if code2 != 0 {
+        t.Fatalf("second concurrent append expected success, got exit=%d stderr=%q", code2, err2)
+    }
+    if out1.BytesAppended != len(partA) {
+        t.Fatalf("bytesAppended mismatch for first writer: got %d want %d", out1.BytesAppended, len(partA))
+    }
+    if out2.BytesAppended != len(partB) {
+        t.Fatalf("bytesAppended mismatch for second writer: got %d want %d", out2.BytesAppended, len(partB))
+    }
+
+    // Verify final content length and composition (order-agnostic)
+    got, err := os.ReadFile(path)
+    if err != nil {
+        t.Fatalf("read back: %v", err)
+    }
+    wantLen := len(partA) + len(partB)
+    if len(got) != wantLen {
+        t.Fatalf("final size mismatch: got %d want %d", len(got), wantLen)
+    }
+    var countA, countB int
+    for _, b := range got {
+        if b == 'A' {
+            countA++
+        } else if b == 'B' {
+            countB++
+        }
+    }
+    if countA != len(partA) || countB != len(partB) {
+        t.Fatalf("content composition mismatch: countA=%d want %d, countB=%d want %d", countA, len(partA), countB, len(partB))
     }
 }
