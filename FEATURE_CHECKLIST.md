@@ -58,7 +58,7 @@
   - [x] [S02:search-skeleton] scaffold minimal `tools/fs_search` program with argument parsing/types
   - [x] [S03:search-impl-literal] minimal implementation to pass literal search test
   - [x] [S04:search-regex-glob-tests] add tests for regex and glob filtering
-  - [ ] [S05:search-truncation] implement maxResults truncation and test
+  - [x] [S05:search-truncation] implement maxResults truncation and test
 * [ ] Update scripts/smoke-test.sh to remove goresearch and SearxNG checks and make it goagent-specific retaining only the OpenAI-compatible LLM health check and clarifying messages; smallest change is editing the script header and deleting the Searx section; scope scripts; low risk; DoD includes script runs locally and reports PASS/FAIL for LLM reachability without Docker or Searx, tests unchanged and green, all quality gates green, peer review completed, verification by executing the script on a clean clone, rollback by reverting the script change.
 * [ ] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string"}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
 * [ ] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
