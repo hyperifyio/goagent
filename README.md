@@ -16,6 +16,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
  - [fs_append_file tool example](#fs_append_file-tool-example)
  - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
 - [fs_rm tool example](#fs_rm-tool-example)
+ - [fs_move tool example](#fs_move-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -162,6 +163,27 @@ echo '{"path":"tmp_rm_demo.txt"}' | ./tools/fs_rm | jq .
 mkdir -p tmp_rm_dir/a/b && touch tmp_rm_dir/a/b/file.txt
 echo '{"path":"tmp_rm_dir","recursive":true}' | ./tools/fs_rm | jq .
 rm -rf tmp_rm_dir
+```
+
+### fs_move tool example
+Move (rename or cross-device copy+remove) a repo-relative file. By default, it refuses to overwrite an existing destination unless `overwrite:true` is provided.
+```bash
+make build-tools
+
+# Create a source file
+printf 'payload' > tmp_move_src.txt
+
+# Basic rename when destination does not exist
+echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt"}' | ./tools/fs_move | jq .
+test ! -e tmp_move_src.txt && test -e tmp_move_dst.txt
+
+# Overwrite behavior: destination exists, require overwrite:true
+printf 'old' > tmp_move_dst.txt
+printf 'new' > tmp_move_src.txt
+echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./tools/fs_move | jq .
+grep -qx 'new' tmp_move_dst.txt
+
+rm -f tmp_move_src.txt tmp_move_dst.txt
 ```
 
 ### Features
