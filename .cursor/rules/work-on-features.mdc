@@ -38,6 +38,7 @@ Preflight continuity (must do before any new work):
 - Legacy success banner: treat `--- SUCCESS ---` as equivalent to a successful end when parsing older logs; when writing new logs, ALWAYS emit `--- SUCCESSFUL END ---`.
  - Legacy empty work banner: some older logs emit `--- WORKING ON ---` without the checklist line. When writing, ALWAYS include the exact checklist line; when reading legacy logs without it, infer from the nearest checklist diff in `FEATURE_CHECKLIST.md` if unambiguous, otherwise leave the task label unknown and proceed deterministically by selection rules.
  - NDJSON-only logs: if the recent log tail contains no plain‑text markers at all (only streamed JSON or tokenized output), do not attempt to parse it. Start emitting markers in this iteration (see Marker format) and proceed; set baseline metrics to `unavailable` where counting is impossible.
+ - Leading whitespace normalization: when parsing existing logs, tolerate and strip any leading whitespace before markers (e.g., `   --- WORKING ON ---`). When writing new markers, always start at column 1 with no leading whitespace so future scans can anchor reliably.
  - Git-state caching: capture `git status -s` and `git diff --name-only` at most once per iteration and reuse those results to avoid redundant checks.
  - Error code hygiene: when interpreting failures in logs or command results, treat exit codes 124 (GNU timeout), 137 (SIGKILL), and 130 (SIGINT) as timeouts for baseline counting; other non-zero exits are failures.
 
@@ -127,6 +128,7 @@ Execution timeboxing and recovery:
  - Mandatory markers: any retry must be accompanied by a `RETRY:` line with the reason; any skipped duplicate must log a `SKIP:` line with the reason. If prior logs show duplicate commands without these markers, begin using them now.
  - Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -run '^(TestName1|TestName2)$'` first; widen scope to the full package and then to `./...` only after green.
  - Git command timebox: individual `git` queries (status, diff, log) should complete in under 5s; if slower, narrow scope to specific paths you touched.
+ - Live probe de‑emphasis: avoid live LLM probes or external health checks during this workflow unless strictly necessary to validate a slice. Prefer offline unit/integration tests to keep iterations deterministic and fast.
 
 Rerun guard (within and across iterations):
 - Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration (look back across the last ~1000 lines). If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason. Never repeat a full-repo grep/scan if the previous iteration already captured the exact targets.
@@ -161,6 +163,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
  - `BLOCKED: <one-line reason> | next=<exact deterministic step>` (mandatory when entering blocked-state)
   - `SUBST: from=<mechanism> to=<mechanism> path=<path>` (log when replacing a prior delete tool call with a deterministic deletion)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
+Alignment requirement: all markers must be left‑aligned (no leading spaces or tabs) when written.
 
 Marker emission rules:
 - Emit each marker as a single plain‑text line (no JSON framing, no xtrace prefix).
