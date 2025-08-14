@@ -13,6 +13,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Usage](#usage)
  - [Exec tool example](#exec-tool-example)
  - [fs_read_file tool example](#fs_read_file-tool-example)
+ - [fs_append_file tool example](#fs_append_file-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -109,6 +110,18 @@ printf 'hello world' > tmp_readme_demo.txt
 echo '{"path":"tmp_readme_demo.txt"}' | ./tools/fs_read_file | jq .
 # => {"contentBase64":"aGVsbG8gd29ybGQ=","sizeBytes":11,"eof":true}
 rm -f tmp_readme_demo.txt
+```
+
+### fs_append_file tool example
+Append base64 content to a repo-relative file (creates the file if missing):
+```bash
+make build-tools
+echo -n 'hello ' | base64 > b64a.txt
+echo -n 'world'  | base64 > b64b.txt
+echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64a.txt)"'"}' | ./tools/fs_append_file | jq .
+echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64b.txt)"'"}' | ./tools/fs_append_file | jq .
+cat tmp_append_demo.txt
+rm -f tmp_append_demo.txt b64a.txt b64b.txt
 ```
 
 ### fs_write_file tool example
