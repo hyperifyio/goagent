@@ -73,10 +73,10 @@ Skeleton‑first fallback (for new tools and file ops):
 - Implement the smallest code necessary to make only that test pass, without broader refactors. Defer documentation and CI updates to follow‑up slices unless trivially small.
 
 Blocked‑state protocol (prevent thrashing):
-- Detect blocked state when any of the following appear in the recent log tail for the same checklist banner without `PASS:` or `--- SUCCESSFUL END ---`:
-  - Repeated timeouts; or
-  - Identical retries (same `CMD:` and inputs); or
-  - The same `--- WORKING ON ---` banner resurfacing.
+- Detect blocked state when any of the following appear in the recent log tail (last ~1000 lines) for the same checklist banner without `PASS:` or `--- SUCCESSFUL END ---`:
+  - Repeated timeouts (threshold: at least 2 timeouts for the same command/scope within the last ~200 lines); or
+  - Identical retries (threshold: at least 2 identical `CMD:` entries—same command and inputs—without an intervening `RETRY:` line or parameter change); or
+  - The same `--- WORKING ON ---` banner resurfacing 3+ times across iterations.
 - On detection, immediately:
   1) Emit `BLOCKED: <one‑line reason> | next=<exact deterministic step>`;
   2) Switch to producing the smallest failing test or minimal stub that unblocks future work;
@@ -97,15 +97,16 @@ Commit isolation and restaging discipline:
  - Deterministic deletions protocol (replace deleteToolCall with tracked-status driven ops):
   - Explicit ban: never invoke `deleteToolCall` in this repository. If the recent log tail shows such a call, immediately substitute with the correct deterministic deletion (`git rm` or `rm` as specified below) and emit a `SUBST:` marker.
   - Substitution evidence: when substituting, you MUST also emit the exact deterministic deletion as a `CMD:` line with `exit` and `ms` fields. Absence of `SUBST:` paired with a prior `deleteToolCall` in the tail is a protocol breach; correct it immediately in the current iteration.
-  - Preflight (cache per-iteration): determine tracked status once per path and reuse the result. Use `git ls-files --error-unmatch <path>` (fast-fail) or a targeted `git status -s -- <path>`; avoid broad scans.
+  - Preflight (cache per-iteration): determine tracked status once per path and reuse the result via an in-run map `trackedStatus[path]=tracked|untracked`. Use `git ls-files --error-unmatch -- <path>` (fast-fail) or a targeted `git status -s -- <path>`; avoid broad scans and never re-check the same path twice in one iteration.
   - Path safety constraints (mandatory): operate only within the repository working tree. Reject absolute paths and any path containing `..` segments. Resolve candidate paths using a realpath check and verify they are under the repo root before deleting. Do not use wildcards; enumerate explicit paths.
+  - Root/critical path guard: never target the repository root `.` or top-level directories without an explicit, enumerated file list. If ambiguity is detected, enter BLOCKED and set `next=<exact path list>`.
   - If path is tracked (in Git index/history):
     - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options and quote any path containing spaces. Do not invoke any delete tool or shell `rm` for tracked paths.
-    - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the recent log tail or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
+    - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the last ~200 log lines or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
     - If Git reports index conflicts or unrelated staged content, restage deterministically to include only intended deletions: `git restore --staged .` then repeat `git rm` with the explicit paths. Retry once within the timebox; on a second failure, enter BLOCKED with `next=<exact git command>`.
   - If path is untracked and inside the repository working tree:
     - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote paths with spaces and use `--` to avoid globbing/option ambiguity. Never spawn a long‑lived process. Do not use wildcards; list each path explicitly.
-    - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the log tail, immediately substitute a direct `rm` and record the substitution.
+    - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the last ~200 log lines, immediately substitute a direct `rm` and record the substitution.
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
   - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable. When substituting a prior delete tool call, also emit `SUBST: from=deleteToolCall to=<git rm|rm> path=<path>`.
@@ -113,7 +114,8 @@ Commit isolation and restaging discipline:
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
  - If zero-staged conditions recur across three consecutive iterations (as evidenced by repeated `COMMIT_SKIP: zero-staged` or commit banners without diffs), enter BLOCKED with `next=adjust commit preflight to skip when staged is empty` and proceed to a smallest failing test or stub for the currently selected task.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
-- Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling, and avoid any further commit-related git inspections in this iteration.
+ - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling, and avoid any further commit-related git inspections in this iteration.
+ - Legacy driver compatibility: if the recent log tail shows a blanket `git add .` by an outer driver, do not attempt any commit flow unless you have explicitly staged only this slice’s files. If unrelated files became staged, run `git restore --staged .` and then stage only explicit paths for this slice before committing.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
@@ -215,6 +217,7 @@ Baseline and validation (for refining this rule):
  - Environment fallback: if ripgrep (`rg`) is unavailable, use portable `grep` pipelines shown below. If even those are unavailable or streamed output prevents reliable counting, set the affected numeric fields to `unavailable` in the commit message rather than blocking the change. Never guess.
  - If the automation runtime cannot yet emit `ITER_START:`/`ITER_END:` markers, proceed with the refinement and set `After:` fields to `pending`. Add a follow-up entry in `FEATURE_CHECKLIST.md` to enable markers in the runtime that writes `logs/coding.log`.
  - Aggregation rule: when computing baseline counts, search both `logs/coding.log` and `logs/improving.log` and aggregate totals; prefer `logs/coding.log` for duration estimates and task continuity.
+ - Duration aggregation method: when `ITER_START:`/`ITER_END:` pairs exist, compute per‑iteration durations and report p50/p95 over the most recent up to 20 complete iterations; if fewer than 5 are available, set both to `unavailable`. If pairs are missing, estimate using adjacent `DATE:` markers bracketing each `--- WORKING ON ---` section and label the result as an estimate.
 
 Suggested grep snippets (for reproducible counts):
 - Timeouts: `rg -n "(?i)timeout|timed out|Timeout after" logs/coding.log | wc -l`
