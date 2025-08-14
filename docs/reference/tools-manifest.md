@@ -45,8 +45,11 @@ Each manifest entry is exported as an OpenAI tool of type `function`:
       "description": "Get current time for an IANA timezone",
       "schema": {
         "type": "object",
-        "properties": {"tz": {"type": "string"}},
-        "required": ["tz"],
+        "properties": {
+          "timezone": {"type": "string", "description": "IANA timezone, e.g. Europe/Helsinki"},
+          "tz": {"type": "string", "description": "Alias for timezone (deprecated)"}
+        },
+        "required": ["timezone"],
         "additionalProperties": false
       },
       "command": ["./tools/get_time"],
