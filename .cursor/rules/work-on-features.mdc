@@ -18,7 +18,7 @@ Core constraints to reaffirm (never weaken):
 - Backward compatibility preserved unless explicitly approved with migration plan.
 
 Preflight continuity (must do before any new work):
-- Read only the recent tail of `logs/coding.log` (cap to last ~600 lines; never read the whole file). If that file is missing or empty, fall back to `logs/improving.log` with the same tail cap. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
+- Read only the recent tail of `logs/coding.log` (cap to last ~400 lines; never read the whole file). If that file is missing or empty, fall back to `logs/improving.log` with the same tail cap. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
  - For aggregate metrics (not continuity), search both files under `logs/` to avoid bias when computing counts.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
@@ -31,7 +31,7 @@ Preflight continuity (must do before any new work):
 - Missing-markers adoption: if the recent tail shows identical commands re-run without accompanying `RETRY:`/`SKIP:` markers, begin emitting `RETRY:` (for a single mitigated retry) and `SKIP:` (for identical inputs) in this iteration and onward.
 - Delete-tool substitution enforcement: if any `deleteToolCall` appears in the recent tail without a paired `SUBST:` entry, immediately apply deterministic deletion per the protocol below and log `SUBST:` alongside the `CMD:` evidence in this iteration.
   - Pre-task gate: scan the last ~200 lines for `deleteToolCall`. If present without a corresponding `SUBST:` and deterministic `CMD:` evidence, elevate a micro-slice `[SXX:delete-subst]` to perform the exact `git rm`/`rm` substitution before any other work on the current checklist item. Treat this as the smallest slice and complete it within the current iteration.
-- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line, then `ITER_START:` (see format below), and one `--- WORKING ON ---` banner with the exact checklist line before any commands. Do not print any lead‑in commentary before these markers. If the outer driver already printed a legacy empty `--- WORKING ON ---` banner, still emit your own banner including the exact checklist line text, but only once per iteration. If the outer driver will print the final success banner, you still MUST emit your own `ITER_END:` immediately before completion so each `ITER_START:` is paired in the log.
+- At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line, then `ITER_START:` (see format below), then one `--- WORKING ON ---` banner with the exact checklist line, and exactly one `TASK:` line before any commands. Do not print any lead‑in commentary before these markers. If the outer driver already printed a legacy empty `--- WORKING ON ---` banner, still emit your own banner including the exact checklist line text, but only once per iteration. If the outer driver will print the final success banner, you still MUST emit your own `ITER_END:` immediately before completion so each `ITER_START:` is paired in the log.
  - Do not emit multiple `--- WORKING ON ---` banners for the same checklist line within a single iteration. Across iterations, if the same checklist line remains unfinished and unchanged, emit at most one banner for it in the new iteration and continue; avoid banner spam.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
 - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, REQUIRE RFC3339 in UTC. If both appear, prefer RFC3339 for any calculations.
@@ -55,6 +55,9 @@ Deterministic micro‑slicing (ten‑minute slices):
 - Keep the original umbrella checklist item unchecked until all generated slices are checked.
 - The current iteration must complete exactly one slice (per the minimum outcome rules) and must not silently fan‑out into multiple slices.
  - Minimum outcome enforcement: if a slice cannot reach green within the wall clock, end with the smallest failing unit test that isolates the next behavior; forbid empty iterations.
+
+Additional ordering within sliced tasks:
+- When an umbrella item has generated `[SNN:<slug>]` slices, always select the smallest unchecked index first (ascending `SNN`). Do not reorder slices unless a lower‑index slice is blocked by an external dependency.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -93,6 +96,7 @@ Commit isolation and restaging discipline:
  - Fast-path zero-staged check: before invoking any commit tooling, perform a quiet staged-diff check (`git diff --staged --quiet`). If it exits 0 (no staged diffs), emit `COMMIT_SKIP: zero-staged` and skip the entire commit ceremony. Do not run further commit-related `git status`/`git diff`/`git log` calls in this iteration until new changes are staged.
  - When skipping due to zero-staged, also avoid running any additional `git status`/`git diff`/`git log` calls solely for commit preflight until new changes are staged.
  - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git restore --staged .` then explicitly `git add` only the intended paths.
+- Stage paths for the commit in stable lexicographic order. When multiple files belong to the slice, pass them to `git add` in sorted order to ensure deterministic hook outputs and diffs.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
  - Commit after every successful slice: end each green slice with exactly one commit containing only files for that slice. Do not batch multiple slices into one commit.
