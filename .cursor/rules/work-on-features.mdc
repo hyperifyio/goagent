@@ -29,6 +29,7 @@ Preflight continuity (must do before any new work):
  - Legacy empty work banner: some older logs emit `--- WORKING ON ---` without the checklist line. When writing, ALWAYS include the exact checklist line; when reading legacy logs without it, infer from the nearest checklist diff in `FEATURE_CHECKLIST.md` if unambiguous, otherwise leave the task label unknown and proceed deterministically by selection rules.
  - NDJSON-only logs: if the recent log tail contains no plain‑text markers at all (only streamed JSON or tokenized output), do not attempt to parse it. Start emitting markers in this iteration (see Marker format) and proceed; set baseline metrics to `unavailable` where counting is impossible.
  - Git-state caching: capture `git status -s` and `git diff --name-only` at most once per iteration and reuse those results to avoid redundant checks.
+ - Error code hygiene: when interpreting failures in logs or command results, treat exit codes 124 (GNU timeout), 137 (SIGKILL), and 130 (SIGINT) as timeouts for baseline counting; other non-zero exits are failures.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -55,6 +56,7 @@ Commit isolation and restaging discipline:
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
+ - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
@@ -78,6 +80,7 @@ Deterministic outputs to the activity log (kept concise):
 - Suppress meta narration; prefer one-line operational entries that enable fast resumption.
 - Do not emit verbose lead-ins (e.g., lines starting with "I'll", "I'm going to"). Write the marker or command/result directly.
  - If output would be split into many tiny lines, buffer locally and emit a single concise line per marker. Never emit one word per line.
+ - Always write success markers to `logs/coding.log` (not only to improvement logs) so the main workflow can detect completion.
 
 Strict chatter ban (enforced examples):
 - Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`.
@@ -142,6 +145,7 @@ Baseline and validation (for refining this rule):
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
  - Environment fallback: if ripgrep (`rg`) is unavailable, use portable `grep` pipelines shown below. If even those are unavailable or streamed output prevents reliable counting, set the affected numeric fields to `unavailable` in the commit message rather than blocking the change. Never guess.
  - If the automation runtime cannot yet emit `ITER_START:`/`ITER_END:` markers, proceed with the refinement and set `After:` fields to `pending`. Add a follow-up entry in `FEATURE_CHECKLIST.md` to enable markers in the runtime that writes `logs/coding.log`.
+ - Aggregation rule: when computing baseline counts, search both `logs/coding.log` and `logs/improving.log` and aggregate totals; prefer `logs/coding.log` for duration estimates and task continuity.
 
 Suggested grep snippets (for reproducible counts):
 - Timeouts: `rg -n "(?i)timeout|timed out|Timeout after" logs/coding.log | wc -l`
@@ -156,6 +160,7 @@ Suggested grep snippets (for reproducible counts):
  - Legacy noisy lines (to eliminate): `rg -n "Searched files|^Listed(\s|$)" logs/coding.log | wc -l`
  - Shell xtrace noise (to ignore in parsing): `grep -En '^\+ ' logs/coding.log | wc -l`
  - NDJSON/streamed JSON lines (for awareness; ignore when parsing): `grep -En '^\{' logs/coding.log | wc -l`
+Note: to aggregate across both logs, replace `logs/coding.log` with the directory `logs` in the queries above.
 If `rg` is unavailable in the shell environment, use grep fallbacks (no installs):
 - Timeouts: `grep -Ein "timeout|timed out|Timeout after|deadline exceeded|context deadline" logs/coding.log | wc -l`
 - Success markers: `grep -En "^--- SUCCESSFUL END ---" logs/coding.log | wc -l`
