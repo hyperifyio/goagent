@@ -113,6 +113,14 @@ Commit isolation and restaging discipline:
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
   - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable. When substituting a prior delete tool call, also emit `SUBST: from=deleteToolCall to=<git rm|rm> path=<path>`.
+  - Missing-path semantics (deterministic, non-fatal):
+    - Untracked paths: prefer `rm -f -- <file>` so already-absent files resolve as success without retries; log `PASS: already-absent` and do not reattempt in this iteration.
+    - Tracked paths removed from working tree: use `git rm -f -- <path>` to drop from index; if the intent is to keep on disk but untrack, use `git rm --cached -- <path>`. Treat "did not match any files" from `git rm` as index-already-clean; log `SKIP: already-untracked` and do not retry.
+    - Directories: mirror the above with `git rm -r -- <dir>` or `rm -rf -- <dir>` as dictated by tracked status.
+  - Repeat suppression within an iteration:
+    - Do not attempt deletion of the same `<path>` with identical inputs more than once per iteration. If the recent log tail already contains `CMD: <git rm|rm> ... -- <path>` with the same flags and there was no mitigation (e.g., restaging), emit `SKIP: same-input` and proceed.
+  - Deletion-specific blocked-state:
+    - If the same `<path>` deletion fails twice with the same error or exceeds the deletion timebox twice within the last ~200 log lines, enter BLOCKED and record `next=<exact git rm|rm command or restaging step>`; immediately switch to producing the smallest failing test or minimal stub that unblocks future work. Add a follow-up slice in `FEATURE_CHECKLIST.md` to perform that exact next step.
 - If an automated hook reformats or updates files, amend the commit to include those changes. If the initial commit fails due to pre-commit hooks, include the hook changes and retry once; if it fails again, enter BLOCKED and record `next=<exact fix or command>`.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
  - If zero-staged conditions recur across three consecutive iterations (as evidenced by repeated `COMMIT_SKIP: zero-staged` or commit banners without diffs), enter BLOCKED with `next=adjust commit preflight to skip when staged is empty` and proceed to a smallest failing test or stub for the currently selected task.
