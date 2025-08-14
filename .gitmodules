@@ -1,0 +1,6 @@
+[submodule ".cursor/rules"]
+	path = .cursor/rules
+	url = git@github.com:hyperifyio/go-cursor-rules.git
+[submodule "scripts"]
+	path = scripts
+	url = git@github.com:hyperifyio/go-scripts.git
