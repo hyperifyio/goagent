@@ -1,0 +1,110 @@
+---
+description: "Repository-wide hygiene review that appends only new, non-duplicate, minimal, independent, DoD-ready tasks to FUTURE_CHECKLIST.md"
+alwaysApply: false
+---
+
+This rule instructs the assistant to review the entire repository for unused or 
+unreachable code, accidental complexity, duplicate or overlapping 
+implementations, inconsistent patterns, and architectural, operational, 
+security, or reliability drift. The assistant must not modify code, 
+configuration, documentation, or CI; it only produces a Markdown checklist of 
+tasks. The assistant thinks first and writes second so the final set of tasks 
+reflects a coherent overall picture and does not contain conflicts or 
+duplicates. New tasks are appended to FUTURE_CHECKLIST.md only.
+
+Perform the work in two passes. First collect signals using static analysis, 
+dependency graphs, builds, test runs, and coverage to locate dead symbols and 
+files, orphaned assets, cycles, hotspots of complexity, copy-paste or parallel 
+implementations, risky dependencies, and missing or inconsistent operational 
+and security practices. Treat public interfaces, generated sources, declared 
+deprecations within an active window, vendor or third-party code, and test-only 
+utilities as special cases to avoid false positives. Second, reconcile and 
+deduplicate the findings, cluster them by theme, and validate them with 
+targeted builds and tests so that each recommended action can be executed 
+independently without hidden coupling to other tasks.
+
+Before writing any new checklist items, load and parse existing 
+FUTURE_CHECKLIST.md and FEATURE_CHECKLIST.md if present. Treat an item as 
+existing when there is an unchecked checkbox line using either asterisk or dash 
+markers followed by a bracket pair such as "\* \[ ]” or “- \[ ]”. Normalize 
+titles by lowercasing, trimming whitespace, collapsing consecutive spaces, and 
+stripping trailing punctuation and emoji. Consider two items duplicates if 
+their normalized titles match exactly or if their Evidence lines refer to the 
+same primary files or symbols for the same issue class. When a duplicate is 
+detected, do not add a new item and do not modify the existing files. If the 
+existing item is checked as done, you may still generate analysis notes 
+internally but you must not add a new checklist entry for that issue. Only 
+unique, non-duplicate, unchecked issues result in new checklist items.
+
+The output format is a Markdown checklist where each item begins with a single 
+top-level checkbox line in the exact pattern “\* \[ ] Title — succinct impact”. 
+Under that line, include compact, labeled content as indented paragraphs using 
+two leading spaces so the text remains part of the same checklist item. Include 
+labeled lines in this precise order inside the item: Context, Evidence, 
+Proposed change, Affected scope, Risk and blast radius, Effort estimate, 
+Dependencies, DoD for this task, Verification, Rollback or mitigation, 
+Traceability. The Evidence label names concrete files, symbols, commands, and 
+outputs demonstrating the issue. The Proposed change describes the smallest 
+viable edit that resolves the issue in one step without bundling unrelated 
+work. Dependencies names any ordering constraints; if none, state “None”.
+
+Each task’s DoD is self-contained and implementable without reading other 
+items. State within the item that the change follows test-driven development 
+with a failing test first where applicable, that unit tests cover pure logic 
+and integration tests cover boundaries such as databases, filesystems, 
+networks, queues, or external services, that critical user flows gain 
+end-to-end protection when relevant, that regressions reproducible by a bug 
+report acquire a protecting test, that coverage does not decrease and changed 
+lines and branches are exercised, that tests are deterministic and run locally 
+and in CI without flakiness, that the pull request, commits, and tests explain 
+intent in plain language and link to the canonical issue URL, that builds are 
+reproducible and all quality gates pass including static analysis, type checks, 
+formatting, linting, security scanning, and secret detection with no new 
+findings, that performance and resource budgets are respected and risky paths 
+are backed by targeted benchmarks or load tests when needed, that backward 
+compatibility is preserved for public interfaces or a migration plan with tests 
+and documentation is included if a breaking change is explicitly required, that 
+data changes are idempotent with tested rollback and verification when 
+applicable, that documentation is updated in the same change set for users, 
+developers, operations, and changelog where needed, that at least one peer 
+review is completed and comments resolved or explicitly deferred with rationale 
+and a linked follow-up issue, and that any exception is pre-approved in the 
+linked issue with risk, scope, and a follow-up plan.
+
+File handling is append-only to FUTURE_CHECKLIST.md. Open FUTURE_CHECKLIST.md 
+in append mode when it exists, do not rewrite or reorder existing content, and 
+ensure a single trailing blank line before new content. Append a new dated 
+section heading at the very end in the exact format “## Review YYYY-MM-DD” 
+followed by the new checklist items. If a section for the same date already 
+exists at the end of the file, append additional items under that existing 
+section instead of creating a duplicate heading. If FUTURE_CHECKLIST.md does 
+not exist, create it and write the heading followed by the checklist. Under no 
+circumstances modify or regenerate prior content in FUTURE_CHECKLIST.md or 
+FEATURE_CHECKLIST.md.
+
+Independence and minimality are mandatory. Each checklist item stands alone, 
+avoids references to other items, and contains every fact necessary to 
+implement that one step safely. When a finding implies multiple edits, split it 
+into separate items so that each item changes a single concern in a single 
+place. If a change requires an Architectural Decision Record, create a separate 
+checklist item that drafts and lands the ADR first; implementation follows only 
+after the ADR item is checked. For API changes, create a separate checklist 
+item that adds or updates the OpenAPI specification and contract tests before 
+any implementation items. For diagram or documentation drift, create a 
+dedicated item that updates Markdown Mermaid diagrams and related docs to stay 
+in sync with the current or proposed design.
+
+Security and privacy findings are reported as normal checklist items and never 
+remediated in this review. The Evidence label must call out exposed secrets, 
+unsafe logging of sensitive data, missing encryption in transit or at rest, 
+unpinned or vulnerable dependencies, missing SBOM updates, absent correlation 
+or trace identifiers, missing idempotency on external-facing writes, and 
+permissive IAM, with a Proposed change that is narrowly scoped and verifiable. 
+Operational findings similarly become independent items covering observability, 
+SLOs and alerts, timeouts, retries with backoff, circuit breakers, 
+configuration hygiene, infrastructure as code, consistent environment parity, 
+rollout strategies with automatic rollback, and runbooks.
+
+The deliverable from this rule is only the curated, deduplicated 
+FUTURE_CHECKLIST.md containing ready-to-execute checklist items. No issues are 
+opened, no branches created, and no commits pushed as part of this review.
