@@ -23,6 +23,7 @@ Preflight continuity (must do before any new work):
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
 - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
+ - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection; do not invoke any git commit/add/diff commands in this iteration until new changes exist.
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
 - In-run cache: within a single iteration, do not re-read the same file twice. Reference prior results from the same iteration instead of repeating searches/reads.
 - At the beginning of your run, emit compact markers so the next iteration can resume precisely. Always write them to stdout and, if the repo is writable, also append the same lines to `logs/coding.log` (atomic append). Emit exactly one `DATE:` line, then `ITER_START:` (see format below), and one `--- WORKING ON ---` banner with the exact checklist line before any commands. Do not print any lead‑in commentary before these markers.
@@ -80,6 +81,7 @@ Blocked‑state protocol (prevent thrashing):
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
+ - When skipping due to zero-staged, also avoid running any additional `git status`/`git diff`/`git log` calls solely for commit preflight until new changes are staged.
 - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
@@ -104,6 +106,7 @@ Commit isolation and restaging discipline:
  - If zero-staged conditions recur across three consecutive iterations (as evidenced by repeated `COMMIT_SKIP: zero-staged` or commit banners without diffs), enter BLOCKED with `next=adjust commit preflight to skip when staged is empty` and proceed to a smallest failing test or stub for the currently selected task.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
  - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling.
+ - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling or any further commit-related git inspections in this iteration.
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
@@ -132,6 +135,7 @@ Deterministic outputs to the activity log (kept concise):
 
 Strict chatter ban (enforced examples):
 - Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`.
+ - Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`, `We will`, `We’re going to`, `Let’s`, `Going to`.
 - Replace legacy noisy lines like `Searched files (...)` or `Listed <path>` with the compact `SEARCH:` and `LIST:` markers.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
