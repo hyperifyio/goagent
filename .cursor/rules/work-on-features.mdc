@@ -20,6 +20,7 @@ Core constraints to reaffirm (never weaken):
 Preflight continuity (must do before any new work):
 - Read only the recent tail of `logs/coding.log` (cap to last ~400 lines; never read the whole file). If that file is missing or empty, fall back to `logs/improving.log` with the same tail cap. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
  - For aggregate metrics (not continuity), search both files under `logs/` to avoid bias when computing counts.
+- Tail expansion fallback: if no required markers are found in the last ~400 lines (e.g., none of `DATE:`, `ITER_START:`, `ITER_END:`, or `--- WORKING ON ---`), expand the read window once up to ~1200 lines for this iteration only. Do not read the whole file.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
 - Incomplete-iteration recovery: if the latest tail shows `ITER_START:` without a matching `ITER_END:` (no success/error banner), treat the prior iteration as incomplete and resume that exact task at the next smallest pending subtask. Do not repeat broad scans. Emit the new `ITER_START:` only once for the current iteration, and ensure you emit `ITER_END:` followed by a success/error banner before finishing this run.
@@ -104,6 +105,13 @@ Commit isolation and restaging discipline:
  - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by progress metrics and a 1–2 sentence rationale:
   - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, delete_calls=<n|unavailable>, subst_performed=<n|unavailable>, deterministic_deletes=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, delete_calls=<n|pending>, subst_performed=<n|pending>, deterministic_deletes=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
+  - Use a HEREDOC to pass the multi-line commit message to `git commit -m`, for example:
+    - `git commit -m "$(cat <<'EOF'
+Baseline: ...
+After: ...
+<1–2 sentence rationale>
+EOF
+)"`
  - Deterministic deletions protocol (replace deleteToolCall with tracked-status driven ops):
   - Explicit ban: never invoke `deleteToolCall` in this repository. If the recent log tail shows such a call, immediately substitute with the correct deterministic deletion (`git rm` or `rm` as specified below) and emit a `SUBST:` marker.
   - Substitution evidence: when substituting, you MUST also emit the exact deterministic deletion as a `CMD:` line with `exit` and `ms` fields. Absence of `SUBST:` paired with a prior `deleteToolCall` in the tail is a protocol breach; correct it immediately in the current iteration.
