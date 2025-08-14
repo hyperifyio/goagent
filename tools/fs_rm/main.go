@@ -64,10 +64,15 @@ func run() error {
 		}
 		return fmt.Errorf("stat: %w", err)
 	}
-	if info.IsDir() {
-		// Directory handling (recursive) is out of scope for this slice.
-		return fmt.Errorf("path is a directory; recursive delete not implemented")
-	}
+    if info.IsDir() {
+        if !in.Recursive {
+            return fmt.Errorf("path is a directory; set recursive=true to delete")
+        }
+        if err := os.RemoveAll(clean); err != nil {
+            return fmt.Errorf("remove recursive: %w", err)
+        }
+        return writeJSON(fsRmOutput{Removed: true})
+    }
 
 	if err := os.Remove(clean); err != nil {
 		if os.IsNotExist(err) {
