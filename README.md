@@ -14,6 +14,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
  - [Exec tool example](#exec-tool-example)
  - [fs_read_file tool example](#fs_read_file-tool-example)
  - [fs_append_file tool example](#fs_append_file-tool-example)
+ - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -132,6 +133,20 @@ echo -n 'hello world' | base64 > b64.txt
 echo '{"path":"tmp_write_demo.txt","contentBase64":"'"$(cat b64.txt)"'"}' | ./tools/fs_write_file | jq .
 cat tmp_write_demo.txt
 rm -f tmp_write_demo.txt b64.txt
+```
+
+### fs_mkdirp tool example
+Create directories recursively (idempotent; returns created=true on first call, false thereafter):
+```bash
+# Build this tool (until aggregated in Makefile)
+go build -o tools/fs_mkdirp ./tools/fs_mkdirp
+
+echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
+ls -ld tmp_mkdirp_demo/a/b/c
+
+# Second call is idempotent (created=false)
+echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
+rm -rf tmp_mkdirp_demo
 ```
 
 ### Features
