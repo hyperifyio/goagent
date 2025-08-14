@@ -19,6 +19,7 @@ Core constraints to reaffirm (never weaken):
 
 Preflight continuity (must do before any new work):
 - Read only the recent tail of `logs/coding.log` (cap to last ~600 lines; never read the whole file). If that file is missing or empty, fall back to `logs/improving.log` with the same tail cap. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
+ - For aggregate metrics (not continuity), search both files under `logs/` to avoid bias when computing counts.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
 - Incomplete-iteration recovery: if the latest tail shows `ITER_START:` without a matching `ITER_END:` (no success/error banner), treat the prior iteration as incomplete and resume that exact task at the next smallest pending subtask. Do not repeat broad scans. Emit the new `ITER_START:` only once for the current iteration, and ensure you emit `ITER_END:` followed by a success/error banner before finishing this run.
@@ -107,6 +108,7 @@ Commit isolation and restaging discipline:
     - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options and quote any path containing spaces. Do not invoke any delete tool or shell `rm` for tracked paths.
     - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the last ~200 log lines or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
     - If Git reports index conflicts or unrelated staged content, restage deterministically to include only intended deletions: `git restore --staged .` then repeat `git rm` with the explicit paths. Retry once within the timebox; on a second failure, enter BLOCKED with `next=<exact git command>`.
+    - Prefer targeted queries over broad scans when checking tracked status or staging results (e.g., `git status -s -- <path>`) to minimize latency and avoid repository-wide checks.
   - If path is untracked and inside the repository working tree:
     - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote paths with spaces and use `--` to avoid globbing/option ambiguity. Never spawn a long‑lived process. Do not use wildcards; list each path explicitly.
     - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the last ~200 log lines, immediately substitute a direct `rm` and record the substitution.
@@ -259,6 +261,9 @@ If `rg` is unavailable in the shell environment, use grep fallbacks (no installs
 - Work banners: `grep -En "^--- WORKING ON ---" logs/coding.log | wc -l`
 - Error banners: `grep -En "^--- ERROR:.*---$" logs/coding.log | wc -l`
 - Verbose chatter: `grep -En "^(I'|I am|I'll|I'm going to)" logs/coding.log | wc -l`
+ - Substitutions logged: `grep -En "^SUBST:" logs/coding.log | wc -l`
+ - Deterministic deletions executed: `grep -En "^CMD: (git rm|rm)" logs/coding.log | wc -l`
+Note: to aggregate across both logs, run the same commands against the `logs/` directory and sum counts (e.g., `grep -Ern "^SUBST:" logs | wc -l`).
 
 Quality gates to run in this order where relevant:
 - go fmt/vet/lint (or `make lint` if available).
