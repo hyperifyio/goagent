@@ -137,9 +137,13 @@ Baseline and validation (for refining this rule):
 - Before editing this rule, compute a baseline from the activity log (prefer `logs/coding.log`, else `logs/improving.log`). If both are missing/empty, state that baseline data is unavailable.
 - Use deterministic searches to gather:
   - Counts: timeouts, retries/reruns without new info, empty/no-op commits, oscillations between tasks, ambiguous restarts.
+  - Definitions for consistent counting:
+    - Retries: consecutive identical `CMD:` entries with the same command and scope/inputs, not preceded by `RETRY:` and not separated by a parameter change or narrowed scope.
+    - Oscillations: the same `--- WORKING ON ---` checklist line appearing 3+ times between two `--- SUCCESSFUL END ---` banners without an intervening `PASS:`.
+    - Ambiguous restarts: an `ITER_START:` within 2 minutes of the previous `ITER_END:` with no intervening `CMD:`/`TEST:` markers or recorded file changes.
   - Durations: if `ITER_START:`/`ITER_END:` are present, compute durations between them. Otherwise, estimate using the nearest `DATE:` markers adjacent to each iteration. If timestamps are absent, record that durations are unavailable.
 - In the commit message for this change, include two grep-friendly lines:
-  - `Baseline: timeouts=<n>, retries=<n>, oscillations=<n>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
+  - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>`
   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|unavailable>/<p95|unavailable>`
 - After editing this rule, validate by running one representative unchecked checklist item end to end (choose the smallest deterministic one per selection rules). Measure the same metrics again from the log tail. Accept the revision only if iteration time improves or remains equal with strictly preserved gates and all checks green.
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
