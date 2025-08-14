@@ -15,6 +15,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
  - [fs_read_file tool example](#fs_read_file-tool-example)
  - [fs_append_file tool example](#fs_append_file-tool-example)
  - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
+- [fs_rm tool example](#fs_rm-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Sequence diagram](#sequence-diagram)
@@ -147,6 +148,20 @@ ls -ld tmp_mkdirp_demo/a/b/c
 # Second call is idempotent (created=false)
 echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
 rm -rf tmp_mkdirp_demo
+```
+
+### fs_rm tool example
+Remove a file or directory tree (paths must be repo‑relative; set `recursive:true` for directories):
+```bash
+make build-tools
+# Remove a single file
+printf 'temp' > tmp_rm_demo.txt
+echo '{"path":"tmp_rm_demo.txt"}' | ./tools/fs_rm | jq .
+
+# Remove a directory tree
+mkdir -p tmp_rm_dir/a/b && touch tmp_rm_dir/a/b/file.txt
+echo '{"path":"tmp_rm_dir","recursive":true}' | ./tools/fs_rm | jq .
+rm -rf tmp_rm_dir
 ```
 
 ### Features
