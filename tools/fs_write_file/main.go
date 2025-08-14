@@ -87,10 +87,10 @@ func run() error {
 	}
 
 	// Decode content
-    data, err := base64.StdEncoding.DecodeString(in.ContentBase64)
-    if err != nil {
-        return fmt.Errorf("decode base64: %v", err)
-    }
+	data, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+	if err != nil {
+		return fmt.Errorf("decode base64: %v", err)
+	}
 
 	// Determine file mode
 	var mode os.FileMode = 0o644
