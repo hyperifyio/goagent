@@ -25,6 +25,7 @@ Preflight continuity (must do before any new work):
  - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
  - Parsing hygiene: ignore shell xtrace lines that begin with `+ ` (from `set -x`), and ignore NDJSON/streamed JSON lines that start with `{` and include keys like `"type"`, `"session_id"`, or `"tool_call"`. Treat only the defined plain‑text markers and banners as signal.
  - Legacy `DATE:` with xtrace: if a line appears as `DATE: + date -R` followed by a timestamp on the next line, parse the following line as the timestamp and ignore the xtrace fragment.
+- Legacy success banner: treat `--- SUCCESS ---` as equivalent to a successful end when parsing older logs; when writing new logs, ALWAYS emit `--- SUCCESSFUL END ---`.
  - Legacy empty work banner: some older logs emit `--- WORKING ON ---` without the checklist line. When writing, ALWAYS include the exact checklist line; when reading legacy logs without it, infer from the nearest checklist diff in `FEATURE_CHECKLIST.md` if unambiguous, otherwise leave the task label unknown and proceed deterministically by selection rules.
  - NDJSON-only logs: if the recent log tail contains no plain‑text markers at all (only streamed JSON or tokenized output), do not attempt to parse it. Start emitting markers in this iteration (see Marker format) and proceed; set baseline metrics to `unavailable` where counting is impossible.
  - Git-state caching: capture `git status -s` and `git diff --name-only` at most once per iteration and reuse those results to avoid redundant checks.
@@ -144,7 +145,7 @@ Baseline and validation (for refining this rule):
 
 Suggested grep snippets (for reproducible counts):
 - Timeouts: `rg -n "(?i)timeout|timed out|Timeout after" logs/coding.log | wc -l`
-- Success markers: `rg -n "^--- SUCCESSFUL END ---" logs/coding.log | wc -l`
+- Success markers (new+legacy): `rg -n "^--- SUCCESSFUL END ---|^--- SUCCESS ---" logs/coding.log | wc -l`
 - Work banners: `rg -n "^--- WORKING ON ---" logs/coding.log | wc -l`
 - Error banners: `rg -n "^--- ERROR:.*---$" logs/coding.log | wc -l`
 - Verbose chatter to reduce: `rg -n "^(I'|I am|I'll|I'm going to)" logs/coding.log | wc -l`
