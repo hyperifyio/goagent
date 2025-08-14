@@ -22,6 +22,7 @@ Preflight continuity (must do before any new work):
 - Read only the recent tail of `logs/coding.log` (last ~1000 lines). If that file is missing or empty, fall back to `logs/improving.log`. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
+- Incomplete-iteration recovery: if the latest tail shows `ITER_START:` without a matching `ITER_END:` (no success/error banner), treat the prior iteration as incomplete and resume that exact task at the next smallest pending subtask. Do not repeat broad scans. Emit the new `ITER_START:` only once for the current iteration, and ensure you emit `ITER_END:` followed by a success/error banner before finishing this run.
 - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
  - Do not invoke any git commit/add/diff commands in this iteration until new changes exist.
 - If the previous attempt ended with a timeout or with a repeated retry for the same command and inputs, do not re-run as-is. Narrow scope, choose a smaller subtask, or change inputs deterministically before a single retry.
@@ -48,6 +49,7 @@ Deterministic micro‑slicing (ten‑minute slices):
   - Prefer leaf work that reduces uncertainty first: stubbing files with types/signatures, writing a single failing test that encodes the contract, or implementing the smallest path to make only that test pass without broader refactors.
 - Keep the original umbrella checklist item unchecked until all generated slices are checked.
 - The current iteration must complete exactly one slice (per the minimum outcome rules) and must not silently fan‑out into multiple slices.
+ - Minimum outcome enforcement: if a slice cannot reach green within the wall clock, end with the smallest failing unit test that isolates the next behavior; forbid empty iterations.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -79,6 +81,7 @@ Blocked‑state protocol (prevent thrashing):
   2) Switch to producing the smallest failing test or minimal stub that unblocks future work;
   3) Create a new follow‑up subtask in `FEATURE_CHECKLIST.md` (using the `[SNN]` pattern) that encodes the unblock step so subsequent iterations can resume deterministically.
 - While blocked in the current iteration: suppress rediscovery or broad scans, and forbid rerunning the last failing command without a concrete mitigation (narrowed scope, changed inputs, or new test).
+ - Commit-skip loop brake: if `COMMIT_SKIP: zero-staged` or commit banners without staged diffs appear in three consecutive iterations for the same checklist line, enter BLOCKED with `next=stage only this task's files or skip commit ceremony`, then proceed to the smallest failing test or stub.
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
@@ -92,13 +95,14 @@ Commit isolation and restaging discipline:
    - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
  - Deterministic deletions protocol (replace deleteToolCall with tracked-status driven ops):
   - Explicit ban: never invoke `deleteToolCall` in this repository. If the recent log tail shows such a call, immediately substitute with the correct deterministic deletion (`git rm` or `rm` as specified below) and emit a `SUBST:` marker.
+  - Substitution evidence: when substituting, you MUST also emit the exact deterministic deletion as a `CMD:` line with `exit` and `ms` fields. Absence of `SUBST:` paired with a prior `deleteToolCall` in the tail is a protocol breach; correct it immediately in the current iteration.
   - Preflight (cache per-iteration): determine tracked status once per path and reuse the result. Use `git ls-files --error-unmatch <path>` (fast-fail) or a targeted `git status -s -- <path>`; avoid broad scans.
   - If path is tracked (in Git index/history):
-    - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options. Do not invoke any delete tool or shell `rm` for tracked paths.
+    - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options and quote any path containing spaces. Do not invoke any delete tool or shell `rm` for tracked paths.
     - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the recent log tail or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
     - If Git reports index conflicts or unrelated staged content, restage deterministically to include only intended deletions: `git restore --staged .` then repeat `git rm` with the explicit paths. Retry once within the timebox; on a second failure, enter BLOCKED with `next=<exact git command>`.
   - If path is untracked and inside the repository working tree:
-    - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote paths with spaces and use `--` to avoid globbing/option ambiguity. Never spawn a long‑lived process.
+    - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote paths with spaces and use `--` to avoid globbing/option ambiguity. Never spawn a long‑lived process. Do not use wildcards; list each path explicitly.
     - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the log tail, immediately substitute a direct `rm` and record the substitution.
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
@@ -118,6 +122,7 @@ Execution timeboxing and recovery:
   - Retry only once if inputs changed or you applied a concrete mitigation (e.g., limiting scope, filtering, smaller test targets).
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
+ - Mandatory markers: any retry must be accompanied by a `RETRY:` line with the reason; any skipped duplicate must log a `SKIP:` line with the reason. If prior logs show duplicate commands without these markers, begin using them now.
  - Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -run '^(TestName1|TestName2)$'` first; widen scope to the full package and then to `./...` only after green.
  - Git command timebox: individual `git` queries (status, diff, log) should complete in under 5s; if slower, narrow scope to specific paths you touched.
 
@@ -160,6 +165,7 @@ Marker emission rules:
 - Emit each marker as a single plain‑text line (no JSON framing, no xtrace prefix).
 - Do not interleave markers with token‑level streamed output; buffer locally and write complete marker lines.
  - Always include the exact checklist line text after `--- WORKING ON ---` so later iterations can resume deterministically.
+ - Pairing requirement: every `ITER_START:` in a run must be paired with exactly one `ITER_END:` in the same run. Emit `ITER_END:` immediately before the final success/error banner.
 
 Ban on long‑lived processes:
 - Never start watch/dev/serve commands or any process intended to run indefinitely (for example: `npm run dev`, file watchers, local web servers, `tail -f`). These hang the iteration and violate the wall‑clock budget.
