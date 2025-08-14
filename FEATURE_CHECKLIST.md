@@ -32,6 +32,7 @@
 * [ ] Implement `tools/fs_rm.go` — stdin `{"path":"string","recursive?:bool,"force?:bool}`; remove file/dir; outputs `{"removed":bool}`; DoD: tests (file, dir tree, force on missing), docs example, CI green.
   - [x] [S01:rm-delete-file-test] failing unit test for deleting a regular file
   - [x] [S02:rm-delete-file-impl] minimal implementation to delete a regular file and pass S01
+  - [x] [S03:rm-force-on-missing-test] unit test for force=true on missing path (expects exit 0 and removed=false)
 * [ ] Implement `tools/fs_move.go` — stdin `{"from":"string","to":"string","overwrite?:bool}`; rename or copy+remove across devices; outputs `{"moved":bool}`; DoD: tests (rename, overwrite=false blocks, cross-device), docs example, CI green.
 * [ ] Implement `tools/fs_search.go` — stdin `{"query":"string","regex?:bool,"globs?:["**/*.go"],"maxResults?:int}`; returns `{"matches":[{"path":"string","line":int,"col":int,"preview":"string"}],"truncated":bool}`; DoD: tests (literal, regex, glob filter, truncation), docs example, CI green.
 * [ ] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string"}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
