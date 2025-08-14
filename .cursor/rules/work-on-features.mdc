@@ -43,6 +43,7 @@ Preflight continuity (must do before any new work):
 Deterministic micro‑slicing (ten‑minute slices):
 - When a selected checklist line contains multiple deliverables (e.g., code, tests, docs, CI, diagrams) or is otherwise broad, immediately generate a series of follow‑up subtasks under the same theme in `FEATURE_CHECKLIST.md` using a stable naming pattern:
   - Prefix: `[SNN]` where `NN` is a zero‑padded step index starting at 01; e.g., `[S01] stub types for fs_append_file`, `[S02] failing contract test for append`, `[S03] minimal pass for single writer`.
+  - Assign a short, kebab‑case slug to each slice and treat the full label as `[SNN:<slug>]` (for example `[S01:append-types]`). Include this exact label at the start of the `TASK:` marker and at the start of the commit subject to make logs, commits, and checklist entries trivially cross‑referencable.
   - Each subtask must be self‑contained, runnable offline, and completable within ~10 minutes.
   - Prefer leaf work that reduces uncertainty first: stubbing files with types/signatures, writing a single failing test that encodes the contract, or implementing the smallest path to make only that test pass without broader refactors.
 - Keep the original umbrella checklist item unchecked until all generated slices are checked.
@@ -142,7 +143,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
 - `DATE: <UTC RFC3339>` (must precede all other markers)
 - `ITER_START: <UTC RFC3339>` (mandatory)
 - `--- WORKING ON --- <exact FEATURE_CHECKLIST.md line>`
-- `TASK: <one-line subtask plan>`
+- `TASK: [SNN:<slug>] <one-line subtask plan>` (include the `[SNN:<slug>]` prefix when micro‑slicing; otherwise omit the bracketed prefix)
 - `CMD: <command> | scope=<pkg-or-path> | exit=<code> | ms=<duration>`
 - `TEST: <scope> | pass=<n> | fail=<n> | ms=<duration>`
 - `PASS: <short reason>` or `FAIL: <short reason>`
