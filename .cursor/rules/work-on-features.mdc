@@ -159,7 +159,7 @@ Execution timeboxing and recovery:
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
  - Mandatory markers: any retry must be accompanied by a `RETRY:` line with the reason; any skipped duplicate must log a `SKIP:` line with the reason. If prior logs show duplicate commands without these markers, begin using them now.
- - Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -run '^(TestName1|TestName2)$'` first; widen scope to the full package and then to `./...` only after green.
+- Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -count=1 -failfast -run '^(TestName1|TestName2)$'` first; widen scope to the full package (drop `-failfast` for broad runs) and then to `./...` only after green.
  - Git command timebox: individual `git` queries (status, diff, log) should complete in under 5s; if slower, narrow scope to specific paths you touched.
  - Live probe de‑emphasis: avoid live LLM probes or external health checks during this workflow unless strictly necessary to validate a slice. Prefer offline unit/integration tests to keep iterations deterministic and fast.
 
