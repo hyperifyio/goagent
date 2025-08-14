@@ -25,6 +25,8 @@ Preflight continuity (must do before any new work):
  - Parsing hygiene: ignore shell xtrace lines that begin with `+ ` (from `set -x`), and ignore NDJSON/streamed JSON lines that start with `{` and include keys like `"type"`, `"session_id"`, or `"tool_call"`. Treat only the defined plain‑text markers and banners as signal.
  - Legacy `DATE:` with xtrace: if a line appears as `DATE: + date -R` followed by a timestamp on the next line, parse the following line as the timestamp and ignore the xtrace fragment.
  - Legacy empty work banner: some older logs emit `--- WORKING ON ---` without the checklist line. When writing, ALWAYS include the exact checklist line; when reading legacy logs without it, infer from the nearest checklist diff in `FEATURE_CHECKLIST.md` if unambiguous, otherwise leave the task label unknown and proceed deterministically by selection rules.
+ - NDJSON-only logs: if the recent log tail contains no plain‑text markers at all (only streamed JSON or tokenized output), do not attempt to parse it. Start emitting markers in this iteration (see Marker format) and proceed; set baseline metrics to `unavailable` where counting is impossible.
+ - Git-state caching: capture `git status -s` and `git diff --name-only` at most once per iteration and reuse those results to avoid redundant checks.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -36,6 +38,7 @@ Deterministic task selection and ordering:
 - If two actions seem equally valid, apply tie-breakers below immediately; do not pause to reconsider.
  - Avoid re-scanning the entire checklist during a single iteration; read it at most once at the start of the iteration.
  - Git-state accelerator: If `git status` reveals untracked/modified files that clearly map to an unchecked checklist line (e.g., `tools/fs_append_file.go` alongside the unchecked item “Implement tools/fs_append_file.go”), prioritize that item immediately to eliminate rediscovery loops.
+ - Redundant git checks ban: do not re-run `git status`, `git diff`, or `git ls-files` repeatedly within the same iteration unless the working tree changed due to your own successful command.
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
@@ -60,6 +63,7 @@ Execution timeboxing and recovery:
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
  - Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -run '^(TestName1|TestName2)$'` first; widen scope to the full package and then to `./...` only after green.
+ - Git command timebox: individual `git` queries (status, diff, log) should complete in under 5s; if slower, narrow scope to specific paths you touched.
 
 Rerun guard (within and across iterations):
 - Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration. If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason. Never repeat a full-repo grep/scan if the previous iteration already captured the exact targets.
@@ -91,6 +95,7 @@ Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS
 Marker emission rules:
 - Emit each marker as a single plain‑text line (no JSON framing, no xtrace prefix).
 - Do not interleave markers with token‑level streamed output; buffer locally and write complete marker lines.
+ - Always include the exact checklist line text after `--- WORKING ON ---` so later iterations can resume deterministically.
 
 Ban on long‑lived processes:
 - Never start watch/dev/serve commands or any process intended to run indefinitely (for example: `npm run dev`, file watchers, local web servers, `tail -f`). These hang the iteration and violate the wall‑clock budget.
@@ -112,6 +117,7 @@ Operational output style:
 
 Discovery budget per iteration (to cap idle scans):
 - Hard cap discovery to at most 3 `SEARCH:` and 1 `LIST:` operations before producing the first `CMD:` or `TEST:` entry, unless additional discovery is strictly necessary to proceed. Use the log tail to avoid repeats.
+ - Cap git inspections to at most 2 invocations (`status` plus one of `diff`/`log`) before the first `CMD:` or `TEST:` unless a commit is imminent.
 
 Search and tooling constraints:
 - Prefer repository-native search tools over shell processes to avoid overhead. Use ripgrep-style queries and glob filters; avoid raw `find`/`grep` shell calls.
