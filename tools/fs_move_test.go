@@ -20,7 +20,7 @@ func buildFsMoveTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-move")
-    cmd := exec.Command("go", "build", "-o", binPath, "./fs_move")
+	cmd := exec.Command("go", "build", "-o", binPath, "./fs_move")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -97,60 +97,60 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 // TestFsMove_DestinationExists_OverwriteFalse ensures the tool refuses to
 // clobber an existing destination when overwrite is false or omitted.
 func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
-    bin := buildFsMoveTool(t)
-    dir := makeRepoRelTempDir(t, "fsmove-overlap-")
-    src := filepath.Join(dir, "a.txt")
-    dst := filepath.Join(dir, "b.txt")
-    if err := os.WriteFile(src, []byte("one"), 0o644); err != nil {
-        t.Fatalf("seed src: %v", err)
-    }
-    if err := os.WriteFile(dst, []byte("two"), 0o644); err != nil {
-        t.Fatalf("seed dst: %v", err)
-    }
+	bin := buildFsMoveTool(t)
+	dir := makeRepoRelTempDir(t, "fsmove-overlap-")
+	src := filepath.Join(dir, "a.txt")
+	dst := filepath.Join(dir, "b.txt")
+	if err := os.WriteFile(src, []byte("one"), 0o644); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+	if err := os.WriteFile(dst, []byte("two"), 0o644); err != nil {
+		t.Fatalf("seed dst: %v", err)
+	}
 
-    // No overwrite flag provided
-    _, stderr, code := runFsMove(t, bin, map[string]any{
-        "from": src,
-        "to":   dst,
-    })
-    if code == 0 {
-        t.Fatalf("expected non-zero exit due to destination exists, got 0; stderr=%q", stderr)
-    }
+	// No overwrite flag provided
+	_, stderr, code := runFsMove(t, bin, map[string]any{
+		"from": src,
+		"to":   dst,
+	})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit due to destination exists, got 0; stderr=%q", stderr)
+	}
 }
 
 // TestFsMove_DestinationExists_OverwriteTrue ensures the tool replaces an
 // existing destination when overwrite is true.
 func TestFsMove_DestinationExists_OverwriteTrue(t *testing.T) {
-    bin := buildFsMoveTool(t)
-    dir := makeRepoRelTempDir(t, "fsmove-overwrite-")
-    src := filepath.Join(dir, "a.txt")
-    dst := filepath.Join(dir, "b.txt")
-    if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {
-        t.Fatalf("seed src: %v", err)
-    }
-    if err := os.WriteFile(dst, []byte("old"), 0o644); err != nil {
-        t.Fatalf("seed dst: %v", err)
-    }
+	bin := buildFsMoveTool(t)
+	dir := makeRepoRelTempDir(t, "fsmove-overwrite-")
+	src := filepath.Join(dir, "a.txt")
+	dst := filepath.Join(dir, "b.txt")
+	if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+	if err := os.WriteFile(dst, []byte("old"), 0o644); err != nil {
+		t.Fatalf("seed dst: %v", err)
+	}
 
-    out, stderr, code := runFsMove(t, bin, map[string]any{
-        "from":      src,
-        "to":        dst,
-        "overwrite": true,
-    })
-    if code != 0 {
-        t.Fatalf("expected success with overwrite, got exit=%d stderr=%q", code, stderr)
-    }
-    if !out.Moved {
-        t.Fatalf("expected moved=true, got false")
-    }
-    if _, err := os.Stat(src); !os.IsNotExist(err) {
-        t.Fatalf("expected source removed, stat err=%v", err)
-    }
-    got, err := os.ReadFile(dst)
-    if err != nil {
-        t.Fatalf("read dest: %v", err)
-    }
-    if string(got) != "new" {
-        t.Fatalf("expected destination content 'new', got %q", string(got))
-    }
+	out, stderr, code := runFsMove(t, bin, map[string]any{
+		"from":      src,
+		"to":        dst,
+		"overwrite": true,
+	})
+	if code != 0 {
+		t.Fatalf("expected success with overwrite, got exit=%d stderr=%q", code, stderr)
+	}
+	if !out.Moved {
+		t.Fatalf("expected moved=true, got false")
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("expected source removed, stat err=%v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(got) != "new" {
+		t.Fatalf("expected destination content 'new', got %q", string(got))
+	}
 }

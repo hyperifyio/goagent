@@ -115,22 +115,22 @@ func TestFsRm_DeleteDirRecursive(t *testing.T) {
 // TestFsRm_ForceOnMissing verifies force=true on a missing path exits 0,
 // returns {"removed":false}, and the path remains absent.
 func TestFsRm_ForceOnMissing(t *testing.T) {
-    bin := buildFsRmTool(t)
+	bin := buildFsRmTool(t)
 
-    dir := makeRepoRelTempDir(t, "fsrm-missing-")
-    path := filepath.Join(dir, "absent.txt")
+	dir := makeRepoRelTempDir(t, "fsrm-missing-")
+	path := filepath.Join(dir, "absent.txt")
 
-    out, stderr, code := runFsRm(t, bin, map[string]any{
-        "path":  path,
-        "force": true,
-    })
-    if code != 0 {
-        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
-    }
-    if out.Removed {
-        t.Fatalf("expected removed=false for missing path with force=true")
-    }
-    if _, err := os.Stat(path); !os.IsNotExist(err) {
-        t.Fatalf("expected path to be absent, stat err=%v", err)
-    }
+	out, stderr, code := runFsRm(t, bin, map[string]any{
+		"path":  path,
+		"force": true,
+	})
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.Removed {
+		t.Fatalf("expected removed=false for missing path with force=true")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected path to be absent, stat err=%v", err)
+	}
 }
