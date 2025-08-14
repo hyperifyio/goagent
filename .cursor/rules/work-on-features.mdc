@@ -35,12 +35,16 @@ Deterministic task selection and ordering:
 - Once a task is picked, stick to it until completed, blocked by an external dependency, or timeboxed out. No oscillation between tasks.
 - If two actions seem equally valid, apply tie-breakers below immediately; do not pause to reconsider.
  - Avoid re-scanning the entire checklist during a single iteration; read it at most once at the start of the iteration.
+ - Git-state accelerator: If `git status` reveals untracked/modified files that clearly map to an unchecked checklist line (e.g., `tools/fs_append_file.go` alongside the unchecked item “Implement tools/fs_append_file.go”), prioritize that item immediately to eliminate rediscovery loops.
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
 - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
+ - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by a 1–2 sentence rationale:
+   - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n>, durations=<p50|unavailable>/<p95|unavailable>`
+   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>`
 - When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
@@ -55,6 +59,7 @@ Execution timeboxing and recovery:
   - Retry only once if inputs changed or you applied a concrete mitigation (e.g., limiting scope, filtering, smaller test targets).
   - Otherwise, switch to a safer subtask that progresses the same task (e.g., write a failing unit test or slice the change).
 - Avoid redundant reruns: never re-run the exact same command with the same inputs if it just failed/timed out without any change.
+ - Test targeting to reduce cycle time: when only specific tests are affected, prefer `go test <pkg> -run '^(TestName1|TestName2)$'` first; widen scope to the full package and then to `./...` only after green.
 
 Rerun guard (within and across iterations):
 - Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration. If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason. Never repeat a full-repo grep/scan if the previous iteration already captured the exact targets.
@@ -124,6 +129,7 @@ Baseline and validation (for refining this rule):
 - After editing this rule, validate by running one representative unchecked checklist item end to end (choose the smallest deterministic one per selection rules). Measure the same metrics again from the log tail. Accept the revision only if iteration time improves or remains equal with strictly preserved gates and all checks green.
 - If improvement is not demonstrated, tighten wording that addresses the observed slowdown (continuity, ordering, timeboxing, or commit isolation) and repeat once. Prefer conservative changes over broad rewrites.
  - Environment fallback: if ripgrep (`rg`) is unavailable, use portable `grep` pipelines shown below. If even those are unavailable or streamed output prevents reliable counting, set the affected numeric fields to `unavailable` in the commit message rather than blocking the change. Never guess.
+ - If the automation runtime cannot yet emit `ITER_START:`/`ITER_END:` markers, proceed with the refinement and set `After:` fields to `pending`. Add a follow-up entry in `FEATURE_CHECKLIST.md` to enable markers in the runtime that writes `logs/coding.log`.
 
 Suggested grep snippets (for reproducible counts):
 - Timeouts: `rg -n "(?i)timeout|timed out|Timeout after" logs/coding.log | wc -l`
@@ -150,6 +156,7 @@ Quality gates to run in this order where relevant:
 - Unit tests first for changed packages: select packages deterministically from edited file paths; if uncertain, run `go test ./...`.
 - Integration/end-to-end tests when applicable to the task.
 - Security/secret checks if configured in CI; at minimum ensure no secrets are added.
+ - Rule/documentation-only edits: if only files under `.cursor/` or `docs/` change and no code is staged, do not run builds/tests locally; still ensure CI doc/format checks (if any) pass and that no unrelated files are staged.
 
 Continuity-driven workflow (tight loop):
 1) From `logs/coding.log` tail, identify the last selected checklist item and whether it finished. If unfinished, resume at the next smallest pending subtask; otherwise select the next task deterministically from `FEATURE_CHECKLIST.md`.
