@@ -22,7 +22,7 @@
 * [x] Implement `tools/fs_read_file.go` — stdin `{"path":"string","offsetBytes?:int,"maxBytes?:int}` (repo-relative); outputs `{"contentBase64":"string","sizeBytes":int,"eof":bool}`; DoD: tests (text, binary round-trip, ranges, NOT_FOUND), docs example, link to issue, CI green.
 * [x] Implement `tools/fs_write_file.go` (atomic write) — stdin `{"path":"string","contentBase64":"string","createModeOctal?":"0644"}`; write via temp+rename; outputs `{"bytesWritten":int}`; DoD: tests (create, overwrite, binary, missing parent error), docs example, CI green.
 * [ ] Implement `tools/fs_append_file.go` — stdin `{"path":"string","contentBase64":"string"}`; append (create if missing) with advisory file lock; outputs `{"bytesAppended":int}`; DoD: tests (double append, concurrent writers), docs example, CI green.
-  - [ ] [S01] stub types and argument validation for fs_append_file (repo-relative path, base64 decode)
+  - [x] [S01] stub types and argument validation for fs_append_file (repo-relative path, base64 decode)
   - [x] [S02] failing contract test for double append (create-if-missing, then append)
   - [ ] [S03] minimal passing implementation for single-writer append with advisory lock (no concurrency test yet)
   - [ ] [S04] add concurrent writers test (two goroutines append deterministically; order-agnostic content length assertion)
