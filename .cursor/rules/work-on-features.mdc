@@ -142,8 +142,7 @@ Deterministic outputs to the activity log (kept concise):
  - At iteration end, emit a brief operational summary including the exact checklist line text, the one-line subtask description, and the result (PASS/FAIL), so the next iteration can resume deterministically.
 
 Strict chatter ban (enforced examples):
-- Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`.
- - Do not emit lines beginning with: `I'll`, `I am`, `I'm going to`, `I’m going to`, `We will`, `We’re going to`, `Let’s`, `Going to`.
+- Do not emit lines beginning with any of the following: `I'll`, `I am`, `I'm going to`, `I’m going to`, `We will`, `We’re going to`, `Let’s`, `Going to`.
 - Replace legacy noisy lines like `Searched files (...)` or `Listed <path>` with the compact `SEARCH:` and `LIST:` markers.
 
 Marker format (parseable, one line each — use these exact spellings so grep works deterministically):
