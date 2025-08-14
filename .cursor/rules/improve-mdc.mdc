@@ -1,34 +1,100 @@
 ---
-description: "Continuously analyze the coding-assistant activity log to refine .cursor/rules/work-on-features.mdc so tasks finish faster without weakening quality gates"
+description: "Continuously analyze the activity log to refine .cursor/rules/work-on-features.mdc for faster completion using micro-slicing, blocked-state handling, and deterministic deletions via rm or git rm without weakening quality gates"
 alwaysApply: false
----
+------------------
 
-This rule directs the assistant to treat logs/coding.log as a chronological record of the coding assistant’s own actions and outcomes rather than application runtime output, 
-and to use evidence from that record to refine .cursor/rules/work-on-features.mdc so that checklist items complete faster while preserving all existing Definition of Done and 
-testing standards. The goal is to reduce idle time, loops, and indecision in the automation without relaxing quality, safety, or traceability requirements.
+This rule directs the assistant to treat logs/coding.log as a chronological 
+record of the automation’s own actions and outcomes rather than application 
+runtime output, and to use evidence from that record to refine 
+.cursor/rules/work-on-features.mdc so that checklist items complete faster 
+while preserving all existing Definition of Done and testing standards. The 
+goal is to reduce idle time, loops, and indecision in the automation without 
+relaxing quality, safety, or traceability requirements.
 
-Begin by establishing an objective baseline from the activity log. Segment iterations using the log’s date lines, phase banners, success markers, and error codes to measure 
-typical and worst case durations from iteration start to completion. Summarize the frequency and causes of timeouts, repeated retries without new information, empty or no-op 
-commits, oscillation between tasks, and restarts caused by ambiguous instructions. Record this baseline concisely in the next commit message so that it remains reproducible 
-and visible to maintainers without adding new files.
+Begin by establishing an objective baseline from the activity log. Segment 
+iterations using the log’s date lines, phase banners, success markers, and 
+error codes to measure typical and worst case durations from iteration start to 
+completion. Summarize the frequency and causes of timeouts, repeated retries 
+without new information, empty or no-op commits, oscillation between tasks, and 
+restarts caused by ambiguous instructions. Record this baseline concisely in 
+the next commit message so that it remains reproducible and visible to 
+maintainers without adding new files.
 
-Interpret recurrent slowdowns as prompt-level shortcomings. Treat repeated rediscovery of repository state, hesitation in task selection, verbose status chatter that 
-displaces actionable work, redundant command reruns, and unnecessary checklist scans as symptoms of unclear or incomplete guidance in .cursor/rules/work-on-features.mdc. 
-Identify exactly which parts of that rule invite ambiguity, such as vague preflight steps, weak continuity instructions that fail to use the latest portion of 
-logs/coding.log, imprecise ordering for equal priority tasks, unclear commit isolation rules, or missing timeboxing and fallback behavior for long-running or flaky commands.
+Interpret recurrent slowdowns as prompt-level shortcomings. Treat repeated 
+rediscovery of repository state, hesitation in task selection, verbose status 
+chatter that displaces actionable work, redundant command reruns, unnecessary 
+checklist scans, and stalls during file deletions as symptoms of unclear or 
+incomplete guidance in .cursor/rules/work-on-features.mdc. Identify exactly 
+which parts of that rule invite ambiguity, such as vague preflight steps, weak 
+continuity instructions that fail to use the latest portion of logs/coding.log, 
+imprecise ordering for equal-priority tasks, unclear commit isolation rules, or 
+missing timeboxing and fallback behavior for long-running or flaky commands.
 
-Draft a focused revision to .cursor/rules/work-on-features.mdc that addresses these causes directly while explicitly reaffirming all quality gates from the project’s 
-Definition of Done and diverse testing requirements. Strengthen preflight continuity by requiring the assistant to consult the recent tail of logs/coding.log to resume 
-precisely where work last ended rather than repeating exploratory steps. Clarify deterministic task ordering and tie-breaks so selection is immediate and stable. Tighten 
-instructions for keeping commits small and isolated, including restaging when unrelated changes enter the index. Add explicit timeboxing and recovery guidance so that when a 
-command exceeds a sensible window the assistant narrows scope, switches to a safer subtask, or captures minimal diagnostics before proceeding. Require concise, operational 
-output over narrative status text to reduce token and time overhead while keeping essential evidence in the log.
+Draft a focused revision to .cursor/rules/work-on-features.mdc that addresses 
+these causes directly while explicitly reaffirming all quality gates from the 
+project’s Definition of Done and diverse testing requirements. Strengthen 
+preflight continuity by requiring the assistant to consult the recent tail of 
+logs/coding.log to resume precisely where work last ended rather than repeating 
+exploratory steps. Clarify deterministic task ordering and tie-breaks so 
+selection is immediate and stable. Tighten instructions for keeping commits 
+small and isolated, including restaging when unrelated changes enter the index. 
+Add explicit timeboxing and recovery guidance so that when a command exceeds a 
+sensible window the assistant narrows scope, switches to a safer subtask, or 
+captures minimal diagnostics before proceeding. Require concise, operational 
+output over narrative status text to reduce token and time overhead while 
+keeping essential evidence in the log.
 
-Validate the revision by running a representative unchecked checklist item end to end and measuring iteration time again from the log using the same method as the baseline. 
-Accept the change only if the result shows faster completion without any relaxation of tests, gates, or documentation obligations and with all checks green. If the outcome is 
-not both faster and sound, iterate on the wording and repeat the validation until the improvement is demonstrated or until further changes would risk weakening constraints.
+Add deterministic micro-slicing so that large checklist items are split into 
+small, self-contained slices that each complete within the iteration budget. 
+Require that every iteration ends with a minimum outcome, either a green change 
+that keeps all checks passing or the smallest failing unit test that isolates 
+the next behavior to implement. Forbid empty iterations. Prefer slices that 
+reduce uncertainty first, such as stubbing a minimal scaffold that compiles or 
+writing a single failing test that encodes the contract, and keep the change 
+surface to the fewest practical files.
 
-Commit only the refined .cursor/rules/work-on-features.mdc and a brief baseline and after summary in the commit message explaining what changed and why it improves 
-throughput. Do not push to remotes and do not modify unrelated files. When additional improvements are discovered that are safe but out of scope for a single change, add a 
-concise follow-up entry to FEATURE_CHECKLIST.md so that optimization proceeds in small, verifiable steps. Resolve any merge conflicts in the rule conservatively by 
-preserving proven constraints, integrating one clarification at a time, and revalidating behavior after each integration.
+Introduce an explicit blocked-state protocol to prevent thrashing. When the log 
+tail shows repeated timeouts, identical retries, or the same checklist banner 
+resurfacing without progress markers, declare the task blocked, record one 
+concise line explaining the blocker and the exact next deterministic step, and 
+immediately switch to a smallest failing test or minimal stub that unblocks 
+future work. At the same moment, create a follow-up subtask in 
+FEATURE\_CHECKLIST.md that encodes the unblock step so that subsequent 
+iterations can resume deterministically. Suppress further rediscovery during 
+the blocked iteration and forbid rerunning the last failing command without a 
+concrete mitigation.
+
+Replace any built-in deleteToolCall usage with deterministic deletions chosen 
+by tracked status. For versioned paths, delete using git rm for files or git rm 
+-r for directories, or git rm --cached when untracking while keeping the 
+working copy. For untracked paths inside the repository, delete using the shell 
+command rm with explicit paths and without invoking a shell through a tool that 
+hides arguments. Determine tracked status once per path within an iteration 
+using a single lightweight git check and cache the result to avoid repeated 
+queries. Timebox any deletion to a short window; if the action exceeds the 
+timebox or a prior deleteToolCall is observed for the same path in the recent 
+log tail, immediately switch to the appropriate git rm or rm variant, record 
+the substitution in the activity log, and continue with commit isolation. If 
+git reports index conflicts or unrelated staged content, restage to include 
+only the intended deletions and retry once; otherwise declare blocked, record 
+the exact next step, and add a follow-up subtask describing the specific 
+resolution required.
+
+Validate the revision by running a representative unchecked checklist item end 
+to end and measuring iteration time again from the log using the same method as 
+the baseline. Accept the change only if the result shows faster completion 
+without any relaxation of tests, gates, or documentation obligations and with 
+all checks green, and only if the iteration produces a concrete artifact or the 
+smallest failing test as defined above. If the outcome is not both faster and 
+sound, iterate on the wording that governs minimum outcome, slicing, 
+blocked-state behavior, or deletion handling and repeat the validation once, 
+keeping changes conservative.
+
+Commit only the refined .cursor/rules/work-on-features.mdc and a brief baseline 
+and after summary in the commit message explaining what changed and why it 
+improves throughput. Do not push to remotes and do not modify unrelated files. 
+When additional improvements are discovered that are safe but out of scope for 
+a single change, add a concise follow-up entry to FEATURE\_CHECKLIST.md so that 
+optimization proceeds in small, verifiable steps. Resolve any merge conflicts 
+in the rule conservatively by preserving proven constraints, integrating one 
+clarification at a time, and revalidating behavior after each integration.
