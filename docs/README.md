@@ -16,4 +16,7 @@ This docs index helps you navigate architecture notes and diagrams.
 - Security: Threat model and trust boundaries.
   - Link: [docs/security/threat-model.md](security/threat-model.md)
 
+- Runbooks: Troubleshooting common errors and fixes.
+  - Link: [docs/runbooks/troubleshooting.md](runbooks/troubleshooting.md)
+
 Additional guides will be added here as they are created.

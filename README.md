@@ -22,6 +22,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
  - [fs_move tool example](#fs_move-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
+- [Troubleshooting](#troubleshooting)
 - [Sequence diagram](#sequence-diagram)
 - [Tests](#tests)
 - [Contributing](#contributing)
@@ -206,6 +207,9 @@ rm -f tmp_move_src.txt tmp_move_dst.txt
 - Treat model output as untrusted input; never pass to a shell
 
 For a deeper analysis of risks, boundaries, and mitigations, see the full threat model at `docs/security/threat-model.md`.
+
+### Troubleshooting
+See `docs/runbooks/troubleshooting.md` for common issues and deterministic fixes (missing tool binaries, path validation, timeouts, HTTP errors, and golangci-lint setup), with copy‑paste commands.
 
 ### Sequence diagram
 See `docs/diagrams/agentcli-seq.md` for the message flow.
