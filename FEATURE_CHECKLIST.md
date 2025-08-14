@@ -38,7 +38,7 @@
   - [x] [S03:move-overwrite-true] unit test for overwrite=true replacing existing destination; ensure implementation passes
 * [ ] Implement `tools/fs_search.go` — stdin `{"query":"string","regex?:bool,"globs?:["**/*.go"],"maxResults?:int}`; returns `{"matches":[{"path":"string","line":int,"col":int,"preview":"string"}],"truncated":bool}`; DoD: tests (literal, regex, glob filter, truncation), docs example, CI green.
   - [x] [S01:search-failing-literal-test] add failing unit test for literal search on a small fixture file (no regex, no globs)
-  - [ ] [S02:search-skeleton] scaffold minimal `tools/fs_search` program with argument parsing/types
+  - [x] [S02:search-skeleton] scaffold minimal `tools/fs_search` program with argument parsing/types
   - [x] [S03:search-impl-literal] minimal implementation to pass literal search test
   - [ ] [S04:search-regex-glob-tests] add tests for regex and glob filtering
   - [ ] [S05:search-truncation] implement maxResults truncation and test
