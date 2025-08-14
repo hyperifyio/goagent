@@ -28,7 +28,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [License and credits](#license-and-credits)
 
 ### Installation
-- **Prerequisites**: Go 1.21+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
+- **Prerequisites**: Go 1.24+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
 
 From a clean clone:
 ```bash
