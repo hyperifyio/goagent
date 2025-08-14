@@ -35,6 +35,7 @@
   - [x] [S03:rm-force-on-missing-test] unit test for force=true on missing path (expects exit 0 and removed=false)
   - [x] [S04:rm-readme-example] README example and Makefile build rule for fs_rm; tests pass
 * [ ] Implement `tools/fs_move.go` — stdin `{"from":"string","to":"string","overwrite?:bool}`; rename or copy+remove across devices; outputs `{"moved":bool}`; DoD: tests (rename, overwrite=false blocks, cross-device), docs example, CI green.
+  - [x] [S03:move-overwrite-true] unit test for overwrite=true replacing existing destination; ensure implementation passes
 * [ ] Implement `tools/fs_search.go` — stdin `{"query":"string","regex?:bool,"globs?:["**/*.go"],"maxResults?:int}`; returns `{"matches":[{"path":"string","line":int,"col":int,"preview":"string"}],"truncated":bool}`; DoD: tests (literal, regex, glob filter, truncation), docs example, CI green.
 * [ ] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string"}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
 * [ ] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
