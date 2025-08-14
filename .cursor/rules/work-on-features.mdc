@@ -86,7 +86,15 @@ Commit isolation and restaging discipline:
  - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by progress metrics and a 1–2 sentence rationale:
    - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
    - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
-- When deleting files or directories, ALWAYS use `git rm` so deletions are tracked (e.g., `git rm path/to/file` or `git rm -r path/to/dir`). To remove from Git but keep the local file, use `git rm --cached <path>`.
+- Deterministic git-based deletions protocol (replace tool/rm deletions with tracked git ops):
+  - Preflight (cache per-iteration): decide tracked status cheaply using one check and reuse the result. Prefer `git ls-files --error-unmatch <path>` or `git status -s` for specific paths rather than broad scans.
+  - If path is tracked:
+    - Use only `git rm <file>`, `git rm -r <dir>`, or `git rm --cached <path>` (to untrack but keep working copy). Do not call deletion tools or shell `rm`.
+    - Timebox deletion to 5 seconds. If a previous delete-tool attempt appears in the recent log tail for the same path or the deletion exceeds the timebox, immediately switch/ retry with the appropriate `git rm` variant and record the substitution.
+    - If Git reports index conflicts or unrelated staged content, restage to include only intended deletions: `git restore --staged .` then re‑add only the exact deletion paths (`git rm` again). Retry once within the timebox; on a second failure, enter BLOCKED with `next=<exact git command>`.
+  - If path is untracked and ephemeral: prefer updating `.gitignore` (add or refine pattern) over attempting tool-based or shell deletion, unless building a dedicated removal tool is the current slice.
+  - Never use delete-style tools or shell `rm` for any path that is or was tracked in this repo.
+  - Log concise evidence: `CMD: git rm ... | exit=<code> | ms=<dur>` and any `BLOCKED:` reason when applicable.
 - If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
