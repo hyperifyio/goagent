@@ -17,12 +17,12 @@ type fsAppendOutput struct {
 	BytesAppended int `json:"bytesAppended"`
 }
 
-// buildFsAppendTool builds ./tools/fs_append_file.go into a temporary binary.
+// buildFsAppendTool builds ./tools/fs_append_file into a temporary binary.
 func buildFsAppendTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-append-file")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_append_file.go")
+    cmd := exec.Command("go", "build", "-o", binPath, "./fs_append_file")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -98,4 +98,79 @@ func TestFsAppend_DoubleAppend(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("content mismatch: got %q want %q", got, want)
 	}
+}
+
+func TestFsAppend_Validation_MissingPath(t *testing.T) {
+    bin := buildFsAppendTool(t)
+    _, stderr, code := runFsAppend(t, bin, map[string]any{
+        "path":          "",
+        "contentBase64": base64.StdEncoding.EncodeToString([]byte("data")),
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for missing path")
+    }
+    if !strings.Contains(strings.ToLower(stderr), "path is required") {
+        t.Fatalf("stderr should mention path is required, got %q", stderr)
+    }
+}
+
+func TestFsAppend_Validation_MissingContent(t *testing.T) {
+    bin := buildFsAppendTool(t)
+    dir := makeRepoRelTempDir(t, "fsappend-validate-")
+    path := filepath.Join(dir, "x.txt")
+    _, stderr, code := runFsAppend(t, bin, map[string]any{
+        "path":          path,
+        "contentBase64": "",
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for missing contentBase64")
+    }
+    if !strings.Contains(strings.ToLower(stderr), "contentbase64 is required") {
+        t.Fatalf("stderr should mention contentBase64 is required, got %q", stderr)
+    }
+}
+
+func TestFsAppend_Validation_AbsolutePath(t *testing.T) {
+    bin := buildFsAppendTool(t)
+    abs := filepath.Join("/", "tmp", "x.txt")
+    _, stderr, code := runFsAppend(t, bin, map[string]any{
+        "path":          abs,
+        "contentBase64": base64.StdEncoding.EncodeToString([]byte("x")),
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for absolute path")
+    }
+    if !strings.Contains(strings.ToLower(stderr), "path must be relative to repository root") {
+        t.Fatalf("stderr should mention relative path requirement, got %q", stderr)
+    }
+}
+
+func TestFsAppend_Validation_PathEscape(t *testing.T) {
+    bin := buildFsAppendTool(t)
+    _, stderr, code := runFsAppend(t, bin, map[string]any{
+        "path":          filepath.Join("..", "escape.txt"),
+        "contentBase64": base64.StdEncoding.EncodeToString([]byte("x")),
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for path escape")
+    }
+    if !strings.Contains(strings.ToLower(stderr), "path escapes repository root") {
+        t.Fatalf("stderr should mention path escapes repository root, got %q", stderr)
+    }
+}
+
+func TestFsAppend_Validation_BadBase64(t *testing.T) {
+    bin := buildFsAppendTool(t)
+    dir := makeRepoRelTempDir(t, "fsappend-validate-")
+    path := filepath.Join(dir, "bad.txt")
+    _, stderr, code := runFsAppend(t, bin, map[string]any{
+        "path":          path,
+        "contentBase64": "!!!not-base64!!!",
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for bad base64")
+    }
+    if !strings.Contains(strings.ToLower(stderr), "decode base64") {
+        t.Fatalf("stderr should mention base64 decode failure, got %q", stderr)
+    }
 }
