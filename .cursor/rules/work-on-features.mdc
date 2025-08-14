@@ -166,6 +166,7 @@ Execution timeboxing and recovery:
 Rerun guard (within and across iterations):
 - Before issuing a command, compare it to the most recent `CMD:` entry in the log tail and to any `CMD:` you already ran in this iteration (look back across the last ~1000–1200 lines). If it is identical in command and inputs/scope, skip it and log a one‑line `SKIP: same-input` with a short reason. Never repeat a full-repo grep/scan if the previous iteration already captured the exact targets.
 - Only retry once after applying a concrete mitigation (narrowed scope, adjusted flags, smaller target). Otherwise, switch to a safer subtask.
+ - Enforcement: if the recent tail shows any identical `CMD:` reruns without accompanying `RETRY:`/`SKIP:` markers, treat that as a protocol breach. In the current iteration, begin emitting the markers immediately; if the pattern recurs again within ~200 lines, enter `BLOCKED` with `next=<narrowed command or safer subtask>` and do not re-run the command unchanged.
 
 Deterministic outputs to the activity log (kept concise):
 - For reads/searches, log the exact query and the count of matches, not full content.
@@ -176,6 +177,7 @@ Deterministic outputs to the activity log (kept concise):
  - Always write success markers to `logs/coding.log` (not only to improvement logs) so the main workflow can detect completion.
  - At iteration end, emit a brief operational summary including the exact checklist line text, the one-line subtask description, and the result (PASS/FAIL), so the next iteration can resume deterministically.
  - If the recent log tail shows zero `SEARCH:`/`LIST:` markers historically, begin emitting them now (see Marker format) to enable deterministic continuity with concise evidence.
+ - Emit a single `METRICS:` line at iteration end summarizing just this iteration: keys `cmds`, `timeouts`, `retries`, `skips`, `tests` as `pass/fail`, and an elapsed estimate `ms` based on `ITER_START:`→`ITER_END:` (or `DATE:` fallback when missing). Keep it on one line, e.g., `METRICS: cmds=3 timeouts=1 retries=1 skips=2 tests=12/0 ms=42150`.
 
 Additional suppression:
 - Also suppress lines beginning with `Status update:`; emit concise markers instead.
@@ -200,6 +202,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
  - `TEST_SKIP: <short reason>` (use when intentionally skipping tests for rules/docs-only edits per gates)
  - `BLOCKED: <one-line reason> | next=<exact deterministic step>` (mandatory when entering blocked-state)
   - `SUBST: from=<mechanism> to=<mechanism> path=<path>` (log when replacing a prior delete tool call with a deterministic deletion)
+ - `METRICS: cmds=<n> timeouts=<n> retries=<n> skips=<n> tests=<pass>/<fail> ms=<duration>` (single-line per iteration end; counts for this iteration only)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 Alignment requirement: all markers must be left‑aligned (no leading spaces or tabs) when written.
 
