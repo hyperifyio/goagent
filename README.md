@@ -55,11 +55,12 @@ Create a minimal `tools.json` next to the binary:
   "tools": [
     {
       "name": "get_time",
-      "description": "Return current time for an IANA timezone (default UTC).",
+      "description": "Return current time for an IANA timezone (default UTC). Accepts 'timezone' (canonical) and also alias 'tz'.",
       "schema": {
         "type": "object",
         "properties": {
-          "timezone": {"type": "string", "description": "e.g. Europe/Helsinki"}
+          "timezone": {"type": "string", "description": "e.g. Europe/Helsinki"},
+          "tz": {"type": "string", "description": "Alias for timezone (deprecated)"}
         },
         "required": ["timezone"],
         "additionalProperties": false
