@@ -90,17 +90,18 @@ Commit isolation and restaging discipline:
  - Deterministic deletions protocol (replace deleteToolCall with tracked-status driven ops):
   - Preflight (cache per-iteration): determine tracked status once per path and reuse the result. Use `git ls-files --error-unmatch <path>` (fast-fail) or a targeted `git status -s -- <path>`; avoid broad scans.
   - If path is tracked (in Git index/history):
-    - Use only `git rm <file>`, `git rm -r <dir>`, or `git rm --cached <path>` (to untrack but keep working copy). Do not invoke any delete tool or shell `rm` for tracked paths.
+    - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options. Do not invoke any delete tool or shell `rm` for tracked paths.
     - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the recent log tail or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
     - If Git reports index conflicts or unrelated staged content, restage deterministically to include only intended deletions: `git restore --staged .` then repeat `git rm` with the explicit paths. Retry once within the timebox; on a second failure, enter BLOCKED with `next=<exact git command>`.
   - If path is untracked and inside the repository working tree:
-    - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote or `--`‑separate to avoid globbing. Never spawn a long‑lived process.
+    - Delete using shell `rm` with explicit paths and without an intermediate tool wrapper: `rm -f -- <file>` or `rm -rf -- <dir>` as appropriate. Quote paths with spaces and use `--` to avoid globbing/option ambiguity. Never spawn a long‑lived process.
     - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the log tail, immediately substitute a direct `rm` and record the substitution.
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
   - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable. When substituting a prior delete tool call, also emit `SUBST: from=deleteToolCall to=<git rm|rm> path=<path>`.
 - If an automated hook reformats or updates files, amend the commit to include those changes. If the initial commit fails due to pre-commit hooks, include the hook changes and retry once; if it fails again, enter BLOCKED and record `next=<exact fix or command>`.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
+ - If zero-staged conditions recur across three consecutive iterations (as evidenced by repeated `COMMIT_SKIP: zero-staged` or commit banners without diffs), enter BLOCKED with `next=adjust commit preflight to skip when staged is empty` and proceed to a smallest failing test or stub for the currently selected task.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
  - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling.
 
