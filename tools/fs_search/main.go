@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -50,10 +51,15 @@ func run() error {
 	if in.MaxResults < 0 {
 		in.MaxResults = 0
 	}
-	// Only literal search supported for now
-	if in.Regex {
-		return errors.New("regex not supported yet")
-	}
+    // Prepare regex if requested
+    var compiledRE *regexp.Regexp
+    if in.Regex {
+        re, err := regexp.Compile(in.Query)
+        if err != nil {
+            return fmt.Errorf("invalid regex: %w", err)
+        }
+        compiledRE = re
+    }
 
 	allowedExts := deriveAllowedExtensions(in.Globs)
 
@@ -84,8 +90,17 @@ func run() error {
 			}
 		}
 
-		fileMatches, stop, err := searchFileLiteral(path, in.Query, in.MaxResults, len(results))
-		if err != nil {
+        var (
+            fileMatches []match
+            stop        bool
+            searchErr   error
+        )
+        if compiledRE != nil {
+            fileMatches, stop, searchErr = searchFileRegex(path, compiledRE, in.MaxResults, len(results))
+        } else {
+            fileMatches, stop, searchErr = searchFileLiteral(path, in.Query, in.MaxResults, len(results))
+        }
+        if searchErr != nil {
 			// Ignore unreadable files to keep tool robust
 			return nil
 		}
@@ -178,4 +193,43 @@ func searchFileLiteral(path, query string, maxResults int, already int) ([]match
 	}
 	_ = scanner.Err()
 	return matches, false, nil
+}
+
+func searchFileRegex(path string, re *regexp.Regexp, maxResults int, already int) ([]match, bool, error) {
+    f, err := os.Open(path)
+    if err != nil {
+        return nil, false, err
+    }
+    defer f.Close()
+
+    rel := path
+    if strings.HasPrefix(rel, "./") {
+        rel = strings.TrimPrefix(rel, "./")
+    }
+
+    scanner := bufio.NewScanner(f)
+    buf := make([]byte, 0, 256*1024)
+    scanner.Buffer(buf, 10*1024*1024)
+    lineNum := 0
+    var matchesOut []match
+    for scanner.Scan() {
+        lineNum++
+        line := scanner.Text()
+        idxs := re.FindAllStringIndex(line, -1)
+        for _, pair := range idxs {
+            start := pair[0]
+            m := match{
+                Path:    rel,
+                Line:    lineNum,
+                Col:     start + 1,
+                Preview: line,
+            }
+            matchesOut = append(matchesOut, m)
+            if maxResults > 0 && already+len(matchesOut) >= maxResults {
+                return matchesOut, true, nil
+            }
+        }
+    }
+    _ = scanner.Err()
+    return matchesOut, false, nil
 }

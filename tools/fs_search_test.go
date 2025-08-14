@@ -115,3 +115,109 @@ func TestFsSearch_Literal_SingleFile(t *testing.T) {
         t.Fatalf("expected at least one match in %s, got %+v", fileRel, out.Matches)
     }
 }
+
+// TestFsSearch_Regex_SingleFile adds a failing test to define regex behavior.
+// It expects the tool to support regex queries when {"regex":true}.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Regex_SingleFile(t *testing.T) {
+    // Arrange: create a repo-relative temp file with known content
+    tmpDirAbs, err := os.MkdirTemp(".", "fssearch-regex-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+    fileRel := filepath.Join(base, "r.txt")
+    content := "alpha\nbravo charlie\nalpha bravo\n"
+    if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+        t.Fatalf("write file: %v", err)
+    }
+
+    bin := buildFsSearch(t)
+
+    // Act: regex search for lines starting with "alpha"
+    out, stderr, code := runFsSearch(t, bin, map[string]any{
+        "query":      "^alpha",
+        "regex":      true,
+        "globs":      []string{"**/*.txt"},
+        "maxResults": 10,
+    })
+
+    // Assert: should succeed and find at least one match in our file
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.Truncated {
+        t.Fatalf("should not be truncated for small input")
+    }
+    found := false
+    for _, m := range out.Matches {
+        if m.Path == fileRel {
+            if m.Line <= 0 || m.Col <= 0 {
+                t.Fatalf("invalid line/col: line=%d col=%d", m.Line, m.Col)
+            }
+            if !strings.HasPrefix(m.Preview, "alpha") {
+                t.Fatalf("preview should start with 'alpha', got %q", m.Preview)
+            }
+            found = true
+            break
+        }
+    }
+    if !found {
+        t.Fatalf("expected at least one match in %s, got %+v", fileRel, out.Matches)
+    }
+}
+
+// TestFsSearch_Globs_Filter verifies glob filtering limits files considered.
+// It expects that only files matching the provided globs are searched.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Globs_Filter(t *testing.T) {
+    tmpDirAbs, err := os.MkdirTemp(".", "fssearch-glob-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+
+    txtRel := filepath.Join(base, "note.txt")
+    mdRel := filepath.Join(base, "note.md")
+    if err := os.WriteFile(txtRel, []byte("needle in txt\n"), 0o644); err != nil {
+        t.Fatalf("write txt: %v", err)
+    }
+    if err := os.WriteFile(mdRel, []byte("needle in md\n"), 0o644); err != nil {
+        t.Fatalf("write md: %v", err)
+    }
+
+    bin := buildFsSearch(t)
+
+    // Act: literal search with globs restricting to only .md files
+    out, stderr, code := runFsSearch(t, bin, map[string]any{
+        "query":      "needle",
+        "regex":      false,
+        "globs":      []string{"**/*.md"},
+        "maxResults": 10,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.Truncated {
+        t.Fatalf("should not be truncated for small input")
+    }
+
+    // Assert: should contain match for mdRel and not for txtRel
+    var sawMD, sawTXT bool
+    for _, m := range out.Matches {
+        if m.Path == mdRel {
+            sawMD = true
+        }
+        if m.Path == txtRel {
+            sawTXT = true
+        }
+    }
+    if !sawMD {
+        t.Fatalf("expected a match in %s, got %+v", mdRel, out.Matches)
+    }
+    if sawTXT {
+        t.Fatalf("did not expect a match in %s due to globs filter", txtRel)
+    }
+}
