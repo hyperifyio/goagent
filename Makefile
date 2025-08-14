@@ -18,12 +18,13 @@ build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/exec ./tools/exec
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_read_file ./tools/fs_read_file.go
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_write_file ./tools/fs_write_file
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_append_file ./tools/fs_append_file
 
 test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file
+	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file
 
 lint:
 	@set -euo pipefail; \
