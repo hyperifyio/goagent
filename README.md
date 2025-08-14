@@ -44,7 +44,7 @@ Optional environment (flags take precedence):
 Ensure an OpenAI‑compatible API is reachable (e.g., local server at `http://localhost:1234/v1`). Build the CLI and example tool:
 ```bash
 export OAI_BASE_URL=http://localhost:1234/v1
-export OAI_MODEL=openai/gpt-oss-20b
+export OAI_MODEL=oss-gpt-20b
 make build build-tools
 ```
 
