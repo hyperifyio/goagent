@@ -22,6 +22,7 @@ Preflight continuity (must do before any new work):
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
 - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, REQUIRE RFC3339 in UTC. If both appear, prefer RFC3339 for any calculations.
  - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
+ - Parsing hygiene: ignore shell xtrace lines that begin with `+ ` (from `set -x`), and ignore NDJSON/streamed JSON lines that start with `{` and include keys like `"type"`, `"session_id"`, or `"tool_call"`. Treat only the defined plain‑text markers and banners as signal.
 
 Deterministic task selection and ordering:
 - Source of truth is `FEATURE_CHECKLIST.md`.
@@ -79,6 +80,10 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
 - `ITER_END: <UTC RFC3339>` (mandatory; emit immediately before the success/error banner)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 
+Marker emission rules:
+- Emit each marker as a single plain‑text line (no JSON framing, no xtrace prefix).
+- Do not interleave markers with token‑level streamed output; buffer locally and write complete marker lines.
+
 Iteration segment markers are mandatory (see above). They enable precise, reproducible duration calculations and prevent ambiguous parsing in the presence of streamed output.
 
 Additional lightweight markers to replace noisy chatter:
@@ -122,6 +127,8 @@ Suggested grep snippets (for reproducible counts):
  - SEARCH markers: `rg -n "^SEARCH:" logs/coding.log | wc -l`
  - LIST markers: `rg -n "^LIST:" logs/coding.log | wc -l`
  - Legacy noisy lines (to eliminate): `rg -n "Searched files|^Listed(\s|$)" logs/coding.log | wc -l`
+ - Shell xtrace noise (to ignore in parsing): `grep -En '^\+ ' logs/coding.log | wc -l`
+ - NDJSON/streamed JSON lines (for awareness; ignore when parsing): `grep -En '^\{' logs/coding.log | wc -l`
 If `rg` is unavailable in the shell environment, use grep fallbacks (no installs):
 - Timeouts: `grep -Ein "timeout|timed out|Timeout after|deadline exceeded|context deadline" logs/coding.log | wc -l`
 - Success markers: `grep -En "^--- SUCCESSFUL END ---" logs/coding.log | wc -l`
