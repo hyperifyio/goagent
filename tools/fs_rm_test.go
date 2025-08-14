@@ -81,3 +81,33 @@ func TestFsRm_DeleteFile(t *testing.T) {
 		t.Fatalf("expected file to be removed, stat err=%v", err)
 	}
 }
+
+// TestFsRm_DeleteDirRecursive expresses the next contract: deleting a directory
+// tree with recursive=true succeeds, tool exits 0, outputs {"removed":true},
+// and the directory no longer exists.
+func TestFsRm_DeleteDirRecursive(t *testing.T) {
+    bin := buildFsRmTool(t)
+
+    dir := makeRepoRelTempDir(t, "fsrm-dir-")
+    deep := filepath.Join(dir, "a", "b")
+    if err := os.MkdirAll(deep, 0o755); err != nil {
+        t.Fatalf("mkdir tree: %v", err)
+    }
+    if err := os.WriteFile(filepath.Join(deep, "file.txt"), []byte("x"), 0o644); err != nil {
+        t.Fatalf("seed file: %v", err)
+    }
+
+    out, stderr, code := runFsRm(t, bin, map[string]any{
+        "path":      dir,
+        "recursive": true,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if !out.Removed {
+        t.Fatalf("expected removed=true, got false")
+    }
+    if _, err := os.Stat(dir); !os.IsNotExist(err) {
+        t.Fatalf("expected directory to be removed, stat err=%v", err)
+    }
+}
