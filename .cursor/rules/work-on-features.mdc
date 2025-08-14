@@ -97,6 +97,7 @@ Commit isolation and restaging discipline:
   - Explicit ban: never invoke `deleteToolCall` in this repository. If the recent log tail shows such a call, immediately substitute with the correct deterministic deletion (`git rm` or `rm` as specified below) and emit a `SUBST:` marker.
   - Substitution evidence: when substituting, you MUST also emit the exact deterministic deletion as a `CMD:` line with `exit` and `ms` fields. Absence of `SUBST:` paired with a prior `deleteToolCall` in the tail is a protocol breach; correct it immediately in the current iteration.
   - Preflight (cache per-iteration): determine tracked status once per path and reuse the result. Use `git ls-files --error-unmatch <path>` (fast-fail) or a targeted `git status -s -- <path>`; avoid broad scans.
+  - Path safety constraints (mandatory): operate only within the repository working tree. Reject absolute paths and any path containing `..` segments. Resolve candidate paths using a realpath check and verify they are under the repo root before deleting. Do not use wildcards; enumerate explicit paths.
   - If path is tracked (in Git index/history):
     - Use only `git rm -- <file>`, `git rm -r -- <dir>`, or `git rm --cached -- <path>` (to untrack but keep working copy). Always include `--` before path arguments to terminate options and quote any path containing spaces. Do not invoke any delete tool or shell `rm` for tracked paths.
     - Timebox deletion to 5 seconds. If a prior delete-tool attempt for the same path appears in the recent log tail or the deletion exceeds the timebox, immediately substitute the appropriate `git rm` variant and record the substitution.
@@ -115,7 +116,8 @@ Commit isolation and restaging discipline:
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
-- New: Overall iteration wall-clock budget: 10 minutes maximum. If exceeded, immediately emit `ITER_END:` followed by `--- ERROR: timebox ---`, record the exact next step to resume, and stop. Do not start new discovery after the wall time elapses.
+  - New: Overall iteration wall-clock budget: 10 minutes maximum. If exceeded, immediately emit `ITER_END:` followed by `--- ERROR: timebox ---`, record the exact next step to resume, and stop. Do not start new discovery after the wall time elapses.
+  - External driver budgets alignment: if an outer driver defines stricter ceilings (e.g., `COMMIT_TIMEOUT`, `TASK_TIMEOUT`), treat those as hard caps. Aim to finish and emit `ITER_END:` and the final banner at least 30s before the external timeout so markers are recorded. When external budgets are unknown, adhere to the 10-minute wall clock.
 - Prefer narrowed scopes: run `go test` on touched packages first; only expand to `./...` if scope is unclear or failures span packages.
 - On timeouts:
   - Capture minimal diagnostics: command, parameters, duration, exit code, and the last 50 lines of stderr/stdout.
