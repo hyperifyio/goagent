@@ -1,2 +1,11 @@
 bin/
 logs/
+tools/exec_test
+tools/fs_append_file_test
+tools/fs_mkdirp_test
+tools/fs_move_test
+tools/fs_read_file
+tools/fs_read_file_test
+tools/fs_rm_test
+tools/fs_search_test
+tools/fs_write_file_test
