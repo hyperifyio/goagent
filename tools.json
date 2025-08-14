@@ -6,12 +6,16 @@
       "schema": {
         "type": "object",
         "properties": {
-          "tz": {
+          "timezone": {
             "type": "string",
             "description": "IANA timezone, e.g. Europe/Helsinki"
+          },
+          "tz": {
+            "type": "string",
+            "description": "Alias for timezone (deprecated)"
           }
         },
-        "required": ["tz"],
+        "required": ["timezone"],
         "additionalProperties": false
       },
       "command": ["./tools/get_time"],

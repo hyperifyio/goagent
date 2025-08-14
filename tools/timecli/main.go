@@ -11,6 +11,8 @@ import (
 
 type input struct {
 	Timezone string `json:"timezone"`
+    // Backward-compatible alias
+    TZ string `json:"tz"`
 }
 
 type output struct {
@@ -28,11 +30,15 @@ func main() {
 	if len(strings.TrimSpace(string(inBytes))) == 0 {
 		inBytes = []byte("{}")
 	}
-	if err := json.Unmarshal(inBytes, &in); err != nil {
+    if err := json.Unmarshal(inBytes, &in); err != nil {
 		fmt.Fprintf(os.Stdout, "{\"error\":\"bad json: %s\"}\n", escape(err.Error()))
 		return
 	}
-	if strings.TrimSpace(in.Timezone) == "" {
+    // Prefer canonical 'timezone'; allow backward-compatible alias 'tz'
+    if strings.TrimSpace(in.Timezone) == "" && strings.TrimSpace(in.TZ) != "" {
+        in.Timezone = in.TZ
+    }
+    if strings.TrimSpace(in.Timezone) == "" {
 		fmt.Printf("{\"error\":\"missing timezone\"}\n")
 		return
 	}

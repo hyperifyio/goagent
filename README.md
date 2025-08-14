@@ -58,8 +58,10 @@ Create a minimal `tools.json` next to the binary:
       "schema": {
         "type": "object",
         "properties": {
-          "tz": {"type": "string", "description": "e.g. Europe/Helsinki"}
-        }
+          "timezone": {"type": "string", "description": "e.g. Europe/Helsinki"}
+        },
+        "required": ["timezone"],
+        "additionalProperties": false
       },
       "command": ["./tools/get_time"],
       "timeoutSec": 5
