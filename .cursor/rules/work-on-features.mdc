@@ -19,7 +19,7 @@ Core constraints to reaffirm (never weaken):
 - Backward compatibility preserved unless explicitly approved with migration plan.
 
 Preflight continuity (must do before any new work):
-- Read only the recent tail of `logs/coding.log` (last ~600 lines). If that file is missing or empty, fall back to `logs/improving.log`. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
+- Read only the recent tail of `logs/coding.log` (last ~1000 lines). If that file is missing or empty, fall back to `logs/improving.log`. If both are missing or empty, treat continuity as unavailable and start recording fresh markers for this iteration.
 - Extract the latest markers: `DATE:`, `--- WORKING ON ---`, `--- SUCCESSFUL END ---`, `--- ERROR:`, plus any explicit command lines and target file paths.
 - Resume from the last successful step. If the last run already listed files, targets, or exact commands, reuse them; do not re-discover the repo unless something materially changed (e.g., file added/removed since that log tail).
 - If the previous iteration ended with a commit-only cycle (e.g., banner `--- COMMITTING UNCHANGED TO GIT ---`) and there are no staged changes, skip any commit flow entirely and proceed directly to task selection.
@@ -32,6 +32,7 @@ Preflight continuity (must do before any new work):
  - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
  - Parsing hygiene: ignore shell xtrace lines that begin with `+ ` (from `set -x`), and ignore NDJSON/streamed JSON lines that start with `{` and include keys like `"type"`, `"session_id"`, or `"tool_call"`. Treat only the defined plain‑text markers and banners as signal.
  - Legacy `DATE:` with xtrace: if a line appears as `DATE: + date -R` followed by a timestamp on the next line, parse the following line as the timestamp and ignore the xtrace fragment.
+ - Legacy loop counters: when the log includes `UNFINISHED_TASKS:` or `FINISHED_TASKS:` lines, ignore them for continuity and metrics; rely on explicit markers instead.
 - Legacy success banner: treat `--- SUCCESS ---` as equivalent to a successful end when parsing older logs; when writing new logs, ALWAYS emit `--- SUCCESSFUL END ---`.
  - Legacy empty work banner: some older logs emit `--- WORKING ON ---` without the checklist line. When writing, ALWAYS include the exact checklist line; when reading legacy logs without it, infer from the nearest checklist diff in `FEATURE_CHECKLIST.md` if unambiguous, otherwise leave the task label unknown and proceed deterministically by selection rules.
  - NDJSON-only logs: if the recent log tail contains no plain‑text markers at all (only streamed JSON or tokenized output), do not attempt to parse it. Start emitting markers in this iteration (see Marker format) and proceed; set baseline metrics to `unavailable` where counting is impossible.
@@ -97,8 +98,8 @@ Commit isolation and restaging discipline:
     - Timebox to 5 seconds. If a prior delete-tool attempt for the same path appears in the log tail, immediately substitute a direct `rm` and record the substitution.
     - Prefer adding to `.gitignore` for recurring generated artifacts; still perform a one‑time `git rm --cached <path>` if the artifact was ever committed.
   - Never use shell `rm` for any path that is tracked or was previously tracked unless you first untrack it with `git rm --cached`.
-  - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable.
-- If an automated hook reformats or updates files, amend the commit to include those changes. Never leave hook-modified files unstaged.
+  - Log concise evidence for either path: `CMD: git rm ... | exit=<code> | ms=<dur>` or `CMD: rm ... | exit=<code> | ms=<dur>`, and any `BLOCKED:` reason when applicable. When substituting a prior delete tool call, also emit `SUBST: from=deleteToolCall to=<git rm|rm> path=<path>`.
+- If an automated hook reformats or updates files, amend the commit to include those changes. If the initial commit fails due to pre-commit hooks, include the hook changes and retry once; if it fails again, enter BLOCKED and record `next=<exact fix or command>`.
  - Never create a commit when there are zero staged changes. Skip commit ceremony and continue working.
  - Never commit generated artifacts (built binaries or other files ignored by `.gitignore`). If such files enter the index, remove them deterministically using `git rm --cached <path>` and ensure they are ignored going forward.
  - Log-driven skip: if the recent tail of `logs/coding.log` shows `--- COMMITTING UNCHANGED TO GIT ---` and `git diff --staged` is empty, emit `COMMIT_SKIP: zero-staged` and proceed without invoking commit tooling.
@@ -146,6 +147,7 @@ Marker format (parseable, one line each — use these exact spellings so grep wo
  - `RETRY: <short reason>` (use for the single allowed retry after a concrete mitigation)
  - `COMMIT_SKIP: zero-staged` (use when skipping the commit phase due to no staged changes)
  - `BLOCKED: <one-line reason> | next=<exact deterministic step>` (mandatory when entering blocked-state)
+  - `SUBST: from=<mechanism> to=<mechanism> path=<path>` (log when replacing a prior delete tool call with a deterministic deletion)
 Note: Always use `--- SUCCESSFUL END ---` (do not log variants like `--- SUCCESS ---`).
 
 Marker emission rules:
