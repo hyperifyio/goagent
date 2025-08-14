@@ -130,6 +130,7 @@ Commit isolation and restaging discipline:
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 60s. For slow but necessary steps (e.g., `go test ./...`), 5m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window. When the recent tail shows a previous timeout for the same command/scope, narrow scope before a single retry or switch slices.
+- Enforcement: if a command lacks a native timeout flag, wrap it with POSIX `timeout <budget>` so the budget is enforced deterministically. Treat exit 124 (timeout) and 137 (SIGKILL) as timeouts. Log `CMD: ... | exit=<code> | ms=<dur>` on timeout.
   - New: Overall iteration wall-clock budget: 10 minutes maximum. If exceeded, immediately emit `ITER_END:` followed by `--- ERROR: timebox ---`, record the exact next step to resume, and stop. Do not start new discovery after the wall time elapses.
   - External driver budgets alignment: if an outer driver defines stricter ceilings (e.g., `COMMIT_TIMEOUT`, `TASK_TIMEOUT`), treat those as hard caps. Aim to finish and emit `ITER_END:` and the final banner at least 30s before the external timeout so markers are recorded. When external budgets are unknown, adhere to the 10-minute wall clock.
 - Prefer narrowed scopes: run `go test` on touched packages first; only expand to `./...` if scope is unclear or failures span packages.
