@@ -31,7 +31,7 @@ Preflight continuity (must do before any new work):
  - Do not emit multiple `--- WORKING ON ---` banners for the same checklist line within a single iteration. Across iterations, if the same checklist line remains unfinished and unchanged, emit at most one banner for it in the new iteration and continue; avoid banner spam.
  - Treat `logs/coding.log` as the automation activity log (not app runtime output). Prefer its latest tail for continuity instead of repeating exploratory scans.
 - Timestamps: accept both legacy RFC2822 (`date -R`) and RFC3339 in the log; when writing, REQUIRE RFC3339 in UTC. If both appear, prefer RFC3339 for any calculations.
- - If your transport prints tokenized/streamed messages (e.g., one token per line), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
+ - If your transport prints tokenized/streamed messages (e.g., one token per line) or NDJSON/streamed JSON (e.g., lines that look like `{...}`), ignore those verbose lines for continuity; rely on the compact markers you emit (`DATE:`, `--- WORKING ON ---`, `TASK:`, `CMD:`, `TEST:`, `PASS/FAIL`). Do not reproduce tokenized chatter.
  - Parsing hygiene: ignore shell xtrace lines that begin with `+ ` (from `set -x`), and ignore NDJSON/streamed JSON lines that start with `{` and include keys like `"type"`, `"session_id"`, or `"tool_call"`. Treat only the defined plain‑text markers and banners as signal.
  - Legacy `DATE:` with xtrace: if a line appears as `DATE: + date -R` followed by a timestamp on the next line, parse the following line as the timestamp and ignore the xtrace fragment.
  - Legacy loop counters: when the log includes `UNFINISHED_TASKS:` or `FINISHED_TASKS:` lines, ignore them for continuity and metrics; rely on explicit markers instead.
@@ -87,7 +87,7 @@ Blocked‑state protocol (prevent thrashing):
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
  - When skipping due to zero-staged, also avoid running any additional `git status`/`git diff`/`git log` calls solely for commit preflight until new changes are staged.
-- If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git reset -- .` then explicitly `git add` only the intended paths.
+ - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git restore --staged .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
 - Keep commits small, isolated, and explanatory. The message must explain the “why” and link to the issue.
  - Commit after every successful slice: end each green slice with exactly one commit containing only files for that slice. Do not batch multiple slices into one commit.
@@ -145,6 +145,7 @@ Deterministic outputs to the activity log (kept concise):
  - If output would be split into many tiny lines, buffer locally and emit a single concise line per marker. Never emit one word per line.
  - Always write success markers to `logs/coding.log` (not only to improvement logs) so the main workflow can detect completion.
  - At iteration end, emit a brief operational summary including the exact checklist line text, the one-line subtask description, and the result (PASS/FAIL), so the next iteration can resume deterministically.
+ - If the recent log tail shows zero `SEARCH:`/`LIST:` markers historically, begin emitting them now (see Marker format) to enable deterministic continuity with concise evidence.
 
 Strict chatter ban (enforced examples):
 - Do not emit lines beginning with any of the following: `I'll`, `I am`, `I'm going to`, `I’m going to`, `We will`, `We’re going to`, `Let’s`, `Going to`.
