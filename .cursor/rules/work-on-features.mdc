@@ -46,6 +46,7 @@ Commit isolation and restaging discipline:
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 90s. For slow but necessary steps (e.g., `go test ./...`), 8m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window.
+- New: Overall iteration wall-clock budget: 10 minutes maximum. If exceeded, immediately emit `ITER_END:` followed by `--- ERROR: timebox ---`, record the exact next step to resume, and stop. Do not start new discovery after the wall time elapses.
 - Prefer narrowed scopes: run `go test` on touched packages first; only expand to `./...` if scope is unclear or failures span packages.
 - On timeouts:
   - Capture minimal diagnostics: command, parameters, duration, exit code, and the last 50 lines of stderr/stdout.
@@ -84,6 +85,10 @@ Marker emission rules:
 - Emit each marker as a single plain‑text line (no JSON framing, no xtrace prefix).
 - Do not interleave markers with token‑level streamed output; buffer locally and write complete marker lines.
 
+Ban on long‑lived processes:
+- Never start watch/dev/serve commands or any process intended to run indefinitely (for example: `npm run dev`, file watchers, local web servers, `tail -f`). These hang the iteration and violate the wall‑clock budget.
+- Prefer one‑shot commands that exit on their own. If you must verify a server or watcher behavior, write a unit or integration test instead.
+
 Iteration segment markers are mandatory (see above). They enable precise, reproducible duration calculations and prevent ambiguous parsing in the presence of streamed output.
 
 Additional lightweight markers to replace noisy chatter:
@@ -103,6 +108,7 @@ Discovery budget per iteration (to cap idle scans):
 
 Search and tooling constraints:
 - Prefer repository-native search tools over shell processes to avoid overhead. Use ripgrep-style queries and glob filters; avoid raw `find`/`grep` shell calls.
+- Parallelize independent reads/searches: when gathering context (e.g., multiple ripgrep patterns or reading several files), execute them concurrently up to 3–5 at a time. Do not serialize independent lookups.
 - Reuse results from earlier in the same iteration instead of repeating the same search/read.
 
 Baseline and validation (for refining this rule):
