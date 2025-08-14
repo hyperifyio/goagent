@@ -205,6 +205,8 @@ rm -f tmp_move_src.txt tmp_move_dst.txt
 - JSON contract on stdin/stdout; strict timeouts per call
 - Treat model output as untrusted input; never pass to a shell
 
+For a deeper analysis of risks, boundaries, and mitigations, see the full threat model at `docs/security/threat-model.md`.
+
 ### Sequence diagram
 See `docs/diagrams/agentcli-seq.md` for the message flow.
 

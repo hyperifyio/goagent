@@ -13,4 +13,7 @@ This docs index helps you navigate architecture notes and diagrams.
 - Tools manifest reference: precise `tools.json` schema and mapping to OpenAI tools.
   - Link: [docs/reference/tools-manifest.md](reference/tools-manifest.md)
 
+- Security: Threat model and trust boundaries.
+  - Link: [docs/security/threat-model.md](security/threat-model.md)
+
 Additional guides will be added here as they are created.
