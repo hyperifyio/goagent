@@ -39,7 +39,7 @@ make tidy build build-tools
 Optional environment (flags take precedence):
 - `OAI_BASE_URL` default `https://api.openai.com/v1`
 - `OAI_MODEL` default `oss-gpt-20b`
-- `OAI_API_KEY` only if your endpoint requires it
+- `OAI_API_KEY` only if your endpoint requires it (canonical; script and CLI also accept `OPENAI_API_KEY` as a fallback for compatibility)
 
 ### Quick start
 Ensure an OpenAI‑compatible API is reachable (e.g., local server at `http://localhost:1234/v1`). Build the CLI and example tool:
@@ -89,7 +89,7 @@ Common flags:
 -tools string          Path to tools.json (optional)
 -system string         System prompt (default: helpful and precise)
 -base-url string       OpenAI‑compatible base URL (env OAI_BASE_URL)
--api-key string        API key if required (env OAI_API_KEY)
+-api-key string        API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)
 -model string          Model ID (env OAI_MODEL)
 -max-steps int         Maximum reasoning/tool steps (default 8)
 -timeout duration      HTTP and per‑tool timeout (default 30s)
