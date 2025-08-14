@@ -27,7 +27,7 @@ test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move
+	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search
 
 lint:
 	@set -euo pipefail; \
