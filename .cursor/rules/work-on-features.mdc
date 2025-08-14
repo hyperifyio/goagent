@@ -95,8 +95,8 @@ Commit isolation and restaging discipline:
  - Commit after every successful slice: end each green slice with exactly one commit containing only files for that slice. Do not batch multiple slices into one commit.
  - Timebox the commit phase (including hooks) to 30s. If exceeded once, amend staging as needed and retry a single time within the budget; if it would exceed the budget again, enter BLOCKED with `next=<exact commit command>` and proceed to produce the smallest failing test or stub for the selected slice.
  - Commit message skeleton for rule refinements (this file): include these two grep-friendly lines at the top, followed by progress metrics and a 1–2 sentence rationale:
-   - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
-   - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
+  - `Baseline: timeouts=<n>, retries=<n|unavailable>, oscillations=<n|unavailable>, empty_commits=<n|unavailable>, delete_calls=<n|unavailable>, subst_performed=<n|unavailable>, deterministic_deletes=<n|unavailable>, durations=<p50|unavailable>/<p95|unavailable>, progress={checked_items:<n|unavailable>, slices_created:<n|unavailable>, slices_completed:<n|unavailable>}`
+  - `After: timeouts=<n|pending>, retries=<n|pending>, oscillations=<n|pending>, empty_commits=<n|pending>, delete_calls=<n|pending>, subst_performed=<n|pending>, deterministic_deletes=<n|pending>, durations=<p50|pending>/<p95|pending>, progress={checked_items:<n|pending>, slices_created:<n|pending>, slices_completed:<n|pending>}`
  - Deterministic deletions protocol (replace deleteToolCall with tracked-status driven ops):
   - Explicit ban: never invoke `deleteToolCall` in this repository. If the recent log tail shows such a call, immediately substitute with the correct deterministic deletion (`git rm` or `rm` as specified below) and emit a `SUBST:` marker.
   - Substitution evidence: when substituting, you MUST also emit the exact deterministic deletion as a `CMD:` line with `exit` and `ms` fields. Absence of `SUBST:` paired with a prior `deleteToolCall` in the tail is a protocol breach; correct it immediately in the current iteration.
@@ -245,6 +245,9 @@ Suggested grep snippets (for reproducible counts):
  - Legacy noisy lines (to eliminate): `rg -n "Searched files|^Listed(\s|$)" logs/coding.log | wc -l`
  - Shell xtrace noise (to ignore in parsing): `grep -En '^\+ ' logs/coding.log | wc -l`
  - NDJSON/streamed JSON lines (for awareness; ignore when parsing): `grep -En '^\{' logs/coding.log | wc -l`
+ - Delete tool calls (to replace): `rg -n "deleteToolCall" logs/coding.log | wc -l`
+ - Substitutions logged: `rg -n "^SUBST:" logs/coding.log | wc -l`
+ - Deterministic deletions executed: `rg -n "^CMD: (git rm|rm)" logs/coding.log | wc -l`
 Note: to aggregate across both logs, replace `logs/coding.log` with the directory `logs` in the queries above.
 If `rg` is unavailable in the shell environment, use grep fallbacks (no installs):
 - Timeouts: `grep -Ein "timeout|timed out|Timeout after|deadline exceeded|context deadline" logs/coding.log | wc -l`
