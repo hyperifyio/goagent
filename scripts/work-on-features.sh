@@ -35,25 +35,8 @@ while grep -q '\* \[ \]' FEATURE_CHECKLIST.md; do
     ) 2>&1 | tee -a "$LOG_FILE"
 
     if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo 2>&1 | tee -a "$LOG_FILE"
-        echo "--- COMMITTING UNCHANGED TO GIT ---" 2>&1 | tee -a "$LOG_FILE"
-        echo 2>&1 | tee -a "$LOG_FILE"
-
         git add . 2>&1 | tee -a "$LOG_FILE"
-
-        if timeout "$COMMIT_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" \
-            -- "$(cat "$COMMIT_MDC")" \
-          2>&1 | tee -a "$LOG_FILE"; then
-          echo 2>&1 | tee -a "$LOG_FILE"
-          echo '--- SUCCESSFUL END ---' 2>&1 | tee -a "$LOG_FILE"
-          echo 2>&1 | tee -a "$LOG_FILE"
-        else
-          ERRNO="$?"
-          echo 2>&1 | tee -a "$LOG_FILE"
-          echo '--- ERROR:'"$ERRNO"' ---' 2>&1 | tee -a "$LOG_FILE"
-          echo 2>&1 | tee -a "$LOG_FILE"
-        fi
-
+	./scripts/commit.sh 2>&1 | tee -a "$LOG_FILE"
     fi
 
     echo 2>&1 | tee -a "$LOG_FILE"
@@ -72,21 +55,10 @@ while grep -q '\* \[ \]' FEATURE_CHECKLIST.md; do
       echo 2>&1 | tee -a "$LOG_FILE"
     fi
 
-    echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-    echo "--- IMPROVING AND LEARNING ---" 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-    echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-
-    if timeout "$TASK_TIMEOUT" cursor-agent -p --output-format "$OUTPUT_FORMAT" -f -m "$MODEL" -- "$(cat "$IMPROVE_MDC")" \
-      2>&1 | tee -a "$IMPROVE_LOG_FILE"; then
-      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-      echo '--- SUCCESSFUL END ---' 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-    else
-      ERRNO="$?"
-      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-      echo '--- ERROR:'"$ERRNO"' ---' 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-      echo 2>&1 | tee -a "$IMPROVE_LOG_FILE"
-    fi
+    (
+      ./scripts/improve-and-learn.sh&
+      ./scripts/codebase-hygiene-audit.sh&
+    ) 2>&1 | tee -a "$IMPROVE_LOG_FILE"
 
     sleep 5
 done
