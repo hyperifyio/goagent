@@ -1,5 +1,5 @@
 ---
-description: "Repository-wide hygiene review that appends only new, non-duplicate, minimal, independent, DoD-ready tasks to FUTURE_CHECKLIST.md, adding documentation work under ./docs only when a real gap exists"
+description: "Repository-wide hygiene review that appends only new, non-duplicate, minimal, independent, DoD-ready tasks to FUTURE_CHECKLIST.md; each item is a single-line plain English checkbox"
 alwaysApply: false
 ---
 
@@ -7,12 +7,11 @@ This rule instructs the assistant to review the entire repository for unused or
 unreachable code, accidental complexity, duplicate or overlapping 
 implementations, inconsistent patterns, and architectural, operational, 
 security, or reliability drift, and to propose preventive documentation tasks 
-only when the current documentation does not already cover the subject 
-adequately. The assistant must not modify code, configuration, documentation, 
-or CI; it only produces a Markdown checklist of tasks. The assistant thinks 
-first and writes second so the final set of tasks reflects a coherent overall 
-picture and does not contain conflicts or duplicates. New tasks are appended to 
-FUTURE_CHECKLIST.md only.
+only when a real gap exists. The assistant must not modify code, configuration, 
+documentation, or CI; it only produces a deduplicated Markdown checklist. The 
+assistant thinks first and writes second so the final set of tasks reflects a 
+coherent overall picture and does not contain conflicts or duplicates. New 
+tasks are appended to FUTURE_CHECKLIST.md only.
 
 Perform the work in two passes. First collect signals using static analysis, 
 dependency graphs, builds, test runs, and coverage to locate dead symbols and 
@@ -27,109 +26,83 @@ independently without hidden coupling to other tasks.
 
 Before writing any new checklist items, load and parse existing 
 FUTURE_CHECKLIST.md and FEATURE_CHECKLIST.md if present. Treat an item as 
-existing when there is an unchecked checkbox line using either asterisk or dash 
-markers followed by a bracket pair such as `* [ ]` or `- [ ]`. Normalize 
-titles by lowercasing, trimming whitespace, collapsing consecutive spaces, and 
-stripping trailing punctuation and emoji. Consider two items duplicates if 
-their normalized titles match exactly or if their Evidence lines refer to the 
-same primary files, symbols, or documentation paths for the same issue class. 
-When a duplicate is detected, do not add a new item and do not modify the 
-existing files. If the existing item is checked as done, you may still generate 
-analysis notes internally but you must not add a new checklist entry for that 
-issue. Only unique, non-duplicate, unchecked issues result in new checklist 
-items.
+existing when there is an unchecked checkbox line beginning with `* [ ]` or 
+`- [ ]`. Normalize candidate and existing items by lowercasing, trimming 
+whitespace, collapsing multiple spaces, removing trailing punctuation and 
+emoji, and compressing repeated file paths. Consider items duplicates if their 
+normalized opening task clause matches or if they address the same primary 
+files or symbols for the same issue class. If a duplicate is found, do not add 
+a new item and do not modify existing files. Checked items never block analysis 
+but must not be recreated.
 
-The output format is a Markdown checklist where each item begins with a single 
-top-level checkbox line in the exact pattern `* [ ] Title — succinct impact`. 
-Under that line, include compact, labeled content as indented paragraphs using 
-two leading spaces so the text remains part of the same checklist item. Include 
-labeled lines in this precise order inside the item: Context, Evidence, 
-Proposed change, Affected scope, Risk and blast radius, Effort estimate, 
-Dependencies, DoD for this task, Verification, Rollback or mitigation, 
-Traceability. The Evidence label names concrete files, symbols, documentation 
-paths, commands, and outputs demonstrating the issue. The Proposed change 
-describes the smallest viable edit that resolves the issue in one step without 
-bundling unrelated work. Dependencies names any ordering constraints; if none, 
-state “None”.
+Each new checklist entry must be exactly one physical line that starts with a 
+Markdown checkbox marker `* [ ] ` followed by plain English sentences only. Do 
+not use any additional formatting, labels, lists, bullets, tables, code fences, 
+inline code, emojis, or special typography inside the line. Do not insert hard 
+line breaks within an item; a single newline ends the item. Write clear prose 
+that stands on its own without “see above” references. The sentence should 
+express, in a compact way, the task, context and evidence, the smallest 
+proposed change, affected scope, risks, effort, dependencies, a concise DoD 
+summary aligned with the project’s Definition of Done, how to verify, how to 
+rollback, and a traceability link to the canonical issue URL; use commas and 
+semicolons to keep it readable while remaining on one line.
 
-Preventive documentation tasks are created only when a real gap exists. Before 
-proposing any documentation work, systematically inspect the ./docs tree to 
-determine whether the topic is already covered clearly, accurately, and 
-discoverably. A topic is considered already covered when an existing Markdown 
-document in ./docs explains the canonical approach, boundaries, layering and 
-dependency rules, naming and layout conventions, reuse guidance, public 
-interfaces and extension points, and includes or links to up-to-date Mermaid 
-diagrams where visual context matters. If such coverage exists and is current, 
-do not add a new documentation task. If coverage exists but is outdated, 
-incorrect, ambiguous, or hard to find, propose the smallest corrective edit 
-that resolves the gap, such as updating a specific section, refreshing a 
-diagram to match the current design, or adding cross-links and an index in 
-./docs/README.md to improve discoverability. Only when no adequate document 
-exists should you propose creating a new file under ./docs with an explicit 
-path such as ./docs/architecture/module-boundaries.md or 
-./docs/components/shared-utilities.md so the task is independently actionable. 
-Avoid duplicating content across documents and maintain a single source of 
-truth by updating the most authoritative document rather than introducing 
-parallel guidance.
+Preventive documentation tasks are created only when a real gap exists after 
+inspecting the ./docs tree. If an existing Markdown document already explains 
+the canonical approach, boundaries, layering and dependency rules, naming and 
+layout conventions, reuse guidance, public interfaces and extension points, and 
+includes up-to-date Mermaid diagrams where visual context matters, do not add a 
+documentation task. When coverage is outdated, incorrect, ambiguous, or hard to 
+find, create a single-line checkbox item that proposes the smallest corrective 
+edit to the specific file under ./docs, such as tightening wording, refreshing 
+a diagram, or adding cross-links and an index in ./docs/README.md. Only when no 
+adequate document exists should a single-line item propose adding a new 
+Markdown file under a precise path like 
+./docs/architecture/module-boundaries.md; avoid duplicating content and prefer 
+updating the most authoritative document.
 
-Each task’s DoD is self-contained and implementable without reading other 
-items. State within the item that the change follows test-driven development 
-with a failing test first where applicable, that unit tests cover pure logic 
-and integration tests cover boundaries such as databases, filesystems, 
-networks, queues, or external services, that critical user flows gain 
-end-to-end protection when relevant, that regressions reproducible by a bug 
-report acquire a protecting test, that coverage does not decrease and changed 
-lines and branches are exercised, that tests are deterministic and run locally 
-and in CI without flakiness, that the pull request, commits, and tests explain 
-intent in plain language and link to the canonical issue URL, that builds are 
-reproducible and all quality gates pass including static analysis, type checks, 
-formatting, linting, security scanning, and secret detection with no new 
-findings, that performance and resource budgets are respected and risky paths 
-are backed by targeted benchmarks or load tests when needed, that backward 
-compatibility is preserved for public interfaces or a migration plan with tests 
-and documentation is included if a breaking change is explicitly required, that 
-data changes are idempotent with tested rollback and verification when 
-applicable, that documentation is updated in the same change set for users, 
-developers, operations, and changelog where needed, that at least one peer 
-review is completed and comments resolved or explicitly deferred with rationale 
-and a linked follow-up issue, and that any exception is pre-approved in the 
-linked issue with risk, scope, and a follow-up plan.
+Each item’s DoD summary inside the single line must commit to test-driven 
+development with a failing test first where applicable, no coverage regression 
+and changed lines/branches exercised, deterministic tests runnable locally and 
+in CI, all quality gates green (build reproducibility, static analysis, type 
+checks, formatting, linting, security scanning, secret detection), preserved 
+backward compatibility for public interfaces or an explicit migration plan with 
+tests and docs for approved breaking changes, idempotent and verified data 
+migrations when relevant, updated user/developer/operational docs and changelog 
+in the same change, at least one completed peer review with comments resolved 
+or explicitly deferred with rationale and a follow-up issue URL, and a clear 
+rollback note.
 
 File handling is append-only to FUTURE_CHECKLIST.md. Open FUTURE_CHECKLIST.md 
 in append mode when it exists, do not rewrite or reorder existing content, and 
 ensure a single trailing blank line before new content. Append a new dated 
 section heading at the very end in the exact format “## Review YYYY-MM-DD” 
-followed by the new checklist items. If a section for the same date already 
-exists at the end of the file, append additional items under that existing 
-section instead of creating a duplicate heading. If FUTURE_CHECKLIST.md does 
-not exist, create it and write the heading followed by the checklist. Under no 
-circumstances modify or regenerate prior content in FUTURE_CHECKLIST.md or 
-FEATURE_CHECKLIST.md.
+followed by the new single-line checkbox items. If a section for the same date 
+already exists at the end of the file, append additional items under that 
+existing section instead of creating a duplicate heading. If 
+FUTURE_CHECKLIST.md does not exist, create it and write the heading followed by 
+the single-line items. Never modify or regenerate prior content in 
+FUTURE_CHECKLIST.md or FEATURE_CHECKLIST.md.
 
-Independence and minimality are mandatory. Each checklist item stands alone, 
-avoids references to other items, and contains every fact necessary to 
-implement that one step safely. When a finding implies multiple edits, split it 
-into separate items so that each item changes a single concern in a single 
-place. If a change requires an Architectural Decision Record, create a separate 
-checklist item that drafts and lands the ADR under ./docs/adr before 
-implementation; implementation follows only after the ADR item is checked. For 
-API changes, create a separate checklist item that adds or updates the OpenAPI 
-specification and contract tests before any implementation items. For diagram 
-or documentation drift, create a dedicated item that updates Markdown Mermaid 
-diagrams and related docs to stay in sync with the current or proposed design.
+Independence and minimality are mandatory. Each item must describe a single 
+smallest change in one place and be implementable without knowledge of any 
+other item. If a change requires an Architectural Decision Record, add a 
+separate single-line item that lands the ADR under ./docs/adr before any 
+implementation item. For API changes, add a separate single-line item that 
+updates the OpenAPI specification and contract tests before implementation. For 
+diagram or documentation drift, add a dedicated single-line item that updates 
+Markdown Mermaid diagrams and related docs to match the current or intended 
+design.
 
-Security and privacy findings are reported as normal checklist items and never 
-remediated in this review. The Evidence label must call out exposed secrets, 
-unsafe logging of sensitive data, missing encryption in transit or at rest, 
-unpinned or vulnerable dependencies, missing SBOM updates, absent correlation 
-or trace identifiers, missing idempotency on external-facing writes, and 
-permissive IAM, with a Proposed change that is narrowly scoped and verifiable. 
-Operational findings similarly become independent items covering observability, 
-SLOs and alerts, timeouts, retries with backoff, circuit breakers, 
-configuration hygiene, infrastructure as code, consistent environment parity, 
-rollout strategies with automatic rollback, and runbooks.
+Security and privacy findings are reported as normal single-line items and 
+never remediated in this review. Identify exposed secrets, unsafe logging of 
+sensitive data, missing encryption in transit or at rest, unpinned or 
+vulnerable dependencies, missing SBOM updates, absent correlation or trace 
+identifiers, missing idempotency on external-facing writes, and permissive IAM; 
+propose the smallest verifiable change as a one-line task with clear 
+verification and rollback notes.
 
 The deliverable from this rule is only the curated, deduplicated 
-FUTURE_CHECKLIST.md containing ready-to-execute remediation and, when 
-warranted by real gaps, preventive documentation tasks under ./docs. No issues 
-are opened, no branches created, and no commits pushed as part of this review.
+FUTURE_CHECKLIST.md containing ready-to-execute single-line checklist items. No 
+issues are opened, no branches created, and no commits pushed as part of this 
+review.
