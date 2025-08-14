@@ -75,3 +75,33 @@ func TestTimeCLI_AcceptsAliasTZ(t *testing.T) {
 		t.Fatalf("iso8601 not RFC3339: %v", err)
 	}
 }
+
+func TestTimeCLI_MissingTimezone_ErrorContract(t *testing.T) {
+    bin := buildTimeTool(t)
+    out, stderr, code := runTimeTool(t, bin, map[string]any{})
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for missing timezone, got 0; stderr=%q", stderr)
+    }
+    if out.Timezone != "" || out.ISO8601 != "" {
+        t.Fatalf("stdout should be empty on error, got: %+v", out)
+    }
+    s := strings.TrimSpace(stderr)
+    if s == "" || !strings.Contains(s, "\"error\"") {
+        t.Fatalf("stderr should contain JSON error, got: %q", stderr)
+    }
+}
+
+func TestTimeCLI_InvalidTimezone_ErrorContract(t *testing.T) {
+    bin := buildTimeTool(t)
+    out, stderr, code := runTimeTool(t, bin, map[string]any{"timezone": "Not/AZone"})
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for invalid timezone, got 0; stderr=%q", stderr)
+    }
+    if out.Timezone != "" || out.ISO8601 != "" {
+        t.Fatalf("stdout should be empty on error, got: %+v", out)
+    }
+    s := strings.TrimSpace(stderr)
+    if s == "" || !strings.Contains(s, "\"error\"") {
+        t.Fatalf("stderr should contain JSON error, got: %q", stderr)
+    }
+}

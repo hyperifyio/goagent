@@ -23,29 +23,29 @@ type output struct {
 func main() {
 	inBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "{\"error\":\"read stdin: %s\"}\n", escape(err.Error()))
-		return
+        fmt.Fprintf(os.Stderr, "{\"error\":\"read stdin: %s\"}\n", escape(err.Error()))
+        os.Exit(1)
 	}
 	var in input
 	if len(strings.TrimSpace(string(inBytes))) == 0 {
 		inBytes = []byte("{}")
 	}
     if err := json.Unmarshal(inBytes, &in); err != nil {
-		fmt.Fprintf(os.Stdout, "{\"error\":\"bad json: %s\"}\n", escape(err.Error()))
-		return
+        fmt.Fprintf(os.Stderr, "{\"error\":\"bad json: %s\"}\n", escape(err.Error()))
+        os.Exit(1)
 	}
     // Prefer canonical 'timezone'; allow backward-compatible alias 'tz'
     if strings.TrimSpace(in.Timezone) == "" && strings.TrimSpace(in.TZ) != "" {
         in.Timezone = in.TZ
     }
     if strings.TrimSpace(in.Timezone) == "" {
-		fmt.Printf("{\"error\":\"missing timezone\"}\n")
-		return
+        fmt.Fprintf(os.Stderr, "{\"error\":\"missing timezone\"}\n")
+        os.Exit(1)
 	}
 	loc, err := time.LoadLocation(in.Timezone)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "{\"error\":\"invalid timezone: %s\"}\n", escape(err.Error()))
-		return
+        fmt.Fprintf(os.Stderr, "{\"error\":\"invalid timezone: %s\"}\n", escape(err.Error()))
+        os.Exit(1)
 	}
 	now := time.Now().In(loc).Format(time.RFC3339)
 	out := output{Timezone: in.Timezone, ISO8601: now}
