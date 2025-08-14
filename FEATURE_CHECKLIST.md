@@ -71,7 +71,7 @@
 * [ ] Add execution audit log in runner — append ndjson `{ts,tool,argv,cwd,exit,ms,stdoutBytes,stderrBytes,truncated}` to `.goagent/audit/YYYYMMDD.log`; DoD: unit test writes/rotates, redaction respected (see next), docs, CI green.
 * [ ] Implement log redaction — configurable patterns/keys in runner (mask env and output: e.g., tokens); DoD: tests proving masking for env and stdout/stderr, README config section, CI green.
 * [ ] Provide “capabilities” CLI (`agentcli -capabilities`) — prints enabled tools from `tools.json` and explicit warning that enabled tools allow arbitrary command execution and network access; DoD: unit test, README usage, CI green.
-* [ ] Update README with “unrestricted tools” warning + examples — clear risk note, copy-paste examples for each fs/* and exec tool, troubleshooting; DoD: docs lint passes, examples exercised in CI script, CI green.
+* [x] Update README with “unrestricted tools” warning + examples — clear risk note, copy-paste examples for each fs/* and exec tool, troubleshooting; DoD: docs lint passes, examples exercised in CI script, CI green.
 * [ ] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.
 * [ ] Add Mermaid diagram `docs/diagrams/toolbelt-seq.md` — sequence of CLI → API → tools → API → final; DoD: diagram renders on GitHub, referenced from README/ADR, updated test ensuring file exists, CI green.
 * [ ] CI smoke job for tools — workflow builds tools, runs each binary with sample stdin, and runs an agent loop against a fake API; no external network dependence; DoD: green in PRs, artifacts attached, linked to issue.

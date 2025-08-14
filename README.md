@@ -28,6 +28,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Contributing](#contributing)
 - [Project status](#project-status)
 - [License and credits](#license-and-credits)
+ - [Unrestricted tools warning](#unrestricted-tools-warning)
 
 ### Installation
 - **Prerequisites**: Go 1.24+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
@@ -207,6 +208,12 @@ rm -f tmp_move_src.txt tmp_move_dst.txt
 - Treat model output as untrusted input; never pass to a shell
 
 For a deeper analysis of risks, boundaries, and mitigations, see the full threat model at `docs/security/threat-model.md`.
+
+### Unrestricted tools warning
+- Enabling certain tools like `exec` grants arbitrary command execution and may allow full network access. Treat this as remote code execution.
+- Run the CLI and tools in a sandboxed environment (container/jail/VM) with least privilege. Prefer a throwaway working directory.
+- Keep `tools.json` minimal and audited; only include tools you truly need. Review commands and arguments regularly.
+- Do not pass secrets via tool arguments. Supply secrets via environment or CI secret stores and ensure logs omit sensitive values.
 
 ### Troubleshooting
 See `docs/runbooks/troubleshooting.md` for common issues and deterministic fixes (missing tool binaries, path validation, timeouts, HTTP errors, and golangci-lint setup), with copy‑paste commands.
