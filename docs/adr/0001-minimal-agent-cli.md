@@ -26,3 +26,6 @@ Link to the canonical GitHub issue once created.
 
 ## Diagram
 See `docs/diagrams/agentcli-seq.md` for the sequence diagram illustrating the loop.
+
+## Related documentation
+See the docs index at `docs/README.md` for navigation to related guides and diagrams.

@@ -8,6 +8,7 @@
 Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions API, executes an explicit allowlist of local tools (argv only, no shell), and prints the model’s final answer. Works with any endpoint that supports `POST /v1/chat/completions`, including a local server at `http://localhost:1234/v1`.
 
 ### Table of contents
+- [Documentation index](docs/README.md)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Usage](#usage)
