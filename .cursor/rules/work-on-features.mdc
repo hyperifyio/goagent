@@ -87,6 +87,7 @@ Blocked‑state protocol (prevent thrashing):
 
 Commit isolation and restaging discipline:
 - Before committing, ensure only files relevant to the current task are staged. If there are zero staged changes, SKIP the commit phase entirely (do not invoke any commit tooling).
+ - Fast-path zero-staged check: before invoking any commit tooling, perform a quiet staged-diff check (`git diff --staged --quiet`). If it exits 0 (no staged diffs), emit `COMMIT_SKIP: zero-staged` and skip the entire commit ceremony. Do not run further commit-related `git status`/`git diff`/`git log` calls in this iteration until new changes are staged.
  - When skipping due to zero-staged, also avoid running any additional `git status`/`git diff`/`git log` calls solely for commit preflight until new changes are staged.
  - If unrelated files are staged, unstage them and stage only task-related changes. Deterministic sequence: `git restore --staged .` then explicitly `git add` only the intended paths.
 - Never run `git add .` as part of your own flow. Always add explicit paths for the current task only. If an external script has pre‑staged unrelated files, unstage them deterministically before proceeding.
@@ -130,6 +131,7 @@ Commit isolation and restaging discipline:
 
 Execution timeboxing and recovery:
 - Default per-shell-command budget: 60s. For slow but necessary steps (e.g., `go test ./...`), 5m max. For network calls, 30s unless the task explicitly demands longer. Do not let a single failing command consume the whole iteration window. When the recent tail shows a previous timeout for the same command/scope, narrow scope before a single retry or switch slices.
+ - Adaptive throttle on recent timeouts: if the last ~200 lines of the log tail show 2 or more timeouts, reduce budgets for the remainder of this iteration to 30s for typical shell commands and 120s for `go test` package runs (`./...` capped at 3m). Restore defaults in the next iteration.
 - Enforcement: if a command lacks a native timeout flag, wrap it with POSIX `timeout <budget>` so the budget is enforced deterministically. Treat exit 124 (timeout) and 137 (SIGKILL) as timeouts. Log `CMD: ... | exit=<code> | ms=<dur>` on timeout.
   - New: Overall iteration wall-clock budget: 10 minutes maximum. If exceeded, immediately emit `ITER_END:` followed by `--- ERROR: timebox ---`, record the exact next step to resume, and stop. Do not start new discovery after the wall time elapses.
   - External driver budgets alignment: if an outer driver defines stricter ceilings (e.g., `COMMIT_TIMEOUT`, `TASK_TIMEOUT`), treat those as hard caps. Aim to finish and emit `ITER_END:` and the final banner at least 30s before the external timeout so markers are recorded. When external budgets are unknown, adhere to the 10-minute wall clock.
