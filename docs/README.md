@@ -7,4 +7,7 @@ This docs index helps you navigate architecture notes and diagrams.
 - Sequence diagram: agent flow from CLI to API and tools.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
 
+- Architecture: Module boundaries and allowed imports between layers.
+  - Link: [docs/architecture/module-boundaries.md](architecture/module-boundaries.md)
+
 Additional guides will be added here as they are created.

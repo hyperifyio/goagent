@@ -9,6 +9,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 
 ### Table of contents
 - [Documentation index](docs/README.md)
+- [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Usage](#usage)
