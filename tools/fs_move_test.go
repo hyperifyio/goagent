@@ -1,0 +1,95 @@
+package main
+
+// https://github.com/hyperifyio/goagent/issues/1
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+)
+
+type fsMoveOutput struct {
+	Moved bool `json:"moved"`
+}
+
+// buildFsMoveTool builds ./tools/fs_move into a temporary binary.
+func buildFsMoveTool(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	binPath := filepath.Join(tmpDir, "fs-move")
+    cmd := exec.Command("go", "build", "-o", binPath, "./fs_move")
+	cmd.Dir = "."
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to build fs_move tool: %v\n%s", err, string(out))
+	}
+	return binPath
+}
+
+// runFsMove runs the built fs_move tool with the given JSON input and decodes stdout.
+func runFsMove(t *testing.T, bin string, input any) (fsMoveOutput, string, int) {
+	t.Helper()
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	cmd := exec.Command(bin)
+	cmd.Dir = "."
+	cmd.Stdin = bytes.NewReader(data)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	code := 0
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else {
+			code = 1
+		}
+	}
+	var out fsMoveOutput
+	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
+	return out, stderr.String(), code
+}
+
+// TestFsMove_RenameSimple_NoOverwrite expresses the basic contract: renaming a file
+// within the same filesystem should succeed when destination does not exist. The tool
+// exits 0, outputs {"moved":true}, and the source disappears while destination appears
+// with identical contents.
+func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
+	// Build (will fail until fs_move is implemented)
+	bin := buildFsMoveTool(t)
+
+	dir := makeRepoRelTempDir(t, "fsmove-basic-")
+	src := filepath.Join(dir, "a.txt")
+	dst := filepath.Join(dir, "b.txt")
+	content := []byte("hello")
+	if err := os.WriteFile(src, content, 0o644); err != nil {
+		t.Fatalf("seed write: %v", err)
+	}
+
+	out, stderr, code := runFsMove(t, bin, map[string]any{
+		"from": src,
+		"to":   dst,
+	})
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if !out.Moved {
+		t.Fatalf("expected moved=true, got false")
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("expected source removed, stat err=%v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("content mismatch: got %q want %q", string(got), string(content))
+	}
+}
