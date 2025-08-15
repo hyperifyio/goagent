@@ -4,22 +4,5 @@ logs/
 .goagent
 *.log
 
-tools/get_time
-tools/exec_test
-tools/fs_append_file_test
-tools/fs_mkdirp_test
-tools/fs_move_test
-tools/fs_read_file
-tools/fs_read_file_test
-tools/fs_rm_test
-tools/fs_search_test
-tools/fs_write_file_test
-
-# Ignore built tool binaries under tools/ while keeping sources
-# Single-file outputs at tools/* and per-directory binaries like tools/<name>/<name>
-tools/*
-!tools/*.go
-!tools/*/
-tools/*/*
-!tools/*/*.go
-tools/bin/*
+# Ignore built tool binaries only; keep sources tracked
+tools/bin/**
