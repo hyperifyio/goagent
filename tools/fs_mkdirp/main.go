@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
+    "encoding/json"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "strconv"
+    "strings"
 )
 
 type mkdirpInput struct {
@@ -20,10 +20,11 @@ type mkdirpOutput struct {
 }
 
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, strings.TrimSpace(err.Error()))
-		os.Exit(1)
-	}
+    if err := run(); err != nil {
+        // Standardized error contract: single-line JSON to stderr.
+        writeStdErrJSON(err)
+        os.Exit(1)
+    }
 }
 
 func run() error {
@@ -42,7 +43,7 @@ func run() error {
 		return fmt.Errorf("path is required")
 	}
 	if filepath.IsAbs(in.Path) {
-		return fmt.Errorf("path must be relative to repository root")
+        return fmt.Errorf("path must be relative to repository root")
 	}
 	clean := filepath.Clean(in.Path)
 	if strings.HasPrefix(clean, "..") {
@@ -81,4 +82,12 @@ func writeJSON(v any) error {
 	}
 	fmt.Println(string(b))
 	return nil
+}
+
+// writeStdErrJSON writes {"error": "..."} to stderr as one line.
+func writeStdErrJSON(err error) {
+    msg := strings.TrimSpace(err.Error())
+    payload := map[string]string{"error": msg}
+    b, _ := json.Marshal(payload)
+    fmt.Fprintln(os.Stderr, string(b))
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,4 +89,30 @@ func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
 	if out2.Created {
 		t.Fatalf("expected created=false on second call")
 	}
+}
+
+// TestFsMkdirp_ErrorJSON verifies the standardized error contract: on failure,
+// the tool must write a single-line JSON object to stderr with an "error" key
+// and exit non-zero. Use an absolute path to trigger validation failure.
+func TestFsMkdirp_ErrorJSON(t *testing.T) {
+    bin := buildFsMkdirpTool(t)
+
+    // Absolute path should be rejected per repo-relative constraint.
+    abs := string(os.PathSeparator) + filepath.Join("tmp", "mkabs")
+
+    _, stderr, code := runFsMkdirp(t, bin, map[string]any{
+        "path": abs,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit on invalid absolute path")
+    }
+    // Must be single-line JSON with {"error":...}
+    line := strings.TrimSpace(stderr)
+    var obj map[string]any
+    if err := json.Unmarshal([]byte(line), &obj); err != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
 }
