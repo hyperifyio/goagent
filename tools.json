@@ -18,7 +18,7 @@
         "required": ["timezone"],
         "additionalProperties": false
       },
-      "command": ["./tools/get_time"],
+      "command": ["./tools/bin/get_time"],
       "timeoutSec": 5
     }
     ,
@@ -35,7 +35,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_read_file"],
+      "command": ["./tools/bin/fs_read_file"],
       "timeoutSec": 5
     },
     {
@@ -51,7 +51,7 @@
         "required": ["path", "contentBase64"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_write_file"],
+      "command": ["./tools/bin/fs_write_file"],
       "timeoutSec": 5
     },
     {
@@ -66,7 +66,7 @@
         "required": ["path", "contentBase64"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_append_file"],
+      "command": ["./tools/bin/fs_append_file"],
       "timeoutSec": 5
     },
     {
@@ -81,7 +81,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_mkdirp"],
+      "command": ["./tools/bin/fs_mkdirp"],
       "timeoutSec": 5
     },
     {
@@ -97,7 +97,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_rm"],
+      "command": ["./tools/bin/fs_rm"],
       "timeoutSec": 5
     },
     {
@@ -113,7 +113,7 @@
         "required": ["from", "to"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_move"],
+      "command": ["./tools/bin/fs_move"],
       "timeoutSec": 5
     },
     {
@@ -130,7 +130,7 @@
         "required": ["query"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_search"],
+      "command": ["./tools/bin/fs_search"],
       "timeoutSec": 5
     },
     {
@@ -148,7 +148,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_listdir"],
+      "command": ["./tools/bin/fs_listdir"],
       "timeoutSec": 5
     },
     {
@@ -165,7 +165,7 @@
         "required": ["path", "startLine", "endLine"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_read_lines"],
+      "command": ["./tools/bin/fs_read_lines"],
       "timeoutSec": 5
     },
     {
@@ -180,7 +180,7 @@
         "required": ["unifiedDiff"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_apply_patch"],
+      "command": ["./tools/bin/fs_apply_patch"],
       "timeoutSec": 10
     },
     {
@@ -198,7 +198,7 @@
         "required": ["path", "startByte", "endByte", "replacementBase64"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_edit_range"],
+      "command": ["./tools/bin/fs_edit_range"],
       "timeoutSec": 5
     },
     {
@@ -217,7 +217,7 @@
         "required": ["cmd"],
         "additionalProperties": false
       },
-      "command": ["./tools/exec"],
+      "command": ["./tools/bin/exec"],
       "timeoutSec": 30
     },
     {
@@ -233,7 +233,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "command": ["./tools/fs_stat"],
+      "command": ["./tools/bin/fs_stat"],
       "timeoutSec": 5
     }
   ]
