@@ -81,16 +81,18 @@ func run() error {
 	}
 	defer f.Close()
 
-	reader := bufio.NewReader(f)
-	var (
-		lineNum       = 0
-		builder       strings.Builder
-		reachedFileEOI bool
-	)
+    reader := bufio.NewReader(f)
+    var (
+        lineNum         = 0
+        builder         strings.Builder
+        reachedFileEOI  bool
+        truncatedByMax  bool
+        maxBytesAllowed = in.MaxBytes
+    )
 
 	// Read lines incrementally; normalize CRLF -> LF; preserve trailing LF if present
 	for {
-		line, err := reader.ReadString('\n')
+        line, err := reader.ReadString('\n')
 		if errors.Is(err, io.EOF) {
 			if len(line) == 0 {
 				reachedFileEOI = true
@@ -98,9 +100,22 @@ func run() error {
 			}
 			// Handle last line without trailing newline
 			lineNum++
-			if lineNum >= in.StartLine && lineNum < in.EndLine {
-				builder.WriteString(normalizeEOL(line, false))
-			}
+            if lineNum >= in.StartLine && lineNum < in.EndLine {
+                chunk := normalizeEOL(line, false)
+                if maxBytesAllowed > 0 {
+                    remaining := maxBytesAllowed - builder.Len()
+                    if remaining <= 0 {
+                        truncatedByMax = true
+                        break
+                    }
+                    if len(chunk) > remaining {
+                        builder.WriteString(chunk[:remaining])
+                        truncatedByMax = true
+                        break
+                    }
+                }
+                builder.WriteString(chunk)
+            }
 			reachedFileEOI = true
 			break
 		}
@@ -108,9 +123,22 @@ func run() error {
 			return fmt.Errorf("read line: %w", err)
 		}
 		lineNum++
-		if lineNum >= in.StartLine && lineNum < in.EndLine {
-			builder.WriteString(normalizeEOL(line, true))
-		}
+        if lineNum >= in.StartLine && lineNum < in.EndLine {
+            chunk := normalizeEOL(line, true)
+            if maxBytesAllowed > 0 {
+                remaining := maxBytesAllowed - builder.Len()
+                if remaining <= 0 {
+                    truncatedByMax = true
+                    break
+                }
+                if len(chunk) > remaining {
+                    builder.WriteString(chunk[:remaining])
+                    truncatedByMax = true
+                    break
+                }
+            }
+            builder.WriteString(chunk)
+        }
 		if lineNum >= in.EndLine {
 			// We can stop early once we've read the last requested line
 			break
@@ -121,7 +149,9 @@ func run() error {
 		Content:   builder.String(),
 		StartLine: in.StartLine,
 		EndLine:   in.EndLine,
-		EOF:       reachedFileEOI && lineNum < in.EndLine,
+        // EOF indicates we reached end-of-file before covering [startLine:endLine).
+        // If we truncated due to maxBytes, do not claim EOF.
+        EOF:       !truncatedByMax && reachedFileEOI && lineNum < in.EndLine,
 	}
 	b, err := json.Marshal(out)
 	if err != nil {
