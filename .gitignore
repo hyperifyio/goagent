@@ -10,3 +10,11 @@ tools/fs_read_file_test
 tools/fs_rm_test
 tools/fs_search_test
 tools/fs_write_file_test
+
+# Ignore built tool binaries under tools/ while keeping sources
+# Single-file outputs at tools/* and per-directory binaries like tools/<name>/<name>
+tools/*
+!tools/*.go
+!tools/*/
+tools/*/*
+!tools/*/*.go
