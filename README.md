@@ -23,6 +23,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
   - [fs_listdir tool example](#fs_listdir-tool-example)
   - [fs_apply_patch tool example](#fs_apply_patch-tool-example)
   - [fs_edit_range tool example](#fs_edit_range-tool-example)
+- [fs_stat tool example](#fs_stat-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Troubleshooting](#troubleshooting)
@@ -265,6 +266,22 @@ cat tmp_edit_demo.txt
 
 # Cleanup
 rm -f tmp_edit_demo.txt b64.txt
+```
+
+### fs_stat tool example
+Report existence, type, size, mode, modTime, and optional SHA‑256 for a repo‑relative path.
+
+```bash
+make build-tools
+
+# Create a demo file
+printf 'hello world' > tmp_stat_demo.txt
+
+# Stat with SHA‑256
+echo '{"path":"tmp_stat_demo.txt","hash":"sha256"}' | ./tools/fs_stat | jq .
+
+# Cleanup
+rm -f tmp_stat_demo.txt
 ```
 
 ### Features
