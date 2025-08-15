@@ -65,6 +65,10 @@ func applyUnifiedDiffStrict(diff string) (int, error) {
 
     for scanner.Scan() {
         line := scanner.Text()
+        // Normalize CRLF to LF by trimming any trailing carriage return
+        if strings.HasSuffix(line, "\r") {
+            line = strings.TrimSuffix(line, "\r")
+        }
         if strings.HasPrefix(line, "--- ") {
             oldPath = strings.TrimSpace(strings.TrimPrefix(line, "--- "))
             state = "have-old"
