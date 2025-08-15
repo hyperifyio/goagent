@@ -149,8 +149,7 @@ rm -f tmp_write_demo.txt b64.txt
 ### fs_mkdirp tool example
 Create directories recursively (idempotent; returns created=true on first call, false thereafter):
 ```bash
-# Build this tool (until aggregated in Makefile)
-go build -o tools/fs_mkdirp ./tools/fs_mkdirp
+make build-tools
 
 echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
 ls -ld tmp_mkdirp_demo/a/b/c
