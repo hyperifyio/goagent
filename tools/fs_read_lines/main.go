@@ -32,14 +32,14 @@ type readLinesOutput struct {
 
 func main() {
 	if err := run(); err != nil {
-		// Error contract: concise message on stderr; exit non-zero
-		msg := strings.TrimSpace(err.Error())
-		if errors.Is(err, os.ErrNotExist) || strings.Contains(strings.ToUpper(msg), "NOT_FOUND") {
-			fmt.Fprintln(os.Stderr, "NOT_FOUND: "+msg)
-		} else {
-			fmt.Fprintln(os.Stderr, msg)
-		}
-		os.Exit(1)
+        // Standardized error JSON contract: single-line {"error":"..."} to stderr
+        msg := strings.TrimSpace(err.Error())
+        if errors.Is(err, os.ErrNotExist) || strings.Contains(strings.ToUpper(msg), "NOT_FOUND") {
+            // Ensure NOT_FOUND marker remains visible for deterministic tests
+            msg = "NOT_FOUND: " + msg
+        }
+        _ = json.NewEncoder(os.Stderr).Encode(map[string]string{"error": msg})
+        os.Exit(1)
 	}
 }
 

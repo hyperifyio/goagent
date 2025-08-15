@@ -140,3 +140,30 @@ func TestFsReadLines_CRLF_Normalize(t *testing.T) {
         t.Fatalf("unexpected EOF=true for partial read")
     }
 }
+
+// TestFsReadLines_ErrorJSON verifies the standardized stderr JSON error contract
+// for fs_read_lines: on invalid input, the tool must write a single-line JSON
+// object with an "error" key to stderr and exit non-zero.
+func TestFsReadLines_ErrorJSON(t *testing.T) {
+    bin := buildFsReadLinesTool(t)
+
+    // Use an absolute path to trigger validation failure.
+    abs := string(os.PathSeparator) + filepath.Join("tmp", "fsread-abs.txt")
+
+    _, stderr, code := runFsReadLines(t, bin, map[string]any{
+        "path":      abs,
+        "startLine": 1,
+        "endLine":   2,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit on invalid absolute path")
+    }
+    line := strings.TrimSpace(stderr)
+    var obj map[string]any
+    if err := json.Unmarshal([]byte(line), &obj); err != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
+}
