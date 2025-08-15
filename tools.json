@@ -37,6 +37,120 @@
       },
       "command": ["./tools/fs_read_file"],
       "timeoutSec": 5
+    },
+    {
+      "name": "fs_write_file",
+      "description": "Atomically write a repository-relative file from base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"},
+          "createModeOctal": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_write_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_append_file",
+      "description": "Append base64 content to a repository-relative file (create if missing)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_append_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_mkdirp",
+      "description": "Recursively create a directory path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "modeOctal": {"type": "string"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_mkdirp"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_rm",
+      "description": "Remove a repository-relative file or directory",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "force": {"type": "boolean"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_rm"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_move",
+      "description": "Move or rename a repository-relative path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "overwrite": {"type": "boolean"}
+        },
+        "required": ["from", "to"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_move"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_search",
+      "description": "Search repository files for a query with optional regex/globs",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "regex": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_search"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "exec",
+      "description": "Run an arbitrary program with args, cwd, env, and stdin",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "cmd": {"type": "string"},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "cwd": {"type": "string"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}},
+          "stdin": {"type": "string"},
+          "timeoutSec": {"type": "integer", "minimum": 1}
+        },
+        "required": ["cmd"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/exec"],
+      "timeoutSec": 30
     }
   ]
 }
