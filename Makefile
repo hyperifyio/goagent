@@ -40,7 +40,25 @@ test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search tools/fs_mkdirp tools/fs_apply_patch tools/fs_read_lines tools/fs_edit_range tools/fs_listdir tools/fs_stat
+	# Remove standard binary directories
+	rm -rf bin tools/bin
+	# Remove legacy single-file tool binaries at tools/<NAME> (files only)
+	rm -f tools/get_time$(EXE) tools/exec$(EXE) tools/fs_read_file$(EXE) tools/fs_write_file$(EXE) tools/fs_append_file$(EXE) tools/fs_rm$(EXE) tools/fs_move$(EXE) tools/fs_search$(EXE) tools/fs_mkdirp$(EXE) tools/fs_apply_patch$(EXE) tools/fs_read_lines$(EXE) tools/fs_edit_range$(EXE) tools/fs_listdir$(EXE) tools/fs_stat$(EXE) || true
+	# Remove legacy subdir-built binaries at tools/*/<NAME>
+	rm -f tools/timecli/get_time$(EXE) \
+	      tools/exec/exec$(EXE) \
+	      tools/fs_read_file/fs_read_file$(EXE) \
+	      tools/fs_write_file/fs_write_file$(EXE) \
+	      tools/fs_append_file/fs_append_file$(EXE) \
+	      tools/fs_rm/fs_rm$(EXE) \
+	      tools/fs_move/fs_move$(EXE) \
+	      tools/fs_search/fs_search$(EXE) \
+	      tools/fs_mkdirp/fs_mkdirp$(EXE) \
+	      tools/fs_apply_patch/fs_apply_patch$(EXE) \
+	      tools/fs_read_lines/fs_read_lines$(EXE) \
+	      tools/fs_edit_range/fs_edit_range$(EXE) \
+	      tools/fs_listdir/fs_listdir$(EXE) \
+	      tools/fs_stat/fs_stat$(EXE) || true
 
 lint:
 	@set -euo pipefail; \
