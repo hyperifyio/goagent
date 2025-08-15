@@ -79,6 +79,8 @@
   - [x] [S02:listdir-readme-example] add README `fs_listdir` example section and ensure tests remain green
   - [x] [S01:listdir-tools-manifest] add `fs_listdir` tool entry to `tools.json` and ensure tests remain green
 * [ ] Implement `tools/fs_stat.go` — stdin `{"path":"string","followSymlinks?:bool,"hash?: "none"|"sha256"}`; outputs `{"exists":bool,"type":"file|dir|symlink|other","sizeBytes":int,"modeOctal":"string","modTime":"RFC3339","sha256?":"string"}`; error on paths outside repo; DoD: TDD (file/dir/symlink, missing path, follow vs no-follow, optional hash), README example, linked issue, CI green.
+  - [x] [S01:fs-stat-file-test] add failing unit test for existing regular file reporting exists=true, type="file", and sizeBytes
+  - [ ] [S02:fs-stat-file-impl] minimal implementation to pass file test
 * [ ] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
 * [ ] Add Makefile build rules for all new tools — `build-tools` compiles each `./tools/*.go` to deterministic static binaries; DoD: `make build build-tools` passes locally and CI, artifacts gitignored, docs updated.
   - [x] [S02:gitignore-binaries] ignore built tool binaries (`tools/*/*` and single-file outputs) and untrack existing ones; verify `git status` clean after `make build-tools` and `make clean`
