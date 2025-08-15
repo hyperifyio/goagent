@@ -33,7 +33,7 @@ test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search tools/fs_mkdirp tools/fs_apply_patch tools/fs_read_lines tools/fs_edit_range tools/fs_listdir tools/fs_stat
+	rm -rf bin tools/bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search tools/fs_mkdirp tools/fs_apply_patch tools/fs_read_lines tools/fs_edit_range tools/fs_listdir tools/fs_stat
 
 lint:
 	@set -euo pipefail; \
