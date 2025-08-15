@@ -90,4 +90,4 @@
 * [ ] Standardize JSON error contract for all tools — on failure, write single-line stderr `{"error":"<escaped>","hint?":"<opt>"}` and exit non-zero; runner maps to tool message; DoD: negative-path tests per tool, docs snippet, CI green.
 * [ ] Add execution audit log in runner — append ndjson `{ts,tool,argv,cwd,exit,ms,stdoutBytes,stderrBytes,truncated}` to `.goagent/audit/YYYYMMDD.log`; DoD: unit test writes/rotates, redaction respected (see next), docs, CI green.
 * [x] Provide “capabilities” CLI (`agentcli -capabilities`) — prints enabled tools from `tools.json` and explicit warning that enabled tools allow arbitrary command execution and network access; DoD: unit test, README usage, CI green.
-* [ ] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.
+* [x] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.
