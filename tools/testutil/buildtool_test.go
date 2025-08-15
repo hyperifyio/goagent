@@ -7,7 +7,8 @@ import (
 )
 
 func TestBuildTool_WindowsSuffix(t *testing.T) {
-    path := BuildTool(t, "demo")
+    // Use a real tool name to ensure build succeeds across environments.
+    path := BuildTool(t, "fs_listdir")
     if runtime.GOOS == "windows" {
         if !strings.HasSuffix(path, ".exe") {
             t.Fatalf("expected .exe suffix on Windows, got %q", path)
