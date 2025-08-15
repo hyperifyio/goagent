@@ -134,6 +134,24 @@
       "timeoutSec": 5
     },
     {
+      "name": "fs_listdir",
+      "description": "List directory entries with optional recursion and glob filtering",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "includeHidden": {"type": "boolean"},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_listdir"],
+      "timeoutSec": 5
+    },
+    {
       "name": "exec",
       "description": "Run an arbitrary program with args, cwd, env, and stdin",
       "schema": {
