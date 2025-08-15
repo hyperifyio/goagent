@@ -149,7 +149,32 @@ func TestFsRead_NotFound(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("expected non-zero exit for missing file")
 	}
-	if !strings.Contains(strings.ToUpper(stderr), "NOT_FOUND") {
-		t.Fatalf("stderr should contain NOT_FOUND, got %q", stderr)
-	}
+    if !strings.Contains(strings.ToUpper(stderr), "NOT_FOUND") {
+        t.Fatalf("stderr should contain NOT_FOUND, got %q", stderr)
+    }
+}
+
+// TestFsRead_ErrorJSON verifies standardized error contract: on failure,
+// the tool writes a single-line JSON object to stderr with an "error" key
+// and exits non-zero.
+func TestFsRead_ErrorJSON(t *testing.T) {
+    bin := buildFsReadTool(t)
+
+    // Use an absolute path to trigger validation failure (repo-relative enforced).
+    abs := string(os.PathSeparator) + filepath.Join("tmp", "fsread-abs.txt")
+
+    _, stderr, code := runFsRead(t, bin, map[string]any{
+        "path": abs,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit on invalid absolute path")
+    }
+    line := strings.TrimSpace(stderr)
+    var obj map[string]any
+    if err := json.Unmarshal([]byte(line), &obj); err != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
 }

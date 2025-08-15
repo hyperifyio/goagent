@@ -1,14 +1,14 @@
 package main
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
+    "encoding/base64"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "strings"
 )
 
 // inputSpec models the stdin JSON contract for fs_read_file.
@@ -29,15 +29,15 @@ type outputSpec struct {
 
 func main() {
 	if err := run(); err != nil {
-		// Error contract: single-line message to stderr.
-		// Include NOT_FOUND marker when applicable for deterministic tests.
-		msg := strings.TrimSpace(err.Error())
-		if errors.Is(err, os.ErrNotExist) || strings.Contains(strings.ToUpper(msg), "NOT_FOUND") {
-			fmt.Fprintln(os.Stderr, "NOT_FOUND: "+msg)
-		} else {
-			fmt.Fprintln(os.Stderr, msg)
-		}
-		os.Exit(1)
+        // Standardized error JSON contract: single-line {"error":"..."} to stderr
+        // Preserve NOT_FOUND marker prefix when applicable for deterministic tests.
+        msg := strings.TrimSpace(err.Error())
+        if errors.Is(err, os.ErrNotExist) || strings.Contains(strings.ToUpper(msg), "NOT_FOUND") {
+            // Ensure NOT_FOUND appears in the message for existing tests
+            msg = "NOT_FOUND: " + msg
+        }
+        _ = json.NewEncoder(os.Stderr).Encode(map[string]string{"error": msg})
+        os.Exit(1)
 	}
 }
 
