@@ -52,7 +52,22 @@ Each manifest entry is exported as an OpenAI tool of type `function`:
         "required": ["timezone"],
         "additionalProperties": false
       },
-      "command": ["./tools/get_time"],
+      "command": ["./tools/bin/get_time"],
+      "timeoutSec": 5
+    }
+  ]
+}
+```
+
+On Windows, use the `.exe` suffix for the tool binary:
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "schema": {"type":"object","properties":{"timezone":{"type":"string"}},"required":["timezone"],"additionalProperties":false},
+      "command": ["./tools/bin/get_time.exe"],
       "timeoutSec": 5
     }
   ]

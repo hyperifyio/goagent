@@ -56,7 +56,7 @@ export OAI_MODEL=oss-gpt-20b
 make build build-tools
 ```
 
-Create a minimal `tools.json` next to the binary:
+Create a minimal `tools.json` next to the binary (Unix/macOS):
 ```json
 {
   "tools": [
@@ -72,7 +72,30 @@ Create a minimal `tools.json` next to the binary:
         "required": ["timezone"],
         "additionalProperties": false
       },
-      "command": ["./tools/get_time"],
+      "command": ["./tools/bin/get_time"],
+      "timeoutSec": 5
+    }
+  ]
+}
+```
+
+On Windows, the binary name uses a `.exe` suffix:
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "timezone": {"type": "string", "description": "e.g. Europe/Helsinki"},
+          "tz": {"type": "string", "description": "Alias for timezone (deprecated)"}
+        },
+        "required": ["timezone"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/get_time.exe"],
       "timeoutSec": 5
     }
   ]
@@ -87,7 +110,7 @@ Run the agent:
   -debug
 ```
 
-Expected behavior: the model may call `get_time`; the CLI executes `./tools/get_time` with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a one‑line final answer.
+Expected behavior: the model may call `get_time`; the CLI executes the tool binary from `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a one‑line final answer.
 
 ### Usage
 Common flags:
@@ -110,12 +133,12 @@ You can also run `./bin/agentcli -h` to see the built‑in help.
 Build the exec tool and run a simple command (Unix):
 ```bash
 make build-tools
-echo '{"cmd":"/bin/echo","args":["hello"]}' | ./tools/exec
+echo '{"cmd":"/bin/echo","args":["hello"]}' | ./tools/bin/exec
 # => {"exitCode":0,"stdout":"hello\n","stderr":"","durationMs":<n>}
 ```
 Timeout example:
 ```bash
-echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/exec
+echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/bin/exec
 # => exitCode>0 and stderr contains "timeout"
 ```
 
@@ -124,7 +147,7 @@ Build the file‑read tool and read a file from the repository root (paths must 
 ```bash
 make build-tools
 printf 'hello world' > tmp_readme_demo.txt
-echo '{"path":"tmp_readme_demo.txt"}' | ./tools/fs_read_file | jq .
+echo '{"path":"tmp_readme_demo.txt"}' | ./tools/bin/fs_read_file | jq .
 # => {"contentBase64":"aGVsbG8gd29ybGQ=","sizeBytes":11,"eof":true}
 rm -f tmp_readme_demo.txt
 ```
@@ -135,8 +158,8 @@ Append base64 content to a repo-relative file (creates the file if missing):
 make build-tools
 echo -n 'hello ' | base64 > b64a.txt
 echo -n 'world'  | base64 > b64b.txt
-echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64a.txt)"'"}' | ./tools/fs_append_file | jq .
-echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64b.txt)"'"}' | ./tools/fs_append_file | jq .
+echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64a.txt)"'"}' | ./tools/bin/fs_append_file | jq .
+echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64b.txt)"'"}' | ./tools/bin/fs_append_file | jq .
 cat tmp_append_demo.txt
 rm -f tmp_append_demo.txt b64a.txt b64b.txt
 ```
@@ -146,7 +169,7 @@ Atomically write a file using base64 content:
 ```bash
 make build-tools
 echo -n 'hello world' | base64 > b64.txt
-echo '{"path":"tmp_write_demo.txt","contentBase64":"'"$(cat b64.txt)"'"}' | ./tools/fs_write_file | jq .
+echo '{"path":"tmp_write_demo.txt","contentBase64":"'"$(cat b64.txt)"'"}' | ./tools/bin/fs_write_file | jq .
 cat tmp_write_demo.txt
 rm -f tmp_write_demo.txt b64.txt
 ```
@@ -156,11 +179,11 @@ Create directories recursively (idempotent; returns created=true on first call, 
 ```bash
 make build-tools
 
-echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
+echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/bin/fs_mkdirp | jq .
 ls -ld tmp_mkdirp_demo/a/b/c
 
 # Second call is idempotent (created=false)
-echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/fs_mkdirp | jq .
+echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/bin/fs_mkdirp | jq .
 rm -rf tmp_mkdirp_demo
 ```
 
@@ -170,11 +193,11 @@ Remove a file or directory tree (paths must be repo‑relative; set `recursive:t
 make build-tools
 # Remove a single file
 printf 'temp' > tmp_rm_demo.txt
-echo '{"path":"tmp_rm_demo.txt"}' | ./tools/fs_rm | jq .
+echo '{"path":"tmp_rm_demo.txt"}' | ./tools/bin/fs_rm | jq .
 
 # Remove a directory tree
 mkdir -p tmp_rm_dir/a/b && touch tmp_rm_dir/a/b/file.txt
-echo '{"path":"tmp_rm_dir","recursive":true}' | ./tools/fs_rm | jq .
+echo '{"path":"tmp_rm_dir","recursive":true}' | ./tools/bin/fs_rm | jq .
 rm -rf tmp_rm_dir
 ```
 
@@ -187,13 +210,13 @@ make build-tools
 printf 'payload' > tmp_move_src.txt
 
 # Basic rename when destination does not exist
-echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt"}' | ./tools/fs_move | jq .
+echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt"}' | ./tools/bin/fs_move | jq .
 test ! -e tmp_move_src.txt && test -e tmp_move_dst.txt
 
 # Overwrite behavior: destination exists, require overwrite:true
 printf 'old' > tmp_move_dst.txt
 printf 'new' > tmp_move_src.txt
-echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./tools/fs_move | jq .
+echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./tools/bin/fs_move | jq .
 grep -qx 'new' tmp_move_dst.txt
 
 rm -f tmp_move_src.txt tmp_move_dst.txt
@@ -209,10 +232,10 @@ make build-tools
 mkdir -p tmp_listdir_demo/a b && touch tmp_listdir_demo/.hidden tmp_listdir_demo/a/afile tmp_listdir_demo/bfile
 
 # Non-recursive list (hidden excluded by default)
-echo '{"path":"tmp_listdir_demo"}' | ./tools/fs_listdir | jq '.entries | map(.path)'
+echo '{"path":"tmp_listdir_demo"}' | ./tools/bin/fs_listdir | jq '.entries | map(.path)'
 
 # Recursive list with globs for only files
-jq -n '{path:"tmp_listdir_demo",recursive:true,globs:["**/*"],includeHidden:false}' | ./tools/fs_listdir | jq '.entries | map(select(.type=="file") | .path)'
+jq -n '{path:"tmp_listdir_demo",recursive:true,globs:["**/*"],includeHidden:false}' | ./tools/bin/fs_listdir | jq '.entries | map(select(.type=="file") | .path)'
 
 # Cleanup
 rm -rf tmp_listdir_demo
@@ -234,7 +257,7 @@ cat > /tmp/demo.diff <<'EOF'
 EOF
 
 # Apply the patch from repository root
-jq -n --arg d "$(cat /tmp/demo.diff)" '{unifiedDiff:$d}' | ./tools/fs_apply_patch | jq .
+jq -n --arg d "$(cat /tmp/demo.diff)" '{unifiedDiff:$d}' | ./tools/bin/fs_apply_patch | jq .
 
 # Verify file content
 printf 'hello
@@ -259,7 +282,7 @@ printf 'abcdef' > tmp_edit_demo.txt
 # Replace bytes [2:4) ("cd") with "XY"
 echo -n 'XY' | base64 > b64.txt
 jq -n --arg b "$(cat b64.txt)" '{path:"tmp_edit_demo.txt",startByte:2,endByte:4,replacementBase64:$b}' \
-  | ./tools/fs_edit_range | jq .
+  | ./tools/bin/fs_edit_range | jq .
 
 # Verify
 cat tmp_edit_demo.txt
@@ -279,7 +302,7 @@ make build-tools
 printf 'hello world' > tmp_stat_demo.txt
 
 # Stat with SHA‑256
-echo '{"path":"tmp_stat_demo.txt","hash":"sha256"}' | ./tools/fs_stat | jq .
+echo '{"path":"tmp_stat_demo.txt","hash":"sha256"}' | ./tools/bin/fs_stat | jq .
 
 # Cleanup
 rm -f tmp_stat_demo.txt
