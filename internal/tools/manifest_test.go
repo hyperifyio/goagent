@@ -69,3 +69,45 @@ func TestLoadManifest_MissingNameOrCommand(t *testing.T) {
 		t.Fatalf("expected error for missing command")
 	}
 }
+
+// Harden validation: reject relative command[0] that escapes ./tools/bin or contains .. after normalization
+func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
+    dir := t.TempDir()
+    file := filepath.Join(dir, "tools.json")
+
+    cases := []struct {
+        name     string
+        command0 string
+        wantErr  bool
+    }{
+        {name: "ok-absolute", command0: "/usr/bin/env", wantErr: false},
+        {name: "ok-simple-relative", command0: "echo", wantErr: false},
+        {name: "ok-tools-bin", command0: "./tools/bin/fs_read_file", wantErr: false},
+        {name: "reject-dotdot-leading", command0: "../tools/bin/get_time", wantErr: true},
+        {name: "reject-escape-from-bin", command0: "./tools/bin/../hack", wantErr: true},
+    }
+
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            data := map[string]any{
+                "tools": []map[string]any{
+                    {
+                        "name":    "t",
+                        "command": []string{tc.command0},
+                    },
+                },
+            }
+            b, _ := json.Marshal(data)
+            if err := os.WriteFile(file, b, 0o644); err != nil {
+                t.Fatalf("write: %v", err)
+            }
+            _, _, err := LoadManifest(file)
+            if tc.wantErr && err == nil {
+                t.Fatalf("expected error for command0=%q", tc.command0)
+            }
+            if !tc.wantErr && err != nil {
+                t.Fatalf("unexpected error for %q: %v", tc.command0, err)
+            }
+        })
+    }
+}

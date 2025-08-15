@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+    "path/filepath"
+    "strings"
 
 	"github.com/hyperifyio/goagent/internal/oai"
 )
@@ -21,8 +23,8 @@ type Manifest struct {
 }
 
 // LoadManifest reads tools.json and returns a name->spec registry and an OpenAI-compatible tools array.
-func LoadManifest(path string) (map[string]ToolSpec, []oai.Tool, error) {
-	data, err := os.ReadFile(path)
+func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) {
+    data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read manifest: %w", err)
 	}
@@ -44,6 +46,26 @@ func LoadManifest(path string) (map[string]ToolSpec, []oai.Tool, error) {
 		if len(t.Command) < 1 {
 			return nil, nil, fmt.Errorf("tool[%d] %q: command must have at least program name", i, t.Name)
 		}
+        // S52: Harden command[0] validation to prevent path escapes when relative
+        cmd0 := t.Command[0]
+        if !filepath.IsAbs(cmd0) {
+            raw := filepath.ToSlash(cmd0)
+            norm := filepath.ToSlash(filepath.Clean(cmd0))
+            // Normalize to a consistent leading ./ for prefix checks
+            if strings.HasPrefix(norm, "tools/") || norm == "tools" {
+                norm = "./" + norm
+            }
+            // Reject leading parent traversal
+            if strings.HasPrefix(norm, "../") || norm == ".." {
+                return nil, nil, fmt.Errorf("tool[%d] %q: command[0] must not start with '..' or escape tools/bin (got %q)", i, t.Name, cmd0)
+            }
+            // If original referenced ./tools/bin, ensure cleaned still stays within ./tools/bin
+            if strings.HasPrefix(raw, "./tools/bin/") || raw == "./tools/bin" {
+                if !(strings.HasPrefix(norm, "./tools/bin/") || norm == "./tools/bin") {
+                    return nil, nil, fmt.Errorf("tool[%d] %q: command[0] escapes ./tools/bin after normalization (got %q -> %q)", i, t.Name, cmd0, norm)
+                }
+            }
+        }
 		registry[t.Name] = t
 		// Build OpenAI tools entry
 		entry := oai.Tool{
