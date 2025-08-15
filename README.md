@@ -14,12 +14,13 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Usage](#usage)
- - [Exec tool example](#exec-tool-example)
- - [fs_read_file tool example](#fs_read_file-tool-example)
- - [fs_append_file tool example](#fs_append_file-tool-example)
- - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
-- [fs_rm tool example](#fs_rm-tool-example)
- - [fs_move tool example](#fs_move-tool-example)
+  - [Exec tool example](#exec-tool-example)
+  - [fs_read_file tool example](#fs_read_file-tool-example)
+  - [fs_append_file tool example](#fs_append_file-tool-example)
+  - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
+  - [fs_rm tool example](#fs_rm-tool-example)
+  - [fs_move tool example](#fs_move-tool-example)
+  - [fs_apply_patch tool example](#fs_apply_patch-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Troubleshooting](#troubleshooting)
@@ -28,7 +29,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Contributing](#contributing)
 - [Project status](#project-status)
 - [License and credits](#license-and-credits)
- - [Unrestricted tools warning](#unrestricted-tools-warning)
+  - [Unrestricted tools warning](#unrestricted-tools-warning)
   - [Unrestricted examples](#unrestricted-examples)
 
 ### Installation
@@ -192,6 +193,35 @@ echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./
 grep -qx 'new' tmp_move_dst.txt
 
 rm -f tmp_move_src.txt tmp_move_dst.txt
+```
+
+### fs_apply_patch tool example
+Apply a strict unified diff (no fuzz) to create a new file. Paths must be repo‑relative; absolute paths or parent traversal are rejected. Existing files are not overwritten; repeated applies are idempotent when content matches.
+
+```bash
+make build-tools
+
+# Minimal unified diff that creates a new file with two lines
+cat > /tmp/demo.diff <<'EOF'
+--- /dev/null
++++ b/tmp_patch_demo.txt
+@@ -0,0 +1,2 @@
++hello
++world
+EOF
+
+# Apply the patch from repository root
+jq -n --arg d "$(cat /tmp/demo.diff)" '{unifiedDiff:$d}' | ./tools/fs_apply_patch | jq .
+
+# Verify file content
+printf 'hello
+world
+' | diff -u - tmp_patch_demo.txt && echo OK
+
+# Caution:
+# - Only new-file diffs are supported in this slice (--- /dev/null to +++ b/<path>)
+# - No fuzzy matching; line endings in the diff are normalized to LF
+# - Will fail if the target exists with different content
 ```
 
 ### Features
