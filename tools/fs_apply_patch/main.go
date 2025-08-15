@@ -13,6 +13,7 @@ import (
 
 type applyPatchInput struct {
 	UnifiedDiff string `json:"unifiedDiff"`
+    DryRun      bool   `json:"dryRun"`
 }
 
 func main() {
@@ -42,7 +43,7 @@ func run() error {
         return fmt.Errorf("missing unifiedDiff")
     }
 
-    filesChanged, err := applyUnifiedDiffStrict(in.UnifiedDiff)
+    filesChanged, err := applyUnifiedDiffStrict(in.UnifiedDiff, in.DryRun)
     if err != nil {
         return err
     }
@@ -55,7 +56,7 @@ func run() error {
 // applyUnifiedDiffStrict implements a minimal strict applier that currently
 // supports creating new files from hunks with --- /dev/null and +++ b/<path>.
 // It rejects other forms to remain strict for this initial slice.
-func applyUnifiedDiffStrict(diff string) (int, error) {
+func applyUnifiedDiffStrict(diff string, dryRun bool) (int, error) {
     scanner := bufio.NewScanner(strings.NewReader(diff))
     scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
@@ -144,6 +145,11 @@ func applyUnifiedDiffStrict(diff string) (int, error) {
         return 0, fmt.Errorf("target exists: %s", cleanNew)
     } else if !errors.Is(err, os.ErrNotExist) {
         return 0, fmt.Errorf("stat target: %w", err)
+    }
+
+    // If this is a dry run, report that one file would change but do not write
+    if dryRun {
+        return 1, nil
     }
 
     // Ensure parent directories exist

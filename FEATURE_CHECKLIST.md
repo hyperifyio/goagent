@@ -67,7 +67,7 @@
   - [x] [S01:adr-file-and-links] create ADR file and add links from `README.md` and `docs/README.md`
 * [x] Add Mermaid diagram `docs/diagrams/toolbelt-seq.md` — sequence of CLI → API → tools → API → final; DoD: diagram renders on GitHub, referenced from README/ADR, updated test ensuring file exists, CI green.
 * [x] Example prompts `examples/unrestricted.md` — prompts demonstrating `exec` + fs tools to write, build, and run code; DoD: examples validated by CI script, README link, CI green.
-* [ ] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string"}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
+* [x] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string","dryRun?:bool}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
   - [x] [S01:fs-apply-patch-stub] add stub tool validating input and exiting with NOT_IMPLEMENTED; build and tests remain green; groundwork for strict apply
   - [x] [S02:fs-apply-clean-new-file] implement strict new-file unified diff apply and tests (clean apply creating a new file); umbrella remains open for conflict/idempotence/CRLF and docs
 * [ ] Implement tools/fs_edit_range.go — stdin {"path":"string","startByte":int,"endByte":int,"replacementBase64":"string","expectedSha256?":"string"}; atomically rewrite by splicing the range; output {"bytesReplaced":int,"newSha256":"string"}; DoD: TDD for mid-file edits, boundary cases (start=0, end=size), binary content, concurrent calls serialized, docs + CI green.

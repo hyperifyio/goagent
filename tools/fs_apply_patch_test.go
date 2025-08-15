@@ -218,3 +218,32 @@ func TestFsApplyPatch_CRLF_NewFile_NormalizedLF(t *testing.T) {
         t.Fatalf("content mismatch, got %q want %q", got, want)
     }
 }
+
+func TestFsApplyPatch_DryRun_NewFile_NoWrite(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    work := t.TempDir()
+
+    // Diff to create a new file, but run with dryRun=true
+    diff := "" +
+        "--- /dev/null\n" +
+        "+++ b/tmp_new_file.txt\n" +
+        "@@ -0,0 +1,2 @@\n" +
+        "+hello\n" +
+        "+world\n"
+
+    out, stderr, code := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+        "dryRun":      true,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    // Should report it would change exactly 1 file
+    if out.FilesChanged != 1 {
+        t.Fatalf("filesChanged mismatch, got %d want 1", out.FilesChanged)
+    }
+    // File must not be written in dryRun
+    if _, err := os.Stat(filepath.Join(work, "tmp_new_file.txt")); !os.IsNotExist(err) {
+        t.Fatalf("expected file to NOT exist after dryRun, stat err=%v", err)
+    }
+}
