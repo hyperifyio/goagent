@@ -9,6 +9,16 @@ This runbook covers common errors and deterministic fixes for `goagent`.
 # Build all tools
 make build-tools
 ```
+- Build a single tool from source (post‑migration layout):
+```bash
+# Unix/macOS
+mkdir -p tools/bin
+go build -o tools/bin/fs_read_file ./tools/cmd/fs_read_file
+
+# Windows (PowerShell or cmd)
+mkdir tools\bin 2> NUL
+go build -o tools\bin\fs_read_file.exe .\tools\cmd\fs_read_file
+```
 - Verify:
 ```bash
 # Unix/macOS
