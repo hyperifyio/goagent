@@ -24,12 +24,15 @@ build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_search ./tools/fs_search
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_mkdirp ./tools/fs_mkdirp
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_apply_patch ./tools/fs_apply_patch
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_read_lines ./tools/fs_read_lines
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_edit_range ./tools/fs_edit_range
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/fs_listdir ./tools/fs_listdir
 
 test:
 	$(GO) test ./...
 
 clean:
-	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search tools/fs_mkdirp tools/fs_apply_patch
+	rm -rf bin tools/get_time tools/exec tools/fs_read_file tools/fs_write_file tools/fs_append_file tools/fs_rm tools/fs_move tools/fs_search tools/fs_mkdirp tools/fs_apply_patch tools/fs_read_lines tools/fs_edit_range tools/fs_listdir
 
 lint:
 	@set -euo pipefail; \
