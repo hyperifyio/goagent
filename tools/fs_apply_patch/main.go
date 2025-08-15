@@ -12,8 +12,22 @@ type applyPatchInput struct {
 }
 
 func main() {
-	data, _ := io.ReadAll(os.Stdin)
-	_ = json.Unmarshal(data, &applyPatchInput{})
-	_, _ = fmt.Fprintln(os.Stderr, `{"error":"NOT_IMPLEMENTED"}`)
-	os.Exit(2)
+	// Read all stdin (expected small JSON)
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "NOT_IMPLEMENTED: read error")
+		os.Exit(1)
+	}
+	var in applyPatchInput
+	if err := json.Unmarshal(data, &in); err != nil {
+		fmt.Fprintln(os.Stderr, "NOT_IMPLEMENTED: invalid JSON")
+		os.Exit(1)
+	}
+	if in.UnifiedDiff == "" {
+		fmt.Fprintln(os.Stderr, "NOT_IMPLEMENTED: missing unifiedDiff")
+		os.Exit(1)
+	}
+	// Stub implementation: advertise not implemented
+	fmt.Fprintln(os.Stderr, "NOT_IMPLEMENTED: fs_apply_patch stub")
+	os.Exit(1)
 }
