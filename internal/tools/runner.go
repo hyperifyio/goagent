@@ -1,19 +1,22 @@
 package tools
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"time"
+    "context"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "time"
 )
 
 // RunToolWithJSON executes the tool command with args JSON provided on stdin.
 // Returns stdout bytes and an error if the command fails. The caller is responsible
 // for mapping errors to deterministic JSON per product rules.
 func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte, defaultTimeout time.Duration) ([]byte, error) {
+    start := time.Now()
 	// Derive timeout: spec.TimeoutSec overrides when >0
 	to := defaultTimeout
 	if spec.TimeoutSec > 0 {
@@ -63,20 +66,82 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	go func() { b, _ := io.ReadAll(stdout); outCh <- b }()
 	go func() { b, _ := io.ReadAll(stderr); errCh <- b }()
 
-	err = cmd.Wait()
-	out := <-outCh
-	serr := <-errCh
-	if ctx.Err() == context.DeadlineExceeded {
-		// Normalize timeout error to a deterministic string per product rules
-		return nil, errors.New("tool timed out")
-	}
-	if err != nil {
-		// Prefer stderr text when available for context
-		msg := string(serr)
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, errors.New(msg)
-	}
-	return out, nil
+    err = cmd.Wait()
+    out := <-outCh
+    serr := <-errCh
+
+    // Prepare audit entry
+    type auditEntry struct {
+        TS           string   `json:"ts"`
+        Tool         string   `json:"tool"`
+        Argv         []string `json:"argv"`
+        CWD          string   `json:"cwd"`
+        Exit         int      `json:"exit"`
+        MS           int64    `json:"ms"`
+        StdoutBytes  int      `json:"stdoutBytes"`
+        StderrBytes  int      `json:"stderrBytes"`
+        Truncated    bool     `json:"truncated"`
+    }
+
+    exitCode := 0
+    if err != nil {
+        // Try to capture exit code when available
+        if ee, ok := err.(*exec.ExitError); ok && ee.ProcessState != nil {
+            exitCode = ee.ProcessState.ExitCode()
+        } else {
+            // Unknown exit (e.g., timeout/cancel)
+            exitCode = -1
+        }
+    }
+    cwd, _ := os.Getwd()
+    entry := auditEntry{
+        TS:          time.Now().UTC().Format(time.RFC3339Nano),
+        Tool:        spec.Name,
+        Argv:        append([]string(nil), spec.Command...),
+        CWD:         cwd,
+        Exit:        exitCode,
+        MS:          time.Since(start).Milliseconds(),
+        StdoutBytes: len(out),
+        StderrBytes: len(serr),
+        Truncated:   false,
+    }
+    // Best-effort append (failures do not affect tool result)
+    _ = appendAuditLog(entry)
+
+    if ctx.Err() == context.DeadlineExceeded {
+        // Normalize timeout error to a deterministic string per product rules
+        return nil, errors.New("tool timed out")
+    }
+    if err != nil {
+        // Prefer stderr text when available for context
+        msg := string(serr)
+        if msg == "" {
+            msg = err.Error()
+        }
+        return nil, errors.New(msg)
+    }
+    return out, nil
+}
+
+// appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log
+func appendAuditLog(entry any) error {
+    b, err := json.Marshal(entry)
+    if err != nil {
+        return err
+    }
+    dir := filepath.Join(".goagent", "audit")
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return err
+    }
+    fname := time.Now().UTC().Format("20060102") + ".log"
+    path := filepath.Join(dir, fname)
+    f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+    if _, err := f.Write(append(b, '\n')); err != nil {
+        return err
+    }
+    return nil
 }

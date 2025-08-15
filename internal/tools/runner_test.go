@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+    "io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,5 +95,74 @@ func main(){fmt.Fprint(os.Stderr, "boom"); os.Exit(3)}
     }
     if err.Error() != "boom" {
         t.Fatalf("expected stderr content, got: %q", err.Error())
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/92
+func TestRunToolWithJSON_AuditLog_WritesLine(t *testing.T) {
+    // Run a quick echo tool and verify a log line is written
+    dir := t.TempDir()
+    helper := filepath.Join(dir, "echo.go")
+    if err := os.WriteFile(helper, []byte(`package main
+import ("io"; "os"; "fmt")
+func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
+`), 0o644); err != nil {
+        t.Fatalf("write: %v", err)
+    }
+    bin := filepath.Join(dir, "echo")
+    if runtime.GOOS == "windows" {
+        bin += ".exe"
+    }
+    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+        t.Fatalf("build helper: %v: %s", err, string(out))
+    }
+
+    // Ensure audit dir is empty before run
+    _ = os.RemoveAll(filepath.Join(".goagent"))
+
+    spec := ToolSpec{Name: "echo", Command: []string{bin}, TimeoutSec: 2}
+    out, err := RunToolWithJSON(context.Background(), spec, []byte(`{"ok":true}`), 5*time.Second)
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+    if len(out) == 0 {
+        t.Fatalf("expected output")
+    }
+
+    // Find today's audit log
+    auditDir := filepath.Join(".goagent", "audit")
+    // Allow small delay for file write
+    deadline := time.Now().Add(2 * time.Second)
+    var logFile string
+    for {
+        entries, _ := os.ReadDir(auditDir)
+        for _, e := range entries {
+            if !e.IsDir() {
+                logFile = filepath.Join(auditDir, e.Name())
+                break
+            }
+        }
+        if logFile != "" || time.Now().After(deadline) {
+            break
+        }
+        time.Sleep(10 * time.Millisecond)
+    }
+    if logFile == "" {
+        t.Fatalf("audit log not created in %s", auditDir)
+    }
+    data, err := os.ReadFile(logFile)
+    if err != nil {
+        t.Fatalf("read audit: %v", err)
+    }
+    // Expect at least one newline-terminated JSON object
+    if len(data) == 0 || data[len(data)-1] != '\n' {
+        t.Fatalf("audit log not newline terminated")
+    }
+    // Quick sanity check: file mode should be 0644
+    st, err := os.Stat(logFile)
+    if err == nil {
+        if st.Mode().Type() != fs.ModeType && (st.Mode().Perm()&0o644) == 0 {
+            t.Fatalf("unexpected permissions: %v", st.Mode())
+        }
     }
 }
