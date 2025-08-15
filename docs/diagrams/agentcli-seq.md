@@ -6,7 +6,7 @@ sequenceDiagram
 
     CLI->>API: POST /v1/chat/completions [system,user,tools]
     API-->>CLI: assistant tool_calls: get_time({"tz":"Europe/Helsinki"})
-    CLI->>TOOL: exec ./tools/get_time stdin {tz}
+    CLI->>TOOL: exec ./tools/bin/get_time stdin {tz}
     TOOL-->>CLI: {"tz":"...","iso":"RFC3339","unix":<sec>}
     CLI->>API: POST /v1/chat/completions [+ tool result]
     API-->>CLI: assistant final content
