@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+    "strings"
 	"testing"
 	"time"
 )
@@ -236,3 +237,67 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
         t.Fatalf("second audit file empty or not newline terminated")
     }
 }
+
+// https://github.com/hyperifyio/goagent/issues/92
+func TestRunToolWithJSON_AuditLog_Redaction(t *testing.T) {
+    // Arrange: set env secrets and GOAGENT_REDACT patterns
+    t.Setenv("OAI_API_KEY", "sk-test-1234567890")
+    t.Setenv("GOAGENT_REDACT", "secret,sk-[a-z0-9]+")
+
+    dir := t.TempDir()
+    helper := filepath.Join(dir, "echo.go")
+    if err := os.WriteFile(helper, []byte(`package main
+import ("io"; "os"; "fmt")
+func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
+`), 0o644); err != nil {
+        t.Fatalf("write: %v", err)
+    }
+    bin := filepath.Join(dir, "echo")
+    if runtime.GOOS == "windows" {
+        bin += ".exe"
+    }
+    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+        t.Fatalf("build helper: %v: %s", err, string(out))
+    }
+
+    // Clean audit dir
+    _ = os.RemoveAll(filepath.Join(".goagent"))
+
+    // Use argv containing sensitive literals
+    spec := ToolSpec{Name: "echo", Command: []string{bin, "--token=sk-test-1234567890", "--note=contains-secret"}, TimeoutSec: 2}
+    if _, err := RunToolWithJSON(context.Background(), spec, []byte(`{"x":1}`), 5*time.Second); err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+
+    // Locate today's audit file
+    auditDir := filepath.Join(".goagent", "audit")
+    deadline := time.Now().Add(2 * time.Second)
+    var logFile string
+    for {
+        entries, _ := os.ReadDir(auditDir)
+        for _, e := range entries {
+            if !e.IsDir() { logFile = filepath.Join(auditDir, e.Name()); break }
+        }
+        if logFile != "" || time.Now().After(deadline) { break }
+        time.Sleep(10 * time.Millisecond)
+    }
+    if logFile == "" {
+        t.Fatalf("audit log not created in %s", auditDir)
+    }
+    data, err := os.ReadFile(logFile)
+    if err != nil {
+        t.Fatalf("read audit: %v", err)
+    }
+    // Assert that raw secret substrings are not present
+    if string(data) == "" || len(data) == 0 { t.Fatalf("empty audit") }
+    if bytes := data; bytes != nil {
+        if contains := string(bytes); contains != "" {
+            if (string(bytes) != "" && (containsFind(contains, "sk-test-1234567890") || containsFind(contains, "contains-secret"))) {
+                t.Fatalf("expected redaction, found sensitive substrings in audit: %s", contains)
+            }
+        }
+    }
+}
+
+// containsFind is a tiny helper to avoid importing strings in this test's top-level import list diff
+func containsFind(s, sub string) bool { return strings.Contains(s, sub) }

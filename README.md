@@ -305,6 +305,7 @@ For a deeper analysis of risks, boundaries, and mitigations, see the full threat
 - Run the CLI and tools in a sandboxed environment (container/jail/VM) with least privilege. Prefer a throwaway working directory.
 - Keep `tools.json` minimal and audited; only include tools you truly need. Review commands and arguments regularly.
 - Do not pass secrets via tool arguments. Supply secrets via environment or CI secret stores and ensure logs omit sensitive values.
+- Audit log redaction: set `GOAGENT_REDACT` to a comma/semicolon‑separated list of regexes or literals to mask in audit entries. Values of `OAI_API_KEY`/`OPENAI_API_KEY` are always masked if present.
 
 ### Troubleshooting
 See `docs/runbooks/troubleshooting.md` for common issues and deterministic fixes (missing tool binaries, path validation, timeouts, HTTP errors, and golangci-lint setup), with copy‑paste commands.
