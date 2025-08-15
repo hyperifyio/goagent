@@ -99,3 +99,44 @@ func TestFsReadLines_LF_Simple(t *testing.T) {
         t.Fatalf("unexpected EOF=true for partial read")
     }
 }
+
+// TestFsReadLines_CRLF_Normalize verifies CRLF input is normalized to LF in output.
+func TestFsReadLines_CRLF_Normalize(t *testing.T) {
+    bin := buildFsReadLinesTool(t)
+
+    // Arrange: create a repo-relative temp file with CRLF line endings
+    tmpDirAbs, err := os.MkdirTemp(".", "fsread-crlf-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+    fileRel := filepath.Join(base, "data.txt")
+    // 5 lines with CRLF endings
+    content := "l1\r\nl2\r\nl3\r\nl4\r\nl5\r\n"
+    if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+        t.Fatalf("seed file: %v", err)
+    }
+
+    // Act: request [startLine=2, endLine=5)
+    out, stderr, code := runFsReadLines(t, bin, map[string]any{
+        "path":      fileRel,
+        "startLine": 2,
+        "endLine":   5,
+    })
+
+    // Assert: success, LF-normalized content, EOF=false for partial range
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.StartLine != 2 || out.EndLine != 5 {
+        t.Fatalf("range echoed mismatch: got (%d,%d) want (2,5)", out.StartLine, out.EndLine)
+    }
+    // Output must use LF even though input used CRLF
+    if out.Content != "l2\nl3\nl4\n" {
+        t.Fatalf("content mismatch: got %q want %q", out.Content, "l2\nl3\nl4\n")
+    }
+    if out.EOF {
+        t.Fatalf("unexpected EOF=true for partial read")
+    }
+}
