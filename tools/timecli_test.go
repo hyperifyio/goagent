@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"os/exec"
-	"strings"
-	"testing"
-	"time"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "strings"
+    "testing"
+    "time"
 )
 
 type timeOutput struct {
@@ -103,5 +104,11 @@ func TestTimeCLI_InvalidTimezone_ErrorContract(t *testing.T) {
     s := strings.TrimSpace(stderr)
     if s == "" || !strings.Contains(s, "\"error\"") {
         t.Fatalf("stderr should contain JSON error, got: %q", stderr)
+    }
+}
+
+func TestToolbeltDiagramExists(t *testing.T) {
+    if _, err := os.Stat("../docs/diagrams/toolbelt-seq.md"); err != nil {
+        t.Fatalf("missing docs/diagrams/toolbelt-seq.md: %v", err)
     }
 }

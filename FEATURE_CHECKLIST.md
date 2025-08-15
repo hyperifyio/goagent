@@ -74,7 +74,7 @@
 * [x] Update README with “unrestricted tools” warning + examples — clear risk note, copy-paste examples for each fs/* and exec tool, troubleshooting; DoD: docs lint passes, examples exercised in CI script, CI green.
 * [ ] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.
   - [x] [S01:adr-file-and-links] create ADR file and add links from `README.md` and `docs/README.md`
-* [ ] Add Mermaid diagram `docs/diagrams/toolbelt-seq.md` — sequence of CLI → API → tools → API → final; DoD: diagram renders on GitHub, referenced from README/ADR, updated test ensuring file exists, CI green.
+* [x] Add Mermaid diagram `docs/diagrams/toolbelt-seq.md` — sequence of CLI → API → tools → API → final; DoD: diagram renders on GitHub, referenced from README/ADR, updated test ensuring file exists, CI green.
 * [ ] CI smoke job for tools — workflow builds tools, runs each binary with sample stdin, and runs an agent loop against a fake API; no external network dependence; DoD: green in PRs, artifacts attached, linked to issue.
 * [ ] Example prompts `examples/unrestricted.md` — prompts demonstrating `exec` + fs tools to write, build, and run code; DoD: examples validated by CI script, README link, CI green.
 * [ ] Implement tools/fs_edit_range.go — stdin {"path":"string","startByte":int,"endByte":int,"replacementBase64":"string","expectedSha256?":"string"}; atomically rewrite by splicing the range; output {"bytesReplaced":int,"newSha256":"string"}; DoD: TDD for mid-file edits, boundary cases (start=0, end=size), binary content, concurrent calls serialized, docs + CI green.

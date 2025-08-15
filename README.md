@@ -218,8 +218,8 @@ For a deeper analysis of risks, boundaries, and mitigations, see the full threat
 ### Troubleshooting
 See `docs/runbooks/troubleshooting.md` for common issues and deterministic fixes (missing tool binaries, path validation, timeouts, HTTP errors, and golangci-lint setup), with copy‑paste commands.
 
-### Sequence diagram
-See `docs/diagrams/agentcli-seq.md` for the message flow.
+### Sequence diagrams
+See `docs/diagrams/agentcli-seq.md` for the agent loop and `docs/diagrams/toolbelt-seq.md` for toolbelt interactions.
 
 ### Architecture Decision Records
 - ADR-0001: Minimal Agent CLI — `docs/adr/0001-minimal-agent-cli.md`

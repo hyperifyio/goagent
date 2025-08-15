@@ -25,7 +25,9 @@ Introduce an "unrestricted toolbelt" set comprising file-system utilities (`fs_r
 ## Links
 - Threat model: `../security/threat-model.md`
 - Tools reference: `../reference/tools-manifest.md`
-- Sequence diagram: `../diagrams/agentcli-seq.md`
+- Sequence diagrams:
+  - Agent loop: `../diagrams/agentcli-seq.md`
+  - Toolbelt interactions: `../diagrams/toolbelt-seq.md`
 
 ## Alternatives considered
 - Disallow `exec` entirely: safer by default, but blocks many real workflows. Decided to allow but keep opt-in and loudly documented.

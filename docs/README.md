@@ -6,8 +6,9 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0001-minimal-agent-cli.md](adr/0001-minimal-agent-cli.md)
 - ADR-0002: Unrestricted toolbelt (files + network) — risks, contracts, and guidance.
   - Link: [docs/adr/0002-unrestricted-toolbelt.md](adr/0002-unrestricted-toolbelt.md)
-- Sequence diagram: agent flow from CLI to API and tools.
+- Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
+  - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)
 
 - Architecture: Module boundaries and allowed imports between layers.
   - Link: [docs/architecture/module-boundaries.md](architecture/module-boundaries.md)
