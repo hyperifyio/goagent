@@ -1,9 +1,11 @@
 package main
 
 import (
-	"path/filepath"
-	"os"
-	"testing"
+    "path/filepath"
+    "os"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // TestFsListdir_Globs_NonRecursive filters by globs when non-recursive.
@@ -26,7 +28,7 @@ func TestFsListdir_Globs_NonRecursive(t *testing.T) {
 		t.Fatalf("write b.md: %v", err)
 	}
 
-	bin := buildFsListdir(t)
+    bin := testutil.BuildTool(t, "fs_listdir")
 
 	// Act: globs should only include *.txt at top level in non-recursive mode
 	out, stderr, code := runFsListdir(t, bin, map[string]any{

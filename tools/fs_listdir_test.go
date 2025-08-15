@@ -10,6 +10,8 @@ import (
     "path/filepath"
     "strings"
     "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsListdirEntry struct {
@@ -25,19 +27,7 @@ type fsListdirOutput struct {
 	Truncated bool             `json:"truncated"`
 }
 
-// buildFsListdir builds ./tools/fs_listdir into a temporary binary.
-func buildFsListdir(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-listdir")
-    cmd := exec.Command("go", "build", "-o", binPath, "./fs_listdir")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_listdir tool: %v\n%s", err, string(out))
-	}
-	return binPath
-}
+// Build via shared helper in tools/testutil.
 
 // runFsListdir executes the fs_listdir tool with given JSON input.
 func runFsListdir(t *testing.T, bin string, input any) (fsListdirOutput, string, int) {
@@ -74,9 +64,9 @@ func TestFsListdir_EmptyDir_NonRecursive(t *testing.T) {
 		t.Fatalf("mkdir temp: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
-	base := filepath.Base(tmpDirAbs)
+    base := filepath.Base(tmpDirAbs)
 
-	bin := buildFsListdir(t)
+    bin := testutil.BuildTool(t, "fs_listdir")
 
 	// Act: list with recursive=false, includeHidden=false
 	out, stderr, code := runFsListdir(t, bin, map[string]any{
@@ -124,7 +114,7 @@ func TestFsListdir_FilesDirsOrder_HiddenFiltering(t *testing.T) {
         t.Fatalf("write hidden file: %v", err)
     }
 
-    bin := buildFsListdir(t)
+    bin := testutil.BuildTool(t, "fs_listdir")
 
     // Act: list with recursive=false, includeHidden=false
     out, stderr, code := runFsListdir(t, bin, map[string]any{
@@ -154,7 +144,7 @@ func TestFsListdir_FilesDirsOrder_HiddenFiltering(t *testing.T) {
 }
 
 func TestFsListdir_ErrorJSON_PathRequired(t *testing.T) {
-    bin := buildFsListdir(t)
+    bin := testutil.BuildTool(t, "fs_listdir")
     // Provide empty JSON to trigger validation error: path is required
     cmd := exec.Command(bin)
     var stdout, stderr bytes.Buffer
