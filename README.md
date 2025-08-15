@@ -29,6 +29,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
 - [Project status](#project-status)
 - [License and credits](#license-and-credits)
  - [Unrestricted tools warning](#unrestricted-tools-warning)
+  - [Unrestricted examples](#unrestricted-examples)
 
 ### Installation
 - **Prerequisites**: Go 1.24+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
@@ -243,3 +244,6 @@ Experimental, but actively maintained. Interfaces may change before a stable 1.0
 
 ### License and credits
 MIT license. See `LICENSE`. Inspired by OpenAI‑compatible agent patterns.
+
+### Unrestricted examples
+See `examples/unrestricted.md` for copy‑paste prompts demonstrating `exec` + file tools to write, build, and run code in a sandboxed environment.
