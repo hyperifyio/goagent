@@ -17,7 +17,8 @@ func TestLoadManifest_OK(t *testing.T) {
 				"name":        "hello",
 				"description": "says hello",
 				"schema":      map[string]any{"type": "object"},
-				"command":     []string{"echo", "{}"},
+                // absolute path allowed in tests
+                "command":     []string{"/bin/echo", "{}"},
 			},
 		},
 	}
@@ -81,7 +82,8 @@ func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
         wantErr  bool
     }{
         {name: "ok-absolute", command0: "/usr/bin/env", wantErr: false},
-        {name: "ok-simple-relative", command0: "echo", wantErr: false},
+        // relative simple path must now be under ./tools/bin
+        {name: "reject-simple-relative", command0: "echo", wantErr: true},
         {name: "ok-tools-bin", command0: "./tools/bin/fs_read_file", wantErr: false},
         {name: "reject-dotdot-leading", command0: "../tools/bin/get_time", wantErr: true},
         {name: "reject-escape-from-bin", command0: "./tools/bin/../hack", wantErr: true},

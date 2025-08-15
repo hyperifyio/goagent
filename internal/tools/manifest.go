@@ -46,7 +46,8 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 		if len(t.Command) < 1 {
 			return nil, nil, fmt.Errorf("tool[%d] %q: command must have at least program name", i, t.Name)
 		}
-        // S52: Harden command[0] validation to prevent path escapes when relative
+        // S52/S30: Harden command[0] validation. For any relative program path,
+        // enforce the canonical tools bin prefix and prevent path escapes.
         cmd0 := t.Command[0]
         if !filepath.IsAbs(cmd0) {
             raw := filepath.ToSlash(cmd0)
@@ -61,8 +62,13 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
             }
             // If original referenced ./tools/bin, ensure cleaned still stays within ./tools/bin
             if strings.HasPrefix(raw, "./tools/bin/") || raw == "./tools/bin" {
-                if !(strings.HasPrefix(norm, "./tools/bin/") || norm == "./tools/bin") {
+                if !(strings.HasPrefix(norm, "./tools/bin/")) {
                     return nil, nil, fmt.Errorf("tool[%d] %q: command[0] escapes ./tools/bin after normalization (got %q -> %q)", i, t.Name, cmd0, norm)
+                }
+            } else {
+                // Enforce canonical prefix for all other relative commands
+                if !strings.HasPrefix(norm, "./tools/bin/") {
+                    return nil, nil, fmt.Errorf("tool[%d] %q: relative command[0] must start with ./tools/bin/", i, t.Name)
                 }
             }
         }

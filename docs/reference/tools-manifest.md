@@ -15,7 +15,7 @@ ToolSpec fields:
 - `name` (string, required): Unique tool name. Must be non-empty and unique across the manifest.
 - `description` (string, optional): Short human description.
 - `schema` (object, optional): JSON Schema for the tool parameters. This is passed through to the model as `parameters` in the OpenAI "function" tool.
-- `command` (array of string, required): Argv vector. First element is the program path (relative or absolute); subsequent elements are fixed args. The runner will execute this program and write the function call JSON arguments to stdin.
+- `command` (array of string, required): Argv vector. First element is the program path (relative or absolute); subsequent elements are fixed args. When relative, it MUST start with `./tools/bin/NAME` (use `.exe` on Windows). The runner will execute this program and write the function call JSON arguments to stdin.
 - `timeoutSec` (integer, optional): Per-call timeout override in seconds. If omitted, the CLI's `-timeout` applies.
 
 Notes:
@@ -79,7 +79,7 @@ On Windows, use the `.exe` suffix for the tool binary:
 - Duplicate `name`: error `tool[i] "<name>": duplicate name`.
 - Empty `command`: error `tool[i] "<name>": command must have at least program name`.
 - Relative `command[0]` not using the canonical bin prefix: error `tool[i] "<name>": relative command[0] must start with ./tools/bin/` (absolute paths are allowed for tests). This ensures tools are invoked from `./tools/bin/NAME`.
-- Relative `command[0]` that normalizes to escape the tools bin directory (e.g., `./tools/bin/../hack`): error `tool[i] "<name>": relative command[0] escapes ./tools/bin (got "./tools/bin/../hack")`.
+- Relative `command[0]` that normalizes to escape the tools bin directory (e.g., `./tools/bin/../hack`): error `tool[i] "<name>": command[0] escapes ./tools/bin after normalization (got "./tools/bin/../hack" -> "./tools/hack")`.
 
 ## Execution model
 - The assistant provides JSON arguments for the tool call. `agentcli` passes that JSON to the tool's stdin verbatim.
