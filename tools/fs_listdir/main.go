@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,10 +21,10 @@ type listdirInput struct {
 
 type listdirEntry struct {
 	Path      string `json:"path"`
-	Type      string `json:"type"` // file|dir|symlink|other
+	Type      string `json:"type"`
 	SizeBytes int64  `json:"sizeBytes"`
 	ModeOctal string `json:"modeOctal"`
-	ModTime   string `json:"modTime"` // RFC3339
+	ModTime   string `json:"modTime"`
 }
 
 type listdirOutput struct {
@@ -35,9 +34,7 @@ type listdirOutput struct {
 
 func main() {
 	if err := run(); err != nil {
-		// Error contract: concise single line to stderr, non-zero exit
-		msg := strings.TrimSpace(err.Error())
-		fmt.Fprintln(os.Stderr, msg)
+		fmt.Fprintln(os.Stderr, strings.TrimSpace(err.Error()))
 		os.Exit(1)
 	}
 }
@@ -47,12 +44,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
 	}
-	if len(strings.TrimSpace(string(inBytes))) == 0 {
-		return fmt.Errorf("missing json input")
-	}
 	var in listdirInput
 	if err := json.Unmarshal(inBytes, &in); err != nil {
-		return fmt.Errorf("bad json: %w", err)
+		return fmt.Errorf("invalid json: %w", err)
 	}
 	if strings.TrimSpace(in.Path) == "" {
 		return fmt.Errorf("path is required")
@@ -60,152 +54,128 @@ func run() error {
 	if filepath.IsAbs(in.Path) {
 		return fmt.Errorf("path must be relative to repository root")
 	}
-	root := filepath.Clean(in.Path)
-	if strings.HasPrefix(root, "..") {
+	clean := filepath.Clean(in.Path)
+	if strings.HasPrefix(clean, "..") {
 		return fmt.Errorf("path escapes repository root")
 	}
 
-	// Default MaxResults safeguard
-	if in.MaxResults <= 0 {
-		in.MaxResults = 10000
+	max := in.MaxResults
+	if max <= 0 {
+		max = int(^uint(0) >> 1)
 	}
 
-	var results []listdirEntry
-	truncated := false
+	var out listdirOutput
 
-	// Helper to append entry respecting max results
-	appendEntry := func(entry listdirEntry) {
-		if len(results) >= in.MaxResults {
-			truncated = true
-			return
-		}
-		results = append(results, entry)
-	}
-
-	// Non-recursive: only list immediate children of root
-	if !in.Recursive {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("NOT_FOUND: %s", root)
+	// Choose traversal based on recursive flag
+	if in.Recursive {
+		// Walk subtree
+		err = filepath.WalkDir(clean, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
-			return fmt.Errorf("readdir: %w", err)
+			// Skip hidden directories if includeHidden=false
+			base := filepath.Base(p)
+			if !in.IncludeHidden && strings.HasPrefix(base, ".") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+        // Skip the root itself; only include contents
+        if p == clean {
+				return nil
+			}
+        if entry, ok := makeEntry(p, d); ok {
+				out.Entries = append(out.Entries, entry)
+				if len(out.Entries) >= max {
+					out.Truncated = true
+					return fmt.Errorf("truncated")
+				}
+			}
+			return nil
+		})
+		if err != nil && err.Error() != "truncated" {
+			// ignore non-fatal walk errors; they are skipped
 		}
-		for _, de := range entries {
-			name := de.Name()
+	} else {
+		// Non-recursive: list direct children only
+		entries, readErr := os.ReadDir(clean)
+		if readErr != nil {
+			return fmt.Errorf("read dir: %w", readErr)
+		}
+		// Stable ordering: dirs first, then others, lexicographic by path
+		sort.SliceStable(entries, func(i, j int) bool {
+			iIsDir := entries[i].IsDir()
+			jIsDir := entries[j].IsDir()
+			if iIsDir != jIsDir {
+				return iIsDir && !jIsDir
+			}
+			return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name())
+		})
+		for _, d := range entries {
+			name := d.Name()
 			if !in.IncludeHidden && strings.HasPrefix(name, ".") {
 				continue
 			}
-			relPath := filepath.Join(root, name)
-			// Lstat to avoid following symlinks
-			info, err := os.Lstat(relPath)
-			if err != nil {
-				// Skip entries we cannot stat, but do not fail whole listing
-				continue
-			}
-			entryType := classifyMode(info.Mode())
-			// Prepare entry
-			appendEntry(listdirEntry{
-				Path:      relPath,
-				Type:      entryType,
-				SizeBytes: fileSizeForMode(info),
-				ModeOctal: fmt.Sprintf("%#04o", uint32(info.Mode().Perm())),
-				ModTime:   info.ModTime().UTC().Format(time.RFC3339),
-			})
-			if truncated {
-				break
+			p := filepath.Join(clean, name)
+			if entry, ok := makeEntry(p, d); ok {
+				out.Entries = append(out.Entries, entry)
+				if len(out.Entries) >= max {
+					out.Truncated = true
+					break
+				}
 			}
 		}
-		sortEntries(results)
-		return writeJSON(listdirOutput{Entries: results, Truncated: truncated})
 	}
 
-	// Recursive: Walk the tree
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			// Skip visit errors
-			return nil
-		}
-		// Skip the root itself
-		if path == root {
-			return nil
-		}
-		name := filepath.Base(path)
-		if !in.IncludeHidden && strings.HasPrefix(name, ".") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		info, err := os.Lstat(path)
-		if err != nil {
-			return nil
-		}
-		appendEntry(listdirEntry{
-			Path:      path,
-			Type:      classifyMode(info.Mode()),
-			SizeBytes: fileSizeForMode(info),
-			ModeOctal: fmt.Sprintf("%#04o", uint32(info.Mode().Perm())),
-			ModTime:   info.ModTime().UTC().Format(time.RFC3339),
-		})
-		if truncated {
-			return io.EOF // early stop WalkDir
-		}
-		return nil
-	})
-	if err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("walk: %w", err)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(out); err != nil {
+		return fmt.Errorf("encode output: %w", err)
 	}
-	sortEntries(results)
-	return writeJSON(listdirOutput{Entries: results, Truncated: truncated})
-}
-
-func writeJSON(v any) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-	fmt.Println(string(b))
 	return nil
 }
 
-func classifyMode(m os.FileMode) string {
-	switch {
-	case m&os.ModeSymlink != 0:
-		return "symlink"
-	case m.IsDir():
-		return "dir"
-	case m.IsRegular():
-		return "file"
-	default:
-		return "other"
+func toSlashRel(p string) string {
+	if strings.HasPrefix(p, "./") {
+		p = p[2:]
 	}
+	return filepath.ToSlash(p)
 }
 
-func sortEntries(entries []listdirEntry) {
-	sort.SliceStable(entries, func(i, j int) bool {
-		// Dirs first, then files/symlinks/others; within same type lexicographic by path
-		rank := func(t string) int {
-			switch t {
-			case "dir":
-				return 0
-			case "file":
-				return 1
-			case "symlink":
-				return 2
-			default:
-				return 3
-			}
-		}
-		ri, rj := rank(entries[i].Type), rank(entries[j].Type)
-		if ri != rj {
-			return ri < rj
-		}
-		return entries[i].Path < entries[j].Path
-	})
+func makeEntry(p string, d os.DirEntry) (listdirEntry, bool) {
+	fi, err := d.Info()
+	if err != nil {
+		return listdirEntry{}, false
+	}
+	t := detectType(fi)
+	mode := fi.Mode().Perm()
+	return listdirEntry{
+		Path:      toSlashRel(p),
+		Type:      t,
+		SizeBytes: sizeFor(fi),
+		ModeOctal: fmt.Sprintf("%04o", uint32(mode)),
+		ModTime:   fi.ModTime().UTC().Format(time.RFC3339),
+	}, true
 }
 
-func fileSizeForMode(info os.FileInfo) int64 {
-	// For non-regular files, size is reported by FileInfo but may not be meaningful; keep as-is
-	return info.Size()
+func detectType(fi os.FileInfo) string {
+	m := fi.Mode()
+	if m&os.ModeSymlink != 0 {
+		return "symlink"
+	}
+	if m.IsDir() {
+		return "dir"
+	}
+	if m.IsRegular() {
+		return "file"
+	}
+	return "other"
+}
+
+func sizeFor(fi os.FileInfo) int64 {
+	if fi.IsDir() {
+		return 0
+	}
+	return fi.Size()
 }
