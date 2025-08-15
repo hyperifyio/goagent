@@ -127,8 +127,16 @@ func applyUnifiedDiffStrict(diff string) (int, error) {
         }
     }
 
-    // If file already exists, fail strictly for this slice (no overwrite)
+    // If file already exists, be idempotent: succeed with no changes if
+    // content matches exactly; otherwise fail strictly (no overwrite).
     if _, err := os.Stat(cleanNew); err == nil {
+        existing, rerr := os.ReadFile(cleanNew)
+        if rerr != nil {
+            return 0, fmt.Errorf("read existing: %w", rerr)
+        }
+        if string(existing) == contentBuilder.String() {
+            return 0, nil
+        }
         return 0, fmt.Errorf("target exists: %s", cleanNew)
     } else if !errors.Is(err, os.ErrNotExist) {
         return 0, fmt.Errorf("stat target: %w", err)

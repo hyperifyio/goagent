@@ -126,3 +126,35 @@ func TestFsApplyPatch_CleanApply_NewFile_Succeeds(t *testing.T) {
         t.Fatalf("expected file to exist: %v", err)
     }
 }
+
+func TestFsApplyPatch_Idempotent_NewFile(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    work := t.TempDir()
+    diff := "" +
+        "--- /dev/null\n" +
+        "+++ b/tmp_new_file.txt\n" +
+        "@@ -0,0 +1,2 @@\n" +
+        "+hello\n" +
+        "+world\n"
+
+    // First apply should create the file
+    out1, stderr1, code1 := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code1 != 0 {
+        t.Fatalf("first apply expected success, got exit=%d stderr=%q", code1, stderr1)
+    }
+    if out1.FilesChanged != 1 {
+        t.Fatalf("first apply filesChanged mismatch, got %d want 1", out1.FilesChanged)
+    }
+    // Second apply of the same diff should be idempotent: no-op with success
+    out2, stderr2, code2 := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code2 != 0 {
+        t.Fatalf("second apply expected success, got exit=%d stderr=%q", code2, stderr2)
+    }
+    if out2.FilesChanged != 0 {
+        t.Fatalf("second apply filesChanged mismatch, got %d want 0", out2.FilesChanged)
+    }
+}
