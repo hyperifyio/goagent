@@ -221,6 +221,10 @@ See `docs/runbooks/troubleshooting.md` for common issues and deterministic fixes
 ### Sequence diagram
 See `docs/diagrams/agentcli-seq.md` for the message flow.
 
+### Architecture Decision Records
+- ADR-0001: Minimal Agent CLI — `docs/adr/0001-minimal-agent-cli.md`
+- ADR-0002: Unrestricted toolbelt (files + network) — `docs/adr/0002-unrestricted-toolbelt.md`
+
 ### Tests
 Run everything locally:
 ```bash

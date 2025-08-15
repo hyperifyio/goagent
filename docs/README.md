@@ -4,6 +4,8 @@ This docs index helps you navigate architecture notes and diagrams.
 
 - ADR-0001: Minimal Agent CLI — design context, decisions, and contracts.
   - Link: [docs/adr/0001-minimal-agent-cli.md](adr/0001-minimal-agent-cli.md)
+- ADR-0002: Unrestricted toolbelt (files + network) — risks, contracts, and guidance.
+  - Link: [docs/adr/0002-unrestricted-toolbelt.md](adr/0002-unrestricted-toolbelt.md)
 - Sequence diagram: agent flow from CLI to API and tools.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
 

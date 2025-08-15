@@ -73,6 +73,7 @@
 * [ ] Provide “capabilities” CLI (`agentcli -capabilities`) — prints enabled tools from `tools.json` and explicit warning that enabled tools allow arbitrary command execution and network access; DoD: unit test, README usage, CI green.
 * [x] Update README with “unrestricted tools” warning + examples — clear risk note, copy-paste examples for each fs/* and exec tool, troubleshooting; DoD: docs lint passes, examples exercised in CI script, CI green.
 * [ ] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.
+  - [x] [S01:adr-file-and-links] create ADR file and add links from `README.md` and `docs/README.md`
 * [ ] Add Mermaid diagram `docs/diagrams/toolbelt-seq.md` — sequence of CLI → API → tools → API → final; DoD: diagram renders on GitHub, referenced from README/ADR, updated test ensuring file exists, CI green.
 * [ ] CI smoke job for tools — workflow builds tools, runs each binary with sample stdin, and runs an agent loop against a fake API; no external network dependence; DoD: green in PRs, artifacts attached, linked to issue.
 * [ ] Example prompts `examples/unrestricted.md` — prompts demonstrating `exec` + fs tools to write, build, and run code; DoD: examples validated by CI script, README link, CI green.
