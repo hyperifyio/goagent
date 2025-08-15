@@ -53,3 +53,20 @@ fmtcheck:
 	if [ -n "$$files" ]; then \
 		echo "Files need gofmt -s:"; echo "$$files"; exit 1; \
 	fi
+
+# Guard against legacy tool path usage outside canonical layout
+# Fails if any "./tools/(get_time|fs_*|exec)" invocation remains outside
+# allowed paths `tools/bin/**` or `tools/cmd/**` (excluding FEATURE_CHECKLIST.md).
+# Requires ripgrep (`rg`).
+check-tools-paths:
+	@set -euo pipefail; \
+	if ! command -v rg >/dev/null 2>&1; then \
+		echo "ripgrep (rg) is required. Please install ripgrep."; \
+		exit 1; \
+	fi; \
+	if rg -n --no-heading --hidden -g '!tools/cmd/**' -g '!tools/bin/**' -g '!FEATURE_CHECKLIST.md' -g '!.git/**' -e '\./tools/(get_time|fs_[a-z_]+|exec)\b' .; then \
+		echo "Forbidden legacy tool path references found. Use ./tools/bin/NAME or sources under tools/cmd/NAME."; \
+		exit 1; \
+	else \
+		echo "check-tools-paths: OK"; \
+	fi
