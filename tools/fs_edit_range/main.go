@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 type editRangeInput struct {
@@ -62,11 +63,26 @@ func run() error {
 	if in.EndByte < in.StartByte {
 		return errors.New("endByte must be >= startByte")
 	}
-	repl, err := base64.StdEncoding.DecodeString(in.ReplacementBase64)
+    repl, err := base64.StdEncoding.DecodeString(in.ReplacementBase64)
 	if err != nil {
 		return errors.New("replacementBase64 must be valid base64")
 	}
-	orig, err := os.ReadFile(clean)
+    // Serialize edits using a sidecar advisory lock file to survive renames
+    lockPath := clean + ".lock"
+    lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+    if err != nil {
+        return fmt.Errorf("open lock: %w", err)
+    }
+    defer func() {
+        _ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+        _ = lockFile.Close()
+        _ = os.Remove(lockPath)
+    }()
+    if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+        return fmt.Errorf("flock: %w", err)
+    }
+
+    orig, err := os.ReadFile(clean)
 	if err != nil {
 		return fmt.Errorf("read file: %w", err)
 	}
