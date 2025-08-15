@@ -3,11 +3,12 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/json"
-	"path/filepath"
-	"testing"
-	"os/exec"
+    "bytes"
+    "encoding/json"
+    "os"
+    "path/filepath"
+    "testing"
+    "os/exec"
 )
 
 type fsStatOutput struct {
@@ -101,5 +102,87 @@ func TestFsStat_MissingPath(t *testing.T) {
     }
     if out.Exists {
         t.Fatalf("expected exists=false for missing path")
+    }
+}
+
+// TestFsStat_Symlink_NoFollow verifies that when followSymlinks=false, a symlink
+// is reported with type="symlink" (not the target type).
+func TestFsStat_Symlink_NoFollow(t *testing.T) {
+    bin := buildFsStatTool(t)
+
+    content := []byte("hello-symlink")
+    target := makeRepoRelTempFile(t, "fsstat-symlink-target-", content)
+
+    // Create a symlink alongside the target within repo root.
+    link := target + ".lnk"
+    // Use a relative target name so resolution is relative to link's directory.
+    if err := os.Symlink(filepath.Base(target), link); err != nil {
+        t.Fatalf("symlink: %v", err)
+    }
+    t.Cleanup(func() { _ = os.Remove(link) })
+
+    out, stderr, code := runFsStat(t, bin, map[string]any{
+        "path":            link,
+        "followSymlinks":  false,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if !out.Exists {
+        t.Fatalf("expected exists=true, got false")
+    }
+    if out.Type != "symlink" {
+        t.Fatalf("expected type=symlink when not following, got %q", out.Type)
+    }
+}
+
+// TestFsStat_Symlink_Follow verifies that when followSymlinks=true, a symlink to
+// a regular file reports the target type and size.
+func TestFsStat_Symlink_Follow(t *testing.T) {
+    bin := buildFsStatTool(t)
+
+    content := []byte("hello-symlink-follow")
+    target := makeRepoRelTempFile(t, "fsstat-symlink-follow-", content)
+    link := target + ".lnk"
+    if err := os.Symlink(filepath.Base(target), link); err != nil {
+        t.Fatalf("symlink: %v", err)
+    }
+    t.Cleanup(func() { _ = os.Remove(link) })
+
+    out, stderr, code := runFsStat(t, bin, map[string]any{
+        "path":           link,
+        "followSymlinks": true,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if !out.Exists {
+        t.Fatalf("expected exists=true, got false")
+    }
+    if out.Type != "file" {
+        t.Fatalf("expected type=file when following, got %q", out.Type)
+    }
+    if out.SizeBytes != int64(len(content)) {
+        t.Fatalf("sizeBytes mismatch: got %d want %d", out.SizeBytes, len(content))
+    }
+}
+
+// TestFsStat_SHA256 verifies that when hash="sha256" and the path is a regular
+// file, the tool includes the SHA256 hex digest in the output.
+func TestFsStat_SHA256(t *testing.T) {
+    bin := buildFsStatTool(t)
+
+    content := []byte("sha256-content\n")
+    path := makeRepoRelTempFile(t, "fsstat-sha256-", content)
+
+    out, stderr, code := runFsStat(t, bin, map[string]any{
+        "path": path,
+        "hash": "sha256",
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.SHA256 == "" {
+        t.Fatalf("expected sha256 present")
     }
 }
