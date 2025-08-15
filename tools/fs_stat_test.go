@@ -19,12 +19,12 @@ type fsStatOutput struct {
 	SHA256    string `json:"sha256,omitempty"`
 }
 
-// buildFsStatTool builds ./tools/fs_stat.go into a temporary binary.
+// buildFsStatTool builds ./tools/fs_stat into a temporary binary.
 func buildFsStatTool(t *testing.T) string {
 					t.Helper()
 					tmpDir := t.TempDir()
 					binPath := filepath.Join(tmpDir, "fs-stat")
-					cmd := exec.Command("go", "build", "-o", binPath, "./fs_stat.go")
+					cmd := exec.Command("go", "build", "-o", binPath, "./fs_stat")
 					cmd.Dir = "."
 					out, err := cmd.CombinedOutput()
 					if err != nil {
