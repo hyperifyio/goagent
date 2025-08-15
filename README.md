@@ -20,6 +20,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
   - [fs_mkdirp tool example](#fs_mkdirp-tool-example)
   - [fs_rm tool example](#fs_rm-tool-example)
   - [fs_move tool example](#fs_move-tool-example)
+  - [fs_listdir tool example](#fs_listdir-tool-example)
   - [fs_apply_patch tool example](#fs_apply_patch-tool-example)
   - [fs_edit_range tool example](#fs_edit_range-tool-example)
 - [Features](#features)
@@ -194,6 +195,25 @@ echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./
 grep -qx 'new' tmp_move_dst.txt
 
 rm -f tmp_move_src.txt tmp_move_dst.txt
+```
+
+### fs_listdir tool example
+List directory entries with optional recursion, glob filtering, and hidden-file control. Returns a stable order (directories first, then files, lexicographic).
+
+```bash
+make build-tools
+
+# Create a demo directory tree
+mkdir -p tmp_listdir_demo/a b && touch tmp_listdir_demo/.hidden tmp_listdir_demo/a/afile tmp_listdir_demo/bfile
+
+# Non-recursive list (hidden excluded by default)
+echo '{"path":"tmp_listdir_demo"}' | ./tools/fs_listdir | jq '.entries | map(.path)'
+
+# Recursive list with globs for only files
+jq -n '{path:"tmp_listdir_demo",recursive:true,globs:["**/*"],includeHidden:false}' | ./tools/fs_listdir | jq '.entries | map(select(.type=="file") | .path)'
+
+# Cleanup
+rm -rf tmp_listdir_demo
 ```
 
 ### fs_apply_patch tool example
