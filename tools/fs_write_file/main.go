@@ -1,15 +1,15 @@
 package main
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
+    "encoding/base64"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "strconv"
+    "strings"
 )
 
 type writeInput struct {
@@ -24,9 +24,8 @@ type writeOutput struct {
 
 func main() {
 	if err := run(); err != nil {
-		// Error contract: one line to stderr. Include MISSING_PARENT marker when applicable.
-		msg := strings.TrimSpace(err.Error())
-		fmt.Fprintln(os.Stderr, msg)
+        // Standardized error contract: single-line JSON to stderr.
+        writeStdErrJSON(err)
 		os.Exit(1)
 	}
 }
@@ -115,4 +114,12 @@ func run() error {
 	b, _ := json.Marshal(out)
 	fmt.Println(string(b))
 	return nil
+}
+
+// writeStdErrJSON writes {"error":"..."} as a single line to stderr.
+func writeStdErrJSON(err error) {
+    msg := strings.TrimSpace(err.Error())
+    payload := map[string]string{"error": msg}
+    b, _ := json.Marshal(payload)
+    fmt.Fprintln(os.Stderr, string(b))
 }
