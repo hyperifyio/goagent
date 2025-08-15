@@ -82,6 +82,7 @@
   - [x] [S01:fs-stat-file-test] add failing unit test for existing regular file reporting exists=true, type="file", and sizeBytes
   - [x] [S02:fs-stat-file-impl] minimal implementation to pass file test
   - [x] [S03:fs-stat-missing] add test for missing path returns exit 0 and exists=false
+  - [x] [S04:fs-stat-symlink+hash-tests] add tests for symlink follow/no-follow and sha256 output
 * [ ] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
 * [ ] Add Makefile build rules for all new tools — `build-tools` compiles each `./tools/*.go` to deterministic static binaries; DoD: `make build build-tools` passes locally and CI, artifacts gitignored, docs updated.
   - [x] [S02:gitignore-binaries] ignore built tool binaries (`tools/*/*` and single-file outputs) and untrack existing ones; verify `git status` clean after `make build-tools` and `make clean`
