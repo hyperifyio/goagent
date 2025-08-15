@@ -158,3 +158,31 @@ func TestFsApplyPatch_Idempotent_NewFile(t *testing.T) {
         t.Fatalf("second apply filesChanged mismatch, got %d want 0", out2.FilesChanged)
     }
 }
+
+func TestFsApplyPatch_Conflict_TargetExistsWithDifferentContent(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    work := t.TempDir()
+
+    // Pre-create target with different content
+    if err := os.WriteFile(filepath.Join(work, "tmp_new_file.txt"), []byte("different\ncontent\n"), 0o644); err != nil {
+        t.Fatalf("prep write: %v", err)
+    }
+
+    // Diff attempts to create a new file with different content (new-file hunk)
+    diff := "" +
+        "--- /dev/null\n" +
+        "+++ b/tmp_new_file.txt\n" +
+        "@@ -0,0 +1,2 @@\n" +
+        "+hello\n" +
+        "+world\n"
+
+    out, stderr, code := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code == 0 {
+        t.Fatalf("expected failure, got success filesChanged=%d", out.FilesChanged)
+    }
+    if !strings.Contains(strings.ToLower(stderr), "target exists") {
+        t.Fatalf("expected error mentioning target exists, got %q", stderr)
+    }
+}
