@@ -45,7 +45,8 @@ lint:
 	golangci-lint version; \
 	golangci-lint run --timeout=5m; \
 	$(GO) vet ./...; \
-	$(MAKE) fmtcheck
+	$(MAKE) fmtcheck; \
+	$(MAKE) check-tools-paths
 
 fmtcheck:
 	@echo "Checking gofmt..."; \
