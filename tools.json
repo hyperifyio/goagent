@@ -152,6 +152,56 @@
       "timeoutSec": 5
     },
     {
+      "name": "fs_read_lines",
+      "description": "Read a line range from a repository-relative file with optional byte cap",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startLine": {"type": "integer", "minimum": 0},
+          "endLine": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path", "startLine", "endLine"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_read_lines"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_apply_patch",
+      "description": "Apply a strict unified diff (optional dry-run)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "unifiedDiff": {"type": "string"},
+          "dryRun": {"type": "boolean"}
+        },
+        "required": ["unifiedDiff"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_apply_patch"],
+      "timeoutSec": 10
+    },
+    {
+      "name": "fs_edit_range",
+      "description": "Atomically replace a byte range in a file with base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startByte": {"type": "integer", "minimum": 0},
+          "endByte": {"type": "integer", "minimum": 0},
+          "replacementBase64": {"type": "string"},
+          "expectedSha256": {"type": "string"}
+        },
+        "required": ["path", "startByte", "endByte", "replacementBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_edit_range"],
+      "timeoutSec": 5
+    },
+    {
       "name": "exec",
       "description": "Run an arbitrary program with args, cwd, env, and stdin",
       "schema": {
@@ -169,6 +219,22 @@
       },
       "command": ["./tools/exec"],
       "timeoutSec": 30
+    },
+    {
+      "name": "fs_stat",
+      "description": "Stat a path (optionally follow symlinks and compute hash)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "followSymlinks": {"type": "boolean"},
+          "hash": {"type": "string", "enum": ["none", "sha256"]}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/fs_stat"],
+      "timeoutSec": 5
     }
   ]
 }

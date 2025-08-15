@@ -83,7 +83,7 @@
   - [x] [S02:fs-stat-file-impl] minimal implementation to pass file test
   - [x] [S03:fs-stat-missing] add test for missing path returns exit 0 and exists=false
   - [x] [S04:fs-stat-symlink+hash-tests] add tests for symlink follow/no-follow and sha256 output
-* [ ] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
+* [x] Extend `tools.json` with new tools — add entries (name, description, JSON Schema, `command`, `timeoutSec`); loader must validate and surface schemas to OpenAI tools; DoD: manifest unit test (schema validity, names unique), sample `tools.json` updated, CI green.
 * [ ] Add Makefile build rules for all new tools — `build-tools` compiles each `./tools/*.go` to deterministic static binaries; DoD: `make build build-tools` passes locally and CI, artifacts gitignored, docs updated.
   - [x] [S02:gitignore-binaries] ignore built tool binaries (`tools/*/*` and single-file outputs) and untrack existing ones; verify `git status` clean after `make build-tools` and `make clean`
 * [ ] Integrate tools into agent loop — ensure `agentcli` advertises schemas and executes tool calls end-to-end; DoD: integration test with fake API that triggers `fs_write_file` → `fs_read_file` → final message, README cross-referenced, CI green.
