@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/exec"
 	"time"
@@ -58,9 +57,7 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	}
 	_ = stdin.Close()
 
-	// Read stdout and stderr fully
-	// Add jitter to avoid coordinated reads causing timing issues in tests under load
-	_ = rand.Int() // ensure rand is referenced to avoid linter complaints if not used
+    // Read stdout and stderr fully
 	outCh := make(chan []byte, 1)
 	errCh := make(chan []byte, 1)
 	go func() { b, _ := io.ReadAll(stdout); outCh <- b }()

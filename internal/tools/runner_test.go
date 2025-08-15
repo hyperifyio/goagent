@@ -68,3 +68,31 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("bad json echo: %v; out=%s", err, string(out))
 	}
 }
+
+// Ensure deterministic collection order: stderr from a failing tool is surfaced as error
+func TestRunToolWithJSON_NonZeroExit_ReportsStderr(t *testing.T) {
+    dir := t.TempDir()
+    helper := filepath.Join(dir, "fail.go")
+    if err := os.WriteFile(helper, []byte(`package main
+import ("os"; "fmt")
+func main(){fmt.Fprint(os.Stderr, "boom"); os.Exit(3)}
+`), 0o644); err != nil {
+        t.Fatalf("write: %v", err)
+    }
+    bin := filepath.Join(dir, "fail")
+    if runtime.GOOS == "windows" {
+        bin += ".exe"
+    }
+    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+        t.Fatalf("build helper: %v: %s", err, string(out))
+    }
+
+    spec := ToolSpec{Name: "fail", Command: []string{bin}, TimeoutSec: 2}
+    _, err := RunToolWithJSON(context.Background(), spec, []byte(`{}`), 5*time.Second)
+    if err == nil {
+        t.Fatalf("expected error")
+    }
+    if err.Error() != "boom" {
+        t.Fatalf("expected stderr content, got: %q", err.Error())
+    }
+}
