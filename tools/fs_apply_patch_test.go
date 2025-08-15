@@ -49,31 +49,80 @@ func runFsApplyPatch(t *testing.T, bin string, input any) (fsApplyPatchOutput, s
 	return out, stderr.String(), code
 }
 
-func TestFsApplyPatch_CleanApply_NewFile(t *testing.T) {
-	bin := buildFsApplyPatch(t)
-	// Prepare a simple unified diff creating a file
-	diff := "" +
-		"--- /dev/null\n" +
-		"+++ b/tmp_new_file.txt\n" +
-		"@@ -0,0 +1,2 @@\n" +
-		"+hello\n" +
-		"+world\n"
+func runFsApplyPatchInDir(t *testing.T, bin, dir string, input any) (fsApplyPatchOutput, string, int) {
+    t.Helper()
+    data, _ := json.Marshal(input)
+    cmd := exec.Command(bin)
+    cmd.Dir = dir
+    cmd.Stdin = bytes.NewReader(data)
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    err := cmd.Run()
+    code := 0
+    if err != nil {
+        if ee, ok := err.(*exec.ExitError); ok {
+            code = ee.ExitCode()
+        } else {
+            code = 1
+        }
+    }
+    var out fsApplyPatchOutput
+    _ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+    return out, stderr.String(), code
+}
 
-	out, stderr, code := runFsApplyPatch(t, bin, map[string]any{
-		"unifiedDiff": diff,
-	})
-	if code == 0 {
-		// Once implemented, expect code==0 and filesChanged==1
-		if out.FilesChanged != 1 {
-			t.Fatalf("filesChanged mismatch, got %d want 1", out.FilesChanged)
-		}
-		if _, err := os.Stat("tmp_new_file.txt"); err != nil {
-			t.Fatalf("expected file to exist: %v", err)
-		}
-		return
-	}
-	// For the initial stub, ensure we get a structured error
-	if !strings.Contains(strings.ToUpper(stderr), "NOT_IMPLEMENTED") {
-		t.Fatalf("expected NOT_IMPLEMENTED in stderr, got %q", stderr)
-	}
+func TestFsApplyPatch_CleanApply_NewFile(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    // Prepare a simple unified diff creating a file
+    diff := "" +
+        "--- /dev/null\n" +
+        "+++ b/tmp_new_file.txt\n" +
+        "@@ -0,0 +1,2 @@\n" +
+        "+hello\n" +
+        "+world\n"
+
+    // Run in an isolated temp directory to avoid polluting the repo
+    work := t.TempDir()
+    out, stderr, code := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code == 0 {
+        // Once implemented, expect code==0 and filesChanged==1
+        if out.FilesChanged != 1 {
+            t.Fatalf("filesChanged mismatch, got %d want 1", out.FilesChanged)
+        }
+        if _, err := os.Stat(filepath.Join(work, "tmp_new_file.txt")); err != nil {
+            t.Fatalf("expected file to exist: %v", err)
+        }
+        return
+    }
+    // For the initial stub, ensure we get a structured error
+    if !strings.Contains(strings.ToUpper(stderr), "NOT_IMPLEMENTED") {
+        t.Fatalf("expected NOT_IMPLEMENTED in stderr, got %q", stderr)
+    }
+}
+
+func TestFsApplyPatch_CleanApply_NewFile_Succeeds(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    work := t.TempDir()
+    diff := "" +
+        "--- /dev/null\n" +
+        "+++ b/tmp_new_file.txt\n" +
+        "@@ -0,0 +1,2 @@\n" +
+        "+hello\n" +
+        "+world\n"
+
+    out, stderr, code := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.FilesChanged != 1 {
+        t.Fatalf("filesChanged mismatch, got %d want 1", out.FilesChanged)
+    }
+    if _, err := os.Stat(filepath.Join(work, "tmp_new_file.txt")); err != nil {
+        t.Fatalf("expected file to exist: %v", err)
+    }
 }

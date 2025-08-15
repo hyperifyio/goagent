@@ -1,5 +1,6 @@
 bin/
 logs/
+tools/get_time
 tools/exec_test
 tools/fs_append_file_test
 tools/fs_mkdirp_test
