@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+    "path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -64,12 +65,13 @@ func run() error {
 		max = int(^uint(0) >> 1)
 	}
 
-	var out listdirOutput
+    var out listdirOutput
+    hasGlobs := len(in.Globs) > 0
 
 	// Choose traversal based on recursive flag
 	if in.Recursive {
 		// Walk subtree
-		err = filepath.WalkDir(clean, func(p string, d os.DirEntry, err error) error {
+        err = filepath.WalkDir(clean, func(p string, d os.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -80,12 +82,16 @@ func run() error {
 					return filepath.SkipDir
 				}
 				return nil
-			}
+            }
         // Skip the root itself; only include contents
         if p == clean {
 				return nil
 			}
-        if entry, ok := makeEntry(p, d); ok {
+            // Glob filtering (match against repo-relative slash path)
+            if hasGlobs && !matchesAnyGlob(p, in.Globs) {
+                return nil
+            }
+            if entry, ok := makeEntry(p, d); ok {
 				out.Entries = append(out.Entries, entry)
 				if len(out.Entries) >= max {
 					out.Truncated = true
@@ -118,6 +124,9 @@ func run() error {
 				continue
 			}
 			p := filepath.Join(clean, name)
+            if hasGlobs && !matchesAnyGlob(p, in.Globs) {
+                continue
+            }
 			if entry, ok := makeEntry(p, d); ok {
 				out.Entries = append(out.Entries, entry)
 				if len(out.Entries) >= max {
@@ -141,6 +150,29 @@ func toSlashRel(p string) string {
 		p = p[2:]
 	}
 	return filepath.ToSlash(p)
+}
+
+// matchesAnyGlob reports whether path p (repo-relative) matches at least one
+// of the provided glob patterns. Supports patterns like "**/*.go" by matching
+// the basename against the suffix when prefixed with "**/" similar to fs_search.
+func matchesAnyGlob(p string, patterns []string) bool {
+    s := filepath.ToSlash(strings.TrimPrefix(p, "./"))
+    for _, pat := range patterns {
+        if pat == "" {
+            continue
+        }
+        if strings.HasPrefix(pat, "**/") {
+            rest := strings.TrimPrefix(pat, "**/")
+            if ok, _ := path.Match(rest, path.Base(s)); ok {
+                return true
+            }
+            continue
+        }
+        if ok, _ := path.Match(pat, s); ok {
+            return true
+        }
+    }
+    return false
 }
 
 func makeEntry(p string, d os.DirEntry) (listdirEntry, bool) {
