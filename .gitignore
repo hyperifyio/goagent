@@ -18,3 +18,4 @@ tools/*
 !tools/*/
 tools/*/*
 !tools/*/*.go
+tools/bin/*
