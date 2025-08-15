@@ -63,6 +63,8 @@ Each manifest entry is exported as an OpenAI tool of type `function`:
 - Missing `name`: error `tool[i]: name is required`.
 - Duplicate `name`: error `tool[i] "<name>": duplicate name`.
 - Empty `command`: error `tool[i] "<name>": command must have at least program name`.
+- Relative `command[0]` not using the canonical bin prefix: error `tool[i] "<name>": relative command[0] must start with ./tools/bin/` (absolute paths are allowed for tests). This ensures tools are invoked from `./tools/bin/NAME`.
+- Relative `command[0]` that normalizes to escape the tools bin directory (e.g., `./tools/bin/../hack`): error `tool[i] "<name>": relative command[0] escapes ./tools/bin (got "./tools/bin/../hack")`.
 
 ## Execution model
 - The assistant provides JSON arguments for the tool call. `agentcli` passes that JSON to the tool's stdin verbatim.
