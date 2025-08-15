@@ -84,3 +84,22 @@ func TestFsStat_File(t *testing.T) {
 		t.Fatalf("sizeBytes mismatch: got %d want %d", out.SizeBytes, len(content))
 	}
 }
+
+// TestFsStat_MissingPath verifies that a non-existent path is handled
+// gracefully: exit code 0 and exists=false in the JSON output.
+func TestFsStat_MissingPath(t *testing.T) {
+    bin := buildFsStatTool(t)
+
+    // Use a path name that is very unlikely to exist under repo root.
+    missing := filepath.Join("fsstat-missing-", "no-such-file.bin")
+
+    out, stderr, code := runFsStat(t, bin, map[string]any{
+        "path": missing,
+    })
+    if code != 0 {
+        t.Fatalf("expected success (exit 0) for missing path, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.Exists {
+        t.Fatalf("expected exists=false for missing path")
+    }
+}
