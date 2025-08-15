@@ -56,18 +56,28 @@ fmtcheck:
 	fi
 
 # Guard against legacy tool path usage outside canonical layout
-# Fails if any "./tools/(get_time|fs_*|exec)" invocation remains outside
-# allowed paths `tools/bin/**` or `tools/cmd/**` (excluding FEATURE_CHECKLIST.md).
+# - Fails if any "./tools/(get_time|fs_*|exec)" invocation remains outside allowed paths
+# - Also fails on single-file references like "./tools/name.go" or direct builds/runs like
+#   "go build ... ./tools/name" outside `tools/cmd/**` and `tools/bin/**` (excluding FEATURE_CHECKLIST.md).
 # Requires ripgrep (`rg`).
 check-tools-paths:
-	@set -euo pipefail; \
-	if ! command -v rg >/dev/null 2>&1; then \
-		echo "ripgrep (rg) is required. Please install ripgrep."; \
-		exit 1; \
-	fi; \
-	if rg -n --no-heading --hidden -g '!tools/cmd/**' -g '!tools/bin/**' -g '!FEATURE_CHECKLIST.md' -g '!.git/**' -e '\./tools/(get_time|fs_[a-z_]+|exec)\b' .; then \
-		echo "Forbidden legacy tool path references found. Use ./tools/bin/NAME or sources under tools/cmd/NAME."; \
-		exit 1; \
-	else \
-		echo "check-tools-paths: OK"; \
-	fi
+    @set -euo pipefail; \
+    if ! command -v rg >/dev/null 2>&1; then \
+        echo "ripgrep (rg) is required. Please install ripgrep."; \
+        exit 1; \
+    fi; \
+    # Legacy invocations of tools outside canonical layout
+    if rg -n --no-heading --hidden \
+        -g '!tools/cmd/**' -g '!tools/bin/**' -g '!FEATURE_CHECKLIST.md' -g '!.git/**' \
+        -e '\./tools/(get_time|fs_[a-z_]+|exec)\b' .; then \
+        echo "Forbidden legacy tool path references found. Use ./tools/bin/NAME or sources under tools/cmd/NAME."; \
+        exit 1; \
+    fi; \
+    # Single-file or direct tool builds outside canonical layout
+    if rg -n --no-heading --hidden \
+        -g '!tools/cmd/**' -g '!tools/bin/**' -g '!FEATURE_CHECKLIST.md' -g '!.git/**' \
+        -e '(\./tools/[a-z_]+\.go|go\s+(build|run)\s+.*\./tools/[a-z_]+)\b' .; then \
+        echo "Direct tool source builds or single-file references found. Build from tools/cmd/NAME -> tools/bin/NAME."; \
+        exit 1; \
+    fi; \
+    echo "check-tools-paths: OK"
