@@ -18,10 +18,10 @@ This repository follows a strict layering model to keep dependencies clear, avoi
   - Allowed imports: standard library only, plus other small `internal/*` helpers if introduced.
   - Not allowed: importing `cmd/` or `tools/` source code. Communicates with tools solely via argv + JSON stdin/stdout.
 
-- `tools/*` (binaries)
-  - Each file under `tools/` builds to a standalone binary (e.g., `tools/fs_read_file`, `tools/fs_write_file`, `tools/exec`).
+- `tools/cmd/*` (tool sources) and `tools/bin/*` (built binaries)
+  - Each tool's source lives under `tools/cmd/<name>/<name>.go` and builds to a standalone binary at `tools/bin/<name>` (or `tools/bin/<name>.exe` on Windows).
   - Allowed imports: standard library only.
-  - Not allowed: importing from `internal/*` or `cmd/`. Tools are process‑isolated and talk via JSON contracts.
+  - Not allowed: importing from `internal/*` or `cmd/`. Tools are process‑isolated and communicate via JSON contracts over stdin/stdout.
 
 Rationale: The CLI (`cmd/agentcli`) depends on `internal/*`, which depend only on the standard library. The `tools/*` binaries are leaf executables with no reverse imports, ensuring the agent can evolve independently from tool implementations and vice versa.
 
@@ -36,13 +36,13 @@ flowchart TD
     TOOLS[internal/tools]
   end
   subgraph ToolBinaries
-    TEXEC[tools/exec]
-    TREAD[tools/fs_read_file]
-    TWRITE[tools/fs_write_file]
-    TAPPEND[tools/fs_append_file]
-    TMKDIRP[tools/fs_mkdirp]
-    TRM[tools/fs_rm]
-    TMOVE[tools/fs_move]
+    TEXEC[tools/bin/exec]
+    TREAD[tools/bin/fs_read_file]
+    TWRITE[tools/bin/fs_write_file]
+    TAPPEND[tools/bin/fs_append_file]
+    TMKDIRP[tools/bin/fs_mkdirp]
+    TRM[tools/bin/fs_rm]
+    TMOVE[tools/bin/fs_move]
   end
 
   CMD --> OAI
@@ -66,12 +66,12 @@ flowchart TD
   - Keep dependencies to the standard library and other `internal/*` leaf utilities.
   - Do not import from `cmd/` or `tools/`.
   - Provide small, explicit exported APIs with clear documentation and unit tests.
-- New tool binary under `tools/<name>.go`:
-  - Treat it as an independent `main` that reads a single JSON object from stdin and writes a single‑line JSON result (or error) to stdout/stderr.
+- New tool under `tools/cmd/<name>/<name>.go`:
+  - Independent `main` that reads a single JSON object from stdin and writes a single‑line JSON result (or error) to stdout/stderr.
   - No imports from `internal/*` or `cmd/`. Use only the standard library.
-  - Add focused unit tests (in `tools/<name>_test.go`) that build and run the tool as a subprocess.
+  - Add focused unit tests in `tools/cmd/<name>/<name>_test.go` that build and run the tool as a subprocess.
 - Build rules:
-  - Ensure `make build-tools` (or `go build -o tools/<name> ./tools/<name>.go`) produces a reproducible static binary.
+  - Ensure `make build-tools` (or `go build -o tools/bin/<name> ./tools/cmd/<name>`) produces a reproducible static binary (with `.exe` suffix on Windows).
 - Contracts:
   - Keep JSON schemas documented in `tools.json` and `README` examples. Validate inputs strictly and fail fast on contract violations.
 
