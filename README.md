@@ -44,8 +44,8 @@ make tidy build build-tools
 ```
 
 Optional environment (flags take precedence):
-- `OAI_BASE_URL` default `https://api.openai.com/v1`
-- `OAI_MODEL` default `oss-gpt-20b`
+- `OAI_BASE_URL` default `https://api.openai.com/v1` (scripts fall back from `LLM_BASE_URL` if unset)
+- `OAI_MODEL` default `oss-gpt-20b` (scripts fall back from `LLM_MODEL` if unset)
 - `OAI_API_KEY` only if your endpoint requires it (canonical; script and CLI also accept `OPENAI_API_KEY` as a fallback for compatibility)
 
 ### Quick start
@@ -95,9 +95,9 @@ Common flags:
 -prompt string         User prompt (required)
 -tools string          Path to tools.json (optional)
 -system string         System prompt (default: helpful and precise)
--base-url string       OpenAI‑compatible base URL (env OAI_BASE_URL)
+-base-url string       OpenAI‑compatible base URL (env OAI_BASE_URL; scripts accept LLM_BASE_URL fallback)
 -api-key string        API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)
--model string          Model ID (env OAI_MODEL)
+-model string          Model ID (env OAI_MODEL; scripts accept LLM_MODEL fallback)
 -max-steps int         Maximum reasoning/tool steps (default 8)
 -timeout duration      HTTP and per‑tool timeout (default 30s)
 -temp float            Sampling temperature (default 0.2)
