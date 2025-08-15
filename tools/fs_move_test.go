@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+    "strings"
 	"testing"
 )
 
@@ -153,4 +154,31 @@ func TestFsMove_DestinationExists_OverwriteTrue(t *testing.T) {
 	if string(got) != "new" {
 		t.Fatalf("expected destination content 'new', got %q", string(got))
 	}
+}
+
+// TestFsMove_ErrorJSONContract verifies standardized error contract: on failure,
+// the tool writes a single-line JSON object with an "error" key to stderr and
+// exits non-zero. This aligns with L91 standardization.
+func TestFsMove_ErrorJSONContract(t *testing.T) {
+    bin := buildFsMoveTool(t)
+    // Missing required fields triggers an error
+    var stdout, stderr bytes.Buffer
+    cmd := exec.Command(bin)
+    cmd.Dir = "."
+    cmd.Stdin = bytes.NewReader([]byte(`{}`))
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    err := cmd.Run()
+    if err == nil {
+        t.Fatalf("expected non-zero exit for invalid input; stderr=%q", stderr.String())
+    }
+    // Stderr must be a single-line JSON containing an "error" field
+    line := strings.TrimSpace(stderr.String())
+    var obj map[string]any
+    if jerr := json.Unmarshal([]byte(line), &obj); jerr != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, jerr)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
 }

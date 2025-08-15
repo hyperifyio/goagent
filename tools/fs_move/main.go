@@ -22,7 +22,7 @@ type moveOutput struct {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, strings.TrimSpace(err.Error()))
+        writeStdErrJSON(err)
 		os.Exit(1)
 	}
 }
@@ -112,4 +112,12 @@ func writeJSON(v any) error {
 	b, _ := json.Marshal(v)
 	fmt.Println(string(b))
 	return nil
+}
+
+// writeStdErrJSON writes {"error":"..."} as a single line to stderr.
+func writeStdErrJSON(err error) {
+    msg := strings.TrimSpace(err.Error())
+    payload := map[string]string{"error": msg}
+    b, _ := json.Marshal(payload)
+    fmt.Fprintln(os.Stderr, string(b))
 }
