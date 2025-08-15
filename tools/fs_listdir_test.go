@@ -3,13 +3,13 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
 )
 
 type fsListdirEntry struct {
@@ -25,7 +25,7 @@ type fsListdirOutput struct {
 	Truncated bool             `json:"truncated"`
 }
 
-// buildFsListdir builds ./tools/fs_listdir.go into a temporary binary.
+// buildFsListdir builds ./tools/fs_listdir into a temporary binary.
 func buildFsListdir(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
@@ -150,5 +150,27 @@ func TestFsListdir_FilesDirsOrder_HiddenFiltering(t *testing.T) {
     }
     if out.Entries[1].Type != "file" || !strings.HasSuffix(out.Entries[1].Path, "/a.txt") {
         t.Fatalf("expected second entry to be file a.txt, got: %+v", out.Entries[1])
+    }
+}
+
+func TestFsListdir_ErrorJSON_PathRequired(t *testing.T) {
+    bin := buildFsListdir(t)
+    // Provide empty JSON to trigger validation error: path is required
+    cmd := exec.Command(bin)
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    cmd.Stdin = bytes.NewBufferString("{}")
+    err := cmd.Run()
+    if err == nil {
+        t.Fatalf("expected non-zero exit for missing path; stderr=%q", stderr.String())
+    }
+    // Stderr must be single-line JSON: {"error":"..."}
+    var payload map[string]any
+    if jerr := json.Unmarshal(bytes.TrimSpace(stderr.Bytes()), &payload); jerr != nil {
+        t.Fatalf("stderr is not valid JSON: %v; got %q", jerr, stderr.String())
+    }
+    if _, ok := payload["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' field: %v", payload)
     }
 }

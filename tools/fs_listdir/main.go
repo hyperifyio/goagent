@@ -1,15 +1,15 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
+    "encoding/json"
+    "fmt"
+    "io"
+    "os"
     "path"
-	"path/filepath"
-	"sort"
-	"strings"
-	"time"
+    "path/filepath"
+    "sort"
+    "strings"
+    "time"
 )
 
 type listdirInput struct {
@@ -35,7 +35,8 @@ type listdirOutput struct {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, strings.TrimSpace(err.Error()))
+        // Standardized error contract: single-line JSON to stderr
+        writeStdErrJSON(err)
 		os.Exit(1)
 	}
 }
@@ -210,4 +211,12 @@ func sizeFor(fi os.FileInfo) int64 {
 		return 0
 	}
 	return fi.Size()
+}
+
+// writeStdErrJSON writes {"error":"..."} as a single line to stderr.
+func writeStdErrJSON(err error) {
+    msg := strings.TrimSpace(err.Error())
+    payload := map[string]string{"error": msg}
+    b, _ := json.Marshal(payload)
+    fmt.Fprintln(os.Stderr, string(b))
 }

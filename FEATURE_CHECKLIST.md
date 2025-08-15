@@ -89,6 +89,7 @@
 * [x] Integrate tools into agent loop — ensure `agentcli` advertises schemas and executes tool calls end-to-end; DoD: integration test with fake API that triggers `fs_write_file` → `fs_read_file` → final message, README cross-referenced, CI green.
 * [ ] Unify tool hierarchy so each tool’s binary is in ./tools/bin/NAME, source in ./tools/cmd/NAME/NAME.go, and tests in ./tools/cmd/NAME/NAME_test.go, updating Makefile, tools.json, documentation, tests, and all other affected places to use a consistent unique naming format.
 * [ ] Standardize JSON error contract for all tools — on failure, write single-line stderr `{"error":"<escaped>","hint?":"<opt>"}` and exit non-zero; runner maps to tool message; DoD: negative-path tests per tool, docs snippet, CI green.
+  - [x] [S03:l91-fs_listdir-error-json] add failing test for fs_listdir and implement standardized stderr JSON {"error":"..."}
   - [x] [S01:l90-fs_mkdirp-error-json] add failing test for fs_mkdirp and implement JSON stderr error contract
   - [x] [S02:l90-fs_read_file-error-json] add failing test for fs_read_file and implement JSON stderr error contract (preserve NOT_FOUND marker)
 * [x] Add execution audit log in runner — append ndjson `{ts,tool,argv,cwd,exit,ms,stdoutBytes,stderrBytes,truncated}` to `.goagent/audit/YYYYMMDD.log`; DoD: unit test writes/rotates, redaction respected (see next), docs, CI green.
