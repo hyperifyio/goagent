@@ -92,7 +92,7 @@
   - [x] [S02:l90-fs_read_file-error-json] add failing test for fs_read_file and implement JSON stderr error contract (preserve NOT_FOUND marker)
 * [ ] Add execution audit log in runner — append ndjson `{ts,tool,argv,cwd,exit,ms,stdoutBytes,stderrBytes,truncated}` to `.goagent/audit/YYYYMMDD.log`; DoD: unit test writes/rotates, redaction respected (see next), docs, CI green.
   - [x] [S01:audit-write-line] append NDJSON audit to `.goagent/audit/YYYYMMDD.log` and add unit test verifying a line is written with expected fields; CI green.
-  - [ ] [S02:audit-rotation] verify daily rotation behavior across date boundary with unit test; CI green.
+  - [x] [S02:audit-rotation] verify daily rotation behavior across date boundary with unit test; CI green.
   - [ ] [S03:audit-redaction] implement sensitive-value redaction and document fields; tests and docs; CI green.
 * [x] Provide “capabilities” CLI (`agentcli -capabilities`) — prints enabled tools from `tools.json` and explicit warning that enabled tools allow arbitrary command execution and network access; DoD: unit test, README usage, CI green.
 * [x] Add ADR-0002 “Unrestricted toolbelt (files+network)” — context, options, decision, consequences, JSON contracts, link to issue; DoD: ADR committed, referenced from README, peer-reviewed, CI doc checks green.

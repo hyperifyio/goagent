@@ -15,6 +15,10 @@ import (
 // RunToolWithJSON executes the tool command with args JSON provided on stdin.
 // Returns stdout bytes and an error if the command fails. The caller is responsible
 // for mapping errors to deterministic JSON per product rules.
+// timeNow is a package-level clock to enable deterministic tests.
+// In production it defaults to time.Now.
+var timeNow = time.Now
+
 func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte, defaultTimeout time.Duration) ([]byte, error) {
     start := time.Now()
 	// Derive timeout: spec.TimeoutSec overrides when >0
@@ -95,7 +99,7 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
     }
     cwd, _ := os.Getwd()
     entry := auditEntry{
-        TS:          time.Now().UTC().Format(time.RFC3339Nano),
+        TS:          timeNow().UTC().Format(time.RFC3339Nano),
         Tool:        spec.Name,
         Argv:        append([]string(nil), spec.Command...),
         CWD:         cwd,
@@ -133,7 +137,7 @@ func appendAuditLog(entry any) error {
     if err := os.MkdirAll(dir, 0o755); err != nil {
         return err
     }
-    fname := time.Now().UTC().Format("20060102") + ".log"
+    fname := timeNow().UTC().Format("20060102") + ".log"
     path := filepath.Join(dir, fname)
     f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
     if err != nil {
