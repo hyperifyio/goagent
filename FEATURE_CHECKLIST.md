@@ -70,7 +70,7 @@
 * [x] Implement `tools/fs_apply_patch.go` (unified diff) — stdin `{"unifiedDiff":"string","dryRun?:bool}`; strict apply (no fuzz), pre-validate with dry-run; outputs `{"filesChanged":int}`; DoD: tests (clean apply, conflict, idempotence, CRLF), docs example + cautions, CI green.
   - [x] [S01:fs-apply-patch-stub] add stub tool validating input and exiting with NOT_IMPLEMENTED; build and tests remain green; groundwork for strict apply
   - [x] [S02:fs-apply-clean-new-file] implement strict new-file unified diff apply and tests (clean apply creating a new file); umbrella remains open for conflict/idempotence/CRLF and docs
-* [ ] Implement tools/fs_edit_range.go — stdin {"path":"string","startByte":int,"endByte":int,"replacementBase64":"string","expectedSha256?":"string"}; atomically rewrite by splicing the range; output {"bytesReplaced":int,"newSha256":"string"}; DoD: TDD for mid-file edits, boundary cases (start=0, end=size), binary content, concurrent calls serialized, docs + CI green.
+* [x] Implement tools/fs_edit_range.go — stdin {"path":"string","startByte":int,"endByte":int,"replacementBase64":"string","expectedSha256?":"string"}; atomically rewrite by splicing the range; output {"bytesReplaced":int,"newSha256":"string"}; DoD: TDD for mid-file edits, boundary cases (start=0, end=size), binary content, concurrent calls serialized, docs + CI green.
   - [x] [S01:fs-edit-mid] add failing mid-file splicing test ensuring bytes [start:end) replaced and SHA reported
   - [x] [S02:fs-edit-mid-impl] minimal implementation to pass mid-file splicing and boundary cases; tests green
   - [x] [S03:fs-edit-lock] serialize concurrent edits with advisory file lock and add concurrency test; tests green

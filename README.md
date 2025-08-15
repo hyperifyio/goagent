@@ -21,6 +21,7 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
   - [fs_rm tool example](#fs_rm-tool-example)
   - [fs_move tool example](#fs_move-tool-example)
   - [fs_apply_patch tool example](#fs_apply_patch-tool-example)
+  - [fs_edit_range tool example](#fs_edit_range-tool-example)
 - [Features](#features)
 - [Security model](#security-model)
 - [Troubleshooting](#troubleshooting)
@@ -222,6 +223,28 @@ world
 # - Only new-file diffs are supported in this slice (--- /dev/null to +++ b/<path>)
 # - No fuzzy matching; line endings in the diff are normalized to LF
 # - Will fail if the target exists with different content
+```
+
+### fs_edit_range tool example
+Atomically splice a byte range in a repo‑relative file and return the new SHA‑256.
+
+```bash
+make build-tools
+
+# Seed a demo file
+printf 'abcdef' > tmp_edit_demo.txt
+
+# Replace bytes [2:4) ("cd") with "XY"
+echo -n 'XY' | base64 > b64.txt
+jq -n --arg b "$(cat b64.txt)" '{path:"tmp_edit_demo.txt",startByte:2,endByte:4,replacementBase64:$b}' \
+  | ./tools/fs_edit_range | jq .
+
+# Verify
+cat tmp_edit_demo.txt
+# => abXYef
+
+# Cleanup
+rm -f tmp_edit_demo.txt b64.txt
 ```
 
 ### Features
