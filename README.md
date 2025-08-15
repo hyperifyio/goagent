@@ -102,6 +102,7 @@ Common flags:
 -timeout duration      HTTP and per‑tool timeout (default 30s)
 -temp float            Sampling temperature (default 0.2)
 -debug                 Dump request/response JSON to stderr
+-capabilities          Print enabled tools and exit
 ```
 You can also run `./bin/agentcli -h` to see the built‑in help.
 
