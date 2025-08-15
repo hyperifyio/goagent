@@ -39,19 +39,37 @@ func getEnv(key, def string) string {
 	return v
 }
 
+// resolveAPIKeyFromEnv returns the API key using canonical and legacy env vars.
+// Precedence: OAI_API_KEY > OPENAI_API_KEY > "".
+func resolveAPIKeyFromEnv() string {
+    if v := os.Getenv("OAI_API_KEY"); strings.TrimSpace(v) != "" {
+        return v
+    }
+    if v := os.Getenv("OPENAI_API_KEY"); strings.TrimSpace(v) != "" {
+        return v
+    }
+    return ""
+}
+
 func parseFlags() (cliConfig, int) {
-	var cfg cliConfig
+    var cfg cliConfig
+
+    // Reset default FlagSet to allow re-entrant parsing in tests.
+    flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+    // Silence automatic usage/errors; we handle messaging ourselves.
+    flag.CommandLine.SetOutput(io.Discard)
 
 	defaultSystem := "You are a helpful, precise assistant. Use tools when strictly helpful."
-	defaultBase := getEnv("OAI_BASE_URL", "https://api.openai.com/v1")
-	defaultModel := getEnv("OAI_MODEL", "oss-gpt-20b")
-	defaultKey := getEnv("OAI_API_KEY", "")
+    defaultBase := getEnv("OAI_BASE_URL", "https://api.openai.com/v1")
+    defaultModel := getEnv("OAI_MODEL", "oss-gpt-20b")
+    // API key resolves from env with fallback for compatibility
+    defaultKey := resolveAPIKeyFromEnv()
 
 	flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
-	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key (if required by the endpoint)")
+    flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
 	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
 	flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
 	flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "HTTP and per-tool timeout")

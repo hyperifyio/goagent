@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+    "io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,51 @@ import (
 
 	"github.com/hyperifyio/goagent/internal/oai"
 )
+
+// https://github.com/hyperifyio/goagent/issues/97
+func TestParseFlags_ApiKeyEnvPrecedence(t *testing.T) {
+    // Save and restore env
+    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+    restore := func(k, v string, ok bool) {
+        if ok { _ = os.Setenv(k, v) } else { _ = os.Unsetenv(k) }
+    }
+    oaiVal, oaiOK := save("OAI_API_KEY")
+    openaiVal, openaiOK := save("OPENAI_API_KEY")
+    defer func() { restore("OAI_API_KEY", oaiVal, oaiOK); restore("OPENAI_API_KEY", openaiVal, openaiOK) }()
+
+    // Case 1: only OPENAI_API_KEY set -> used
+    _ = os.Unsetenv("OAI_API_KEY")
+    _ = os.Setenv("OPENAI_API_KEY", "legacy-token")
+    // parseFlags reads os.Args; simulate minimal args
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+    os.Args = []string{"agentcli.test", "-prompt", "x"}
+    cfg, code := parseFlags()
+    if code != 0 { t.Fatalf("unexpected parse exit: %d", code) }
+    if cfg.apiKey != "legacy-token" {
+        t.Fatalf("expected apiKey from OPENAI_API_KEY, got %q", cfg.apiKey)
+    }
+
+    // Case 2: both set -> OAI_API_KEY wins
+    _ = os.Setenv("OAI_API_KEY", "canonical-token")
+    os.Args = []string{"agentcli.test", "-prompt", "x"}
+    cfg, code = parseFlags()
+    if code != 0 { t.Fatalf("unexpected parse exit: %d", code) }
+    if cfg.apiKey != "canonical-token" {
+        t.Fatalf("expected apiKey from OAI_API_KEY, got %q", cfg.apiKey)
+    }
+
+    // Case 3: flag overrides env
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-api-key", "from-flag"}
+    cfg, code = parseFlags()
+    if code != 0 { t.Fatalf("unexpected parse exit: %d", code) }
+    if cfg.apiKey != "from-flag" {
+        t.Fatalf("expected apiKey from flag, got %q", cfg.apiKey)
+    }
+
+    // Silence any stdout/stderr during runAgent for safety (not strictly needed here)
+    _ = io.Discard
+}
 
 // https://github.com/hyperifyio/goagent/issues/1
 func TestRunAgent_ToolConversationLoop(t *testing.T) {
