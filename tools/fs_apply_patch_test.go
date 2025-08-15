@@ -186,3 +186,35 @@ func TestFsApplyPatch_Conflict_TargetExistsWithDifferentContent(t *testing.T) {
         t.Fatalf("expected error mentioning target exists, got %q", stderr)
     }
 }
+
+func TestFsApplyPatch_CRLF_NewFile_NormalizedLF(t *testing.T) {
+    bin := buildFsApplyPatch(t)
+    work := t.TempDir()
+
+    // Unified diff with CRLF line endings; tool should accept and write LF-normalized content
+    diff := "" +
+        "--- /dev/null\r\n" +
+        "+++ b/tmp_new_file.txt\r\n" +
+        "@@ -0,0 +1,2 @@\r\n" +
+        "+hello\r\n" +
+        "+world\r\n"
+
+    out, stderr, code := runFsApplyPatchInDir(t, bin, work, map[string]any{
+        "unifiedDiff": diff,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    if out.FilesChanged != 1 {
+        t.Fatalf("filesChanged mismatch, got %d want 1", out.FilesChanged)
+    }
+    data, err := os.ReadFile(filepath.Join(work, "tmp_new_file.txt"))
+    if err != nil {
+        t.Fatalf("expected file to exist: %v", err)
+    }
+    got := string(data)
+    want := "hello\nworld\n"
+    if got != want {
+        t.Fatalf("content mismatch, got %q want %q", got, want)
+    }
+}
