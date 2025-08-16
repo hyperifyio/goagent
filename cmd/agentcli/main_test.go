@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -182,8 +181,7 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 			if errBuf.Len() != 0 {
 				t.Fatalf("unexpected stderr: %s", errBuf.String())
 			}
-			// Sanity: demonstrate zero exit would be used
-			_ = fmt.Sprintf("")
+			// Sanity: do nothing; zero exit is implied
 		})
 	}
 }
