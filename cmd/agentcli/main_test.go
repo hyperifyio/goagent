@@ -186,6 +186,51 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/246
+func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
+    // Save/restore env for OAI_HTTP_TIMEOUT
+    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+    if ok {
+        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
+    } else {
+        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
+    }
+    if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
+        t.Fatalf("set env: %v", err)
+    }
+
+    // Prepare args: no -prompt required when -print-config is set
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://example"}
+
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+
+    var outBuf bytes.Buffer
+    exit := printResolvedConfig(cfg, &outBuf)
+    if exit != 0 {
+        t.Fatalf("expected exit 0")
+    }
+    // Validate JSON contains fields and sources
+    got := outBuf.String()
+    for _, substr := range []string{
+        "\"model\": \"m\"",
+        "\"baseURL\": \"http://example\"",
+        "\"httpTimeout\": \"100ms\"",
+        "\"httpTimeoutSource\": \"env\"",
+        "\"toolTimeout\": ",
+        "\"timeout\": ",
+        "\"timeoutSource\": ",
+    } {
+        if !strings.Contains(got, substr) {
+            t.Fatalf("print-config missing %q; got:\n%s", substr, got)
+        }
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/1
 func TestRunAgent_ToolConversationLoop(t *testing.T) {
 	// Fake tool: echo stdin to stdout
