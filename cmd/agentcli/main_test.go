@@ -393,6 +393,89 @@ func TestRunAgent_HTTPTimeout_RaiseResolves(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/245
+func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
+    // Fast server returning a minimal valid response
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode resp: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    // Use flags so sources are "flag"
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    cfg.debug = true
+
+    var outBuf, errBuf bytes.Buffer
+    code = runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
+    }
+    got := errBuf.String()
+    if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
+        t.Fatalf("missing effective timeouts line; got:\n%s", got)
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/245
+func TestHTTPTimeoutError_IncludesSourceAndValue(t *testing.T) {
+    // Slow server to trigger client timeout
+    slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        time.Sleep(200 * time.Millisecond)
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        _ = json.NewEncoder(w).Encode(resp)
+    }))
+    defer slow.Close()
+
+    // Set http-timeout via env so source is "env"
+    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+    if ok {
+        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
+    } else {
+        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
+    }
+    if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
+        t.Fatalf("set env: %v", err)
+    }
+
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", slow.URL, "-model", "m"}
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code = runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    got := errBuf.String()
+    if !strings.Contains(got, "http-timeout=100ms") {
+        t.Fatalf("expected error to include http-timeout value; got: %q", got)
+    }
+    if !strings.Contains(got, "(http-timeout source=env)") {
+        t.Fatalf("expected error to include timeout source env; got: %q", got)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/243
 // Ensure chat POST uses -http-timeout exclusively even if legacy -timeout is shorter
 func TestRunAgent_HTTPTimeout_IgnoresShortGlobal(t *testing.T) {
