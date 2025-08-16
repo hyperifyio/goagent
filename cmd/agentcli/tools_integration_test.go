@@ -1,24 +1,24 @@
 package main
 
 import (
-    "bytes"
-    "encoding/base64"
-    "encoding/json"
-    "io"
-    "net/http"
-    "net/http/httptest"
-    "os"
-    "path/filepath"
-    "testing"
-    "time"
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
 
-    "github.com/hyperifyio/goagent/internal/oai"
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	"github.com/hyperifyio/goagent/internal/oai"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // https://github.com/hyperifyio/goagent/issues/89
 func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
-    // Build required tool binaries into a temp dir under canonical layout tools/bin
+	// Build required tool binaries into a temp dir under canonical layout tools/bin
 	tmp := t.TempDir()
 	binDir := filepath.Join(tmp, "tools", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -26,27 +26,27 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 	}
 	fsWriteBin := filepath.Join(binDir, "fs_write_file")
 	fsReadBin := filepath.Join(binDir, "fs_read_file")
-    // Use the canonical test helper to build tool binaries
-    srcWrite := testutil.BuildTool(t, "fs_write_file")
-    srcRead := testutil.BuildTool(t, "fs_read_file")
-    // Copy built binaries into the expected temp location with canonical names
-    copyTo := func(src, dst string) {
-        in, err := os.Open(src)
-        if err != nil {
-            t.Fatalf("open %s: %v", src, err)
-        }
-        defer in.Close()
-        out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-        if err != nil {
-            t.Fatalf("create %s: %v", dst, err)
-        }
-        defer out.Close()
-        if _, err := io.Copy(out, in); err != nil {
-            t.Fatalf("copy %s -> %s: %v", src, dst, err)
-        }
-    }
-    copyTo(srcWrite, fsWriteBin)
-    copyTo(srcRead, fsReadBin)
+	// Use the canonical test helper to build tool binaries
+	srcWrite := testutil.BuildTool(t, "fs_write_file")
+	srcRead := testutil.BuildTool(t, "fs_read_file")
+	// Copy built binaries into the expected temp location with canonical names
+	copyTo := func(src, dst string) {
+		in, err := os.Open(src)
+		if err != nil {
+			t.Fatalf("open %s: %v", src, err)
+		}
+		defer in.Close()
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+		if err != nil {
+			t.Fatalf("create %s: %v", dst, err)
+		}
+		defer out.Close()
+		if _, err := io.Copy(out, in); err != nil {
+			t.Fatalf("copy %s -> %s: %v", src, dst, err)
+		}
+	}
+	copyTo(srcWrite, fsWriteBin)
+	copyTo(srcRead, fsReadBin)
 
 	// Create a tools manifest referencing the built binaries
 	toolsPath := filepath.Join(tmp, "tools.json")

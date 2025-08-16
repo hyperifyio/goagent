@@ -58,7 +58,7 @@ func makeRepoRelTempDir(t *testing.T, prefix string) string {
 }
 
 func TestFsWrite_CreateText(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_write_file")
+	bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-text-")
 	path := filepath.Join(dir, "hello.txt")
 	content := []byte("hello world\n")
@@ -82,7 +82,7 @@ func TestFsWrite_CreateText(t *testing.T) {
 }
 
 func TestFsWrite_Overwrite(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_write_file")
+	bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-over-")
 	path := filepath.Join(dir, "data.bin")
 	// Seed with initial content
@@ -107,7 +107,7 @@ func TestFsWrite_Overwrite(t *testing.T) {
 }
 
 func TestFsWrite_Binary(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_write_file")
+	bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-bin-")
 	path := filepath.Join(dir, "bytes.bin")
 	data := []byte{0x00, 0x10, 0xFF, 0x42, 0x00}
@@ -128,7 +128,7 @@ func TestFsWrite_Binary(t *testing.T) {
 }
 
 func TestFsWrite_MissingParent(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_write_file")
+	bin := testutil.BuildTool(t, "fs_write_file")
 	path := filepath.Join("no_such_parent_dir", "x", "file.txt")
 	_, stderr, code := runFsWrite(t, bin, map[string]any{
 		"path":          path,
@@ -144,16 +144,16 @@ func TestFsWrite_MissingParent(t *testing.T) {
 
 // TestFsWrite_ErrorJSON_PathRequired verifies standardized error contract on missing required fields.
 func TestFsWrite_ErrorJSON_PathRequired(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_write_file")
-    // Omit path to trigger validation error in readInput
-    _, stderr, code := runFsWrite(t, bin, map[string]any{
-        "contentBase64": base64.StdEncoding.EncodeToString([]byte("hello")),
-    })
-    if code == 0 {
-        t.Fatalf("expected non-zero exit code for missing path")
-    }
-    s := strings.TrimSpace(stderr)
-    if s == "" || !strings.Contains(s, "\"error\"") {
-        t.Fatalf("stderr should contain JSON with 'error' field, got: %q", stderr)
-    }
+	bin := testutil.BuildTool(t, "fs_write_file")
+	// Omit path to trigger validation error in readInput
+	_, stderr, code := runFsWrite(t, bin, map[string]any{
+		"contentBase64": base64.StdEncoding.EncodeToString([]byte("hello")),
+	})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code for missing path")
+	}
+	s := strings.TrimSpace(stderr)
+	if s == "" || !strings.Contains(s, "\"error\"") {
+		t.Fatalf("stderr should contain JSON with 'error' field, got: %q", stderr)
+	}
 }

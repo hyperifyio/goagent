@@ -15,7 +15,7 @@ import (
 //
 // Source discovery (absolute paths used to satisfy repository path hygiene
 // rules in linters/tests):
-//  - tools/cmd/<name> (canonical layout only)
+//   - tools/cmd/<name> (canonical layout only)
 func BuildTool(t *testing.T, name string) string {
 	t.Helper()
 
@@ -31,9 +31,9 @@ func BuildTool(t *testing.T, name string) string {
 	}
 	outPath := filepath.Join(t.TempDir(), binName)
 
-    // Candidate source locations (canonical layout only)
-    var candidates []string
-    candidates = append(candidates, filepath.Join(repoRoot, "tools", "cmd", name))
+	// Candidate source locations (canonical layout only)
+	var candidates []string
+	candidates = append(candidates, filepath.Join(repoRoot, "tools", "cmd", name))
 
 	var srcPath string
 	for _, c := range candidates {

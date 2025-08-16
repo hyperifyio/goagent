@@ -32,10 +32,10 @@ type execOutput struct {
 func main() {
 	in, err := readInput(os.Stdin)
 	if err != nil {
-        // Standardized error contract: write single-line JSON to stderr and exit non-zero
-        msg := sanitizeError(err)
-        fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", msg)
-        os.Exit(1)
+		// Standardized error contract: write single-line JSON to stderr and exit non-zero
+		msg := sanitizeError(err)
+		fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", msg)
+		os.Exit(1)
 	}
 
 	stdout, stderr, exitCode, dur := runCommand(in)
