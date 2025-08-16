@@ -209,7 +209,7 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 	srv := newTwoStepServer(t, targetRelPath, contentB64, "test")
 	defer srv.Close()
 
-    cfg := cliConfig{
+	cfg := cliConfig{
 		prompt:       "write and read a file",
 		toolsPath:    toolsPath,
 		systemPrompt: "sys",
@@ -217,9 +217,9 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 		apiKey:       "",
 		model:        "test",
 		maxSteps:     4,
-        timeout:      10 * time.Second,
-        httpTimeout:  10 * time.Second,
-        toolTimeout:  10 * time.Second,
+		timeout:      10 * time.Second,
+		httpTimeout:  10 * time.Second,
+		toolTimeout:  10 * time.Second,
 		temperature:  0,
 		debug:        false,
 	}

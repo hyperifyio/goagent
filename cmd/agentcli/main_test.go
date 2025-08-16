@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-    "fmt"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -85,84 +85,107 @@ func TestParseFlags_ApiKeyEnvPrecedence(t *testing.T) {
 
 // https://github.com/hyperifyio/goagent/issues/243
 func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
-    // Save/restore OAI_HTTP_TIMEOUT
-    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
-    restore := func(k, v string, ok bool) {
-        if ok {
-            if err := os.Setenv(k, v); err != nil { t.Fatalf("restore %s: %v", k, err) }
-        } else {
-            if err := os.Unsetenv(k); err != nil { t.Fatalf("unset %s: %v", k, err) }
-        }
-    }
-    httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
-    defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
+	// Save/restore OAI_HTTP_TIMEOUT
+	save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+	restore := func(k, v string, ok bool) {
+		if ok {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("restore %s: %v", k, err)
+			}
+		} else {
+			if err := os.Unsetenv(k); err != nil {
+				t.Fatalf("unset %s: %v", k, err)
+			}
+		}
+	}
+	httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
+	defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
 
-    // Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s
-    origArgs := os.Args; defer func(){ os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-prompt", "x"}
-    cfg, code := parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second { t.Fatalf("expected httpTimeout=timeout=30s, got http=%v timeout=%v", cfg.httpTimeout, cfg.timeout) }
-    if cfg.toolTimeout != cfg.timeout { t.Fatalf("expected toolTimeout=timeout, got %v vs %v", cfg.toolTimeout, cfg.timeout) }
+	// Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-prompt", "x"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second {
+		t.Fatalf("expected httpTimeout=timeout=30s, got http=%v timeout=%v", cfg.httpTimeout, cfg.timeout)
+	}
+	if cfg.toolTimeout != cfg.timeout {
+		t.Fatalf("expected toolTimeout=timeout, got %v vs %v", cfg.toolTimeout, cfg.timeout)
+	}
 
-    // Case 2: env OAI_HTTP_TIMEOUT overrides legacy
-    if err := os.Setenv("OAI_HTTP_TIMEOUT", "2m"); err != nil { t.Fatalf("set env: %v", err) }
-    os.Args = []string{"agentcli.test", "-prompt", "x"}
-    cfg, code = parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.httpTimeout != 2*time.Minute { t.Fatalf("expected httpTimeout=2m from env, got %v", cfg.httpTimeout) }
-    if cfg.toolTimeout != 30*time.Second { t.Fatalf("expected toolTimeout=30s default, got %v", cfg.toolTimeout) }
+	// Case 2: env OAI_HTTP_TIMEOUT overrides legacy
+	if err := os.Setenv("OAI_HTTP_TIMEOUT", "2m"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	os.Args = []string{"agentcli.test", "-prompt", "x"}
+	cfg, code = parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.httpTimeout != 2*time.Minute {
+		t.Fatalf("expected httpTimeout=2m from env, got %v", cfg.httpTimeout)
+	}
+	if cfg.toolTimeout != 30*time.Second {
+		t.Fatalf("expected toolTimeout=30s default, got %v", cfg.toolTimeout)
+	}
 
-    // Case 3: flags override env and legacy
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "1s"}
-    cfg, code = parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.httpTimeout != 5*time.Second || cfg.toolTimeout != 7*time.Second { t.Fatalf("expected http=5s tool=7s, got http=%v tool=%v", cfg.httpTimeout, cfg.toolTimeout) }
+	// Case 3: flags override env and legacy
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "1s"}
+	cfg, code = parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.httpTimeout != 5*time.Second || cfg.toolTimeout != 7*time.Second {
+		t.Fatalf("expected http=5s tool=7s, got http=%v tool=%v", cfg.httpTimeout, cfg.toolTimeout)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/214
 func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
-    // Capture stdout
-    var outBuf, errBuf bytes.Buffer
-    // Simulate help via various tokens
-    for _, token := range []string{"--help", "-h", "help"} {
-        t.Run(token, func(t *testing.T) {
-            // Prepare args
-            origArgs := os.Args
-            defer func() { os.Args = origArgs }()
-            os.Args = []string{"agentcli.test", token}
+	// Capture stdout
+	var outBuf, errBuf bytes.Buffer
+	// Simulate help via various tokens
+	for _, token := range []string{"--help", "-h", "help"} {
+		t.Run(token, func(t *testing.T) {
+			// Prepare args
+			origArgs := os.Args
+			defer func() { os.Args = origArgs }()
+			os.Args = []string{"agentcli.test", token}
 
-            // Replace os.Stdout/Stderr via writers by invoking printUsage directly
-            outBuf.Reset()
-            errBuf.Reset()
-            // Call main path segments: emulate early help detection
-            if !helpRequested(os.Args[1:]) {
-                t.Fatalf("expected helpRequested for %s", token)
-            }
-            printUsage(&outBuf)
-            // Validate output contains key lines
-            got := outBuf.String()
-            for _, substr := range []string{
-                "Usage:",
-                "-prompt",
-                "-tools",
-                "-base-url",
-                "-api-key",
-                "-http-timeout",
-                "Examples:",
-            } {
-                if !strings.Contains(got, substr) {
-                    t.Fatalf("usage missing %q; got:\n%s", substr, got)
-                }
-            }
-            // Also ensure no error text is printed by default path here
-            if errBuf.Len() != 0 {
-                t.Fatalf("unexpected stderr: %s", errBuf.String())
-            }
-            // Sanity: demonstrate zero exit would be used
-            _ = fmt.Sprintf("")
-        })
-    }
+			// Replace os.Stdout/Stderr via writers by invoking printUsage directly
+			outBuf.Reset()
+			errBuf.Reset()
+			// Call main path segments: emulate early help detection
+			if !helpRequested(os.Args[1:]) {
+				t.Fatalf("expected helpRequested for %s", token)
+			}
+			printUsage(&outBuf)
+			// Validate output contains key lines
+			got := outBuf.String()
+			for _, substr := range []string{
+				"Usage:",
+				"-prompt",
+				"-tools",
+				"-base-url",
+				"-api-key",
+				"-http-timeout",
+				"Examples:",
+			} {
+				if !strings.Contains(got, substr) {
+					t.Fatalf("usage missing %q; got:\n%s", substr, got)
+				}
+			}
+			// Also ensure no error text is printed by default path here
+			if errBuf.Len() != 0 {
+				t.Fatalf("unexpected stderr: %s", errBuf.String())
+			}
+			// Sanity: demonstrate zero exit would be used
+			_ = fmt.Sprintf("")
+		})
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/1

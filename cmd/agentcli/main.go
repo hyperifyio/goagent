@@ -25,11 +25,11 @@ type cliConfig struct {
 	apiKey       string
 	model        string
 	maxSteps     int
-    timeout      time.Duration // deprecated global timeout; kept for backward compatibility
-    httpTimeout  time.Duration // resolved HTTP timeout (final value after env/flags/global)
-    toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
-    httpRetries  int           // number of retries for HTTP
-    httpBackoff  time.Duration // base backoff between retries
+	timeout      time.Duration // deprecated global timeout; kept for backward compatibility
+	httpTimeout  time.Duration // resolved HTTP timeout (final value after env/flags/global)
+	toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
+	httpRetries  int           // number of retries for HTTP
+	httpBackoff  time.Duration // base backoff between retries
 	temperature  float64
 	debug        bool
 	capabilities bool
@@ -69,50 +69,50 @@ func parseFlags() (cliConfig, int) {
 	// API key resolves from env with fallback for compatibility
 	defaultKey := resolveAPIKeyFromEnv()
 
-    flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
-    flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
-    flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
-    flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
-    flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
-    flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
-    flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
-    // Deprecated global timeout retained as a fallback if the split timeouts are not provided
-    flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
-    // New split timeouts
-    flag.DurationVar(&cfg.httpTimeout, "http-timeout", 0, "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
-    flag.DurationVar(&cfg.toolTimeout, "tool-timeout", 0, "Per-tool timeout (falls back to -timeout if unset)")
-    flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
-    flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
-    flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
-    flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
-    flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
+	flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
+	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
+	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
+	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
+	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
+	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
+	flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
+	// Deprecated global timeout retained as a fallback if the split timeouts are not provided
+	flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
+	// New split timeouts
+	flag.DurationVar(&cfg.httpTimeout, "http-timeout", 0, "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+	flag.DurationVar(&cfg.toolTimeout, "tool-timeout", 0, "Per-tool timeout (falls back to -timeout if unset)")
+	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
+	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
+	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
+	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.Parse()
 
-    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
-    // HTTP timeout: env OAI_HTTP_TIMEOUT supported
-    if cfg.httpTimeout <= 0 {
-        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_TIMEOUT")); v != "" {
-            if d, err := time.ParseDuration(v); err == nil && d > 0 {
-                cfg.httpTimeout = d
-            }
-        }
-    }
-    if cfg.httpTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.httpTimeout = cfg.timeout
-        } else {
-            cfg.httpTimeout = 90 * time.Second // sane default between 60–120s
-        }
-    }
+	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
+	if cfg.httpTimeout <= 0 {
+		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_TIMEOUT")); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				cfg.httpTimeout = d
+			}
+		}
+	}
+	if cfg.httpTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.httpTimeout = cfg.timeout
+		} else {
+			cfg.httpTimeout = 90 * time.Second // sane default between 60–120s
+		}
+	}
 
-    // Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
-    if cfg.toolTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.toolTimeout = cfg.timeout
-        } else {
-            cfg.toolTimeout = 30 * time.Second
-        }
-    }
+	// Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
+	if cfg.toolTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.toolTimeout = cfg.timeout
+		} else {
+			cfg.toolTimeout = 30 * time.Second
+		}
+	}
 
 	if !cfg.capabilities && strings.TrimSpace(cfg.prompt) == "" {
 		return cfg, 2 // CLI misuse
@@ -121,11 +121,11 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
-    // Handle help flags prior to any parsing/validation or side effects
-    if helpRequested(os.Args[1:]) {
-        printUsage(os.Stdout)
-        os.Exit(0)
-    }
+	// Handle help flags prior to any parsing/validation or side effects
+	if helpRequested(os.Args[1:]) {
+		printUsage(os.Stdout)
+		os.Exit(0)
+	}
 	cfg, exitOn := parseFlags()
 	if exitOn != 0 {
 		safeFprintln(os.Stderr, "error: -prompt is required")
@@ -141,21 +141,21 @@ func main() {
 
 // runAgent executes the non-interactive agent loop and returns a process exit code.
 func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
-    // Normalize timeouts for backward compatibility when cfg constructed directly in tests
-    if cfg.httpTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.httpTimeout = cfg.timeout
-        } else {
-            cfg.httpTimeout = 90 * time.Second
-        }
-    }
-    if cfg.toolTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.toolTimeout = cfg.timeout
-        } else {
-            cfg.toolTimeout = 30 * time.Second
-        }
-    }
+	// Normalize timeouts for backward compatibility when cfg constructed directly in tests
+	if cfg.httpTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.httpTimeout = cfg.timeout
+		} else {
+			cfg.httpTimeout = 90 * time.Second
+		}
+	}
+	if cfg.toolTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.toolTimeout = cfg.timeout
+		} else {
+			cfg.toolTimeout = 30 * time.Second
+		}
+	}
 	// Load tools manifest if provided
 	var (
 		toolRegistry map[string]tools.ToolSpec
@@ -181,8 +181,8 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
 
-    // Configure HTTP client with retry policy
-    httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
+	// Configure HTTP client with retry policy
+	httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
 
 	messages := []oai.Message{
 		{Role: oai.RoleSystem, Content: cfg.systemPrompt},
@@ -204,7 +204,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
 
 		// Per-call context
-        callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
+		callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
 		resp, err := httpClient.CreateChatCompletion(callCtx, req)
 		cancel()
 		if err != nil {
@@ -266,7 +266,7 @@ func appendToolCallOutputs(messages []oai.Message, assistantMsg oai.Message, too
 		if argsJSON == "" {
 			argsJSON = "{}"
 		}
-        out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.toolTimeout)
+		out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.toolTimeout)
 		content := sanitizeToolContent(out, runErr)
 		messages = append(messages, oai.Message{
 			Role:       oai.RoleTool,
@@ -330,41 +330,41 @@ func oneLine(s string) string {
 
 // helpRequested returns true if any canonical help token is present.
 func helpRequested(args []string) bool {
-    for _, a := range args {
-        if a == "--help" || a == "-h" || a == "help" {
-            return true
-        }
-    }
-    return false
+	for _, a := range args {
+		if a == "--help" || a == "-h" || a == "help" {
+			return true
+		}
+	}
+	return false
 }
 
 // printUsage writes a comprehensive usage guide to w.
 func printUsage(w io.Writer) {
-    var b strings.Builder
-    b.WriteString("agentcli — non-interactive CLI agent for OpenAI-compatible APIs\n\n")
-    b.WriteString("Usage:\n  agentcli [flags]\n\n")
-    b.WriteString("Flags (precedence: flag > env > default):\n")
-    b.WriteString("  -prompt string\n    User prompt (required)\n")
-    b.WriteString("  -tools string\n    Path to tools.json (optional)\n")
-    b.WriteString("  -system string\n    System prompt (default \"You are a helpful, precise assistant. Use tools when strictly helpful.\")\n")
-    b.WriteString("  -base-url string\n    OpenAI-compatible base URL (env OAI_BASE_URL or default https://api.openai.com/v1)\n")
-    b.WriteString("  -api-key string\n    API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)\n")
-    b.WriteString("  -model string\n    Model ID (env OAI_MODEL or default oss-gpt-20b)\n")
-    b.WriteString("  -max-steps int\n    Maximum reasoning/tool steps (default 8)\n")
-    b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
-    b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
-    b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
-    b.WriteString("  -temp float\n    Sampling temperature (default 0.2)\n")
-    b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
-    b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
-    b.WriteString("\nExamples:\n")
-    b.WriteString("  # Quick start (after make build build-tools)\n")
-    b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
-    b.WriteString("  # Print capabilities (enabled tools)\n")
-    b.WriteString("  ./bin/agentcli -capabilities -tools ./tools.json\n\n")
-    b.WriteString("  # Show help\n")
-    b.WriteString("  agentcli --help\n")
-    safeFprintln(w, strings.TrimRight(b.String(), "\n"))
+	var b strings.Builder
+	b.WriteString("agentcli — non-interactive CLI agent for OpenAI-compatible APIs\n\n")
+	b.WriteString("Usage:\n  agentcli [flags]\n\n")
+	b.WriteString("Flags (precedence: flag > env > default):\n")
+	b.WriteString("  -prompt string\n    User prompt (required)\n")
+	b.WriteString("  -tools string\n    Path to tools.json (optional)\n")
+	b.WriteString("  -system string\n    System prompt (default \"You are a helpful, precise assistant. Use tools when strictly helpful.\")\n")
+	b.WriteString("  -base-url string\n    OpenAI-compatible base URL (env OAI_BASE_URL or default https://api.openai.com/v1)\n")
+	b.WriteString("  -api-key string\n    API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)\n")
+	b.WriteString("  -model string\n    Model ID (env OAI_MODEL or default oss-gpt-20b)\n")
+	b.WriteString("  -max-steps int\n    Maximum reasoning/tool steps (default 8)\n")
+	b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
+	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
+	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
+	b.WriteString("  -temp float\n    Sampling temperature (default 0.2)\n")
+	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
+	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
+	b.WriteString("\nExamples:\n")
+	b.WriteString("  # Quick start (after make build build-tools)\n")
+	b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
+	b.WriteString("  # Print capabilities (enabled tools)\n")
+	b.WriteString("  ./bin/agentcli -capabilities -tools ./tools.json\n\n")
+	b.WriteString("  # Show help\n")
+	b.WriteString("  agentcli --help\n")
+	safeFprintln(w, strings.TrimRight(b.String(), "\n"))
 }
 
 // printCapabilities loads the tools manifest (if provided) and prints a concise list
