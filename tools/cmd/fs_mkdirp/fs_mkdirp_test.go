@@ -41,7 +41,11 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 		}
 	}
 	var out fsMkdirpOutput
-	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
+	if code == 0 {
+		if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
 	return out, stderr.String(), code
 }
 

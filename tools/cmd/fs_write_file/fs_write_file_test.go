@@ -42,7 +42,11 @@ func runFsWrite(t *testing.T, bin string, input any) (fsWriteOutput, string, int
 		}
 	}
 	var out fsWriteOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+	if code == 0 {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
 	return out, stderr.String(), code
 }
 
@@ -91,7 +95,10 @@ func TestFsWrite_Overwrite(t *testing.T) {
 	if out.BytesWritten != len(newContent) {
 		t.Fatalf("bytesWritten mismatch: got %d want %d", out.BytesWritten, len(newContent))
 	}
-	readBack, _ := os.ReadFile(path)
+	readBack, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
 	if !bytes.Equal(readBack, newContent) {
 		t.Fatalf("overwrite failed: got %q want %q", readBack, newContent)
 	}
@@ -112,7 +119,10 @@ func TestFsWrite_Binary(t *testing.T) {
 	if out.BytesWritten != len(data) {
 		t.Fatalf("bytesWritten mismatch: got %d want %d", out.BytesWritten, len(data))
 	}
-	readBack, _ := os.ReadFile(path)
+	readBack, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
 	if !bytes.Equal(readBack, data) {
 		t.Fatalf("binary mismatch: got %v want %v", readBack, data)
 	}

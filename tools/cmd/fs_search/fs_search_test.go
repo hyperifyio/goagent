@@ -52,7 +52,11 @@ func runFsSearch(t *testing.T, bin string, input any) (fsSearchOutput, string, i
 		}
 	}
 	var out fsSearchOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+	if code == 0 {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
 	return out, stderr.String(), code
 }
 
@@ -63,7 +67,11 @@ func TestFsSearch_Literal_SingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "a.txt")
 	content := "alpha\nbravo charlie\nalpha bravo\n"
@@ -116,7 +124,11 @@ func TestFsSearch_Regex_SingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "r.txt")
 	content := "alpha\nbravo charlie\nalpha bravo\n"
@@ -167,7 +179,11 @@ func TestFsSearch_Globs_Filter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 
 	txtRel := filepath.Join(base, "note.txt")
@@ -222,7 +238,11 @@ func TestFsSearch_Truncation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 
 	fileRel := filepath.Join(base, "many.txt")

@@ -43,7 +43,11 @@ func runFsAppend(t *testing.T, bin string, input any) (fsAppendOutput, string, i
 		}
 	}
 	var out fsAppendOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+	if code == 0 {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
 	return out, stderr.String(), code
 }
 

@@ -46,7 +46,11 @@ func runFsRead(t *testing.T, bin string, input any) (fsReadOutput, string, int) 
 		}
 	}
 	var out fsReadOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+	if code == 0 {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
 	return out, stderr.String(), code
 }
 
@@ -62,7 +66,11 @@ func makeRepoRelTempFile(t *testing.T, dirPrefix string, data []byte) (relPath s
 	if err := os.WriteFile(fileRel, data, 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(base); err != nil {
+			t.Logf("cleanup remove %s: %v", base, err)
+		}
+	})
 	return fileRel
 }
 
@@ -117,7 +125,10 @@ func TestFsRead_Ranges(t *testing.T) {
 	if code1 != 0 {
 		t.Fatalf("expected success, got exit=%d stderr=%q", code1, stderr1)
 	}
-	b1, _ := base64.StdEncoding.DecodeString(out1.ContentBase64)
+	b1, err := base64.StdEncoding.DecodeString(out1.ContentBase64)
+	if err != nil {
+		t.Fatalf("decode b1: %v", err)
+	}
 	if string(b1) != "cde" || out1.EOF {
 		t.Fatalf("unexpected range1: content=%q eof=%v", string(b1), out1.EOF)
 	}
@@ -126,7 +137,10 @@ func TestFsRead_Ranges(t *testing.T) {
 	if code2 != 0 {
 		t.Fatalf("expected success, got exit=%d stderr=%q", code2, stderr2)
 	}
-	b2, _ := base64.StdEncoding.DecodeString(out2.ContentBase64)
+	b2, err := base64.StdEncoding.DecodeString(out2.ContentBase64)
+	if err != nil {
+		t.Fatalf("decode b2: %v", err)
+	}
 	if string(b2) != "fg" || !out2.EOF {
 		t.Fatalf("unexpected range2: content=%q eof=%v", string(b2), out2.EOF)
 	}
