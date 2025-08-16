@@ -71,8 +71,12 @@ func runCommand(in execInput) (stdoutStr, stderrStr string, exitCode int, durati
 	if strings.TrimSpace(in.Cwd) != "" {
 		// Ensure cwd is clean and absolute if provided as relative
 		if !filepath.IsAbs(in.Cwd) {
-			abs, _ := filepath.Abs(in.Cwd)
-			cmd.Dir = abs
+			if abs, err := filepath.Abs(in.Cwd); err == nil {
+				cmd.Dir = abs
+			} else {
+				// Fall back to provided value if Abs fails
+				cmd.Dir = in.Cwd
+			}
 		} else {
 			cmd.Dir = in.Cwd
 		}
@@ -130,7 +134,12 @@ func runCommand(in execInput) (stdoutStr, stderrStr string, exitCode int, durati
 }
 
 func writeOutput(out execOutput) {
-	enc, _ := json.Marshal(out)
+	enc, err := json.Marshal(out)
+	if err != nil {
+		// Best-effort: emit minimal JSON
+		fmt.Println("{\"exitCode\":0,\"stdout\":\"\",\"stderr\":\"marshal error\",\"durationMs\":0}")
+		return
+	}
 	// Single line JSON
 	fmt.Println(string(enc))
 }
