@@ -20,8 +20,8 @@ type fsMkdirpOutput struct {
 func buildFsMkdirpTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-mkdirp")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_mkdirp")
+    binPath := filepath.Join(tmpDir, "fs-mkdirp")
+    cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_mkdirp")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
