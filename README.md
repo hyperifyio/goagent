@@ -340,6 +340,12 @@ Useful local helpers during development:
 - `make build-tool NAME=<name>` — build a single tool binary into `tools/bin/NAME`
 - `make check-go-version` — fail fast if your local Go major.minor differs from `go.mod`
 
+If your local toolchain does not match, you will see:
+```text
+Go toolchain mismatch: system X.Y != go.mod X.Y
+```
+Remediation: install the matching Go version shown by `go.mod` (e.g., from the official downloads) or switch via your version manager, then rerun `make check-go-version`.
+
 ## Tooling
 
 This repository pins the toolchain for deterministic results:
