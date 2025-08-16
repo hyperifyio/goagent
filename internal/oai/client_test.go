@@ -31,7 +31,9 @@ func TestCreateChatCompletion_Success(t *testing.T) {
 				Message:      Message{Role: RoleAssistant, Content: "hello"},
 			}},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			panic(err)
+		}
 	}))
 	defer ts.Close()
 
@@ -51,7 +53,9 @@ func TestCreateChatCompletion_Success(t *testing.T) {
 func TestCreateChatCompletion_HTTPError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"bad request"}`))
+		if _, err := w.Write([]byte(`{"error":"bad request"}`)); err != nil {
+			panic(err)
+		}
 	}))
 	defer ts.Close()
 

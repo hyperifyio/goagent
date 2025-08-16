@@ -119,7 +119,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 	}
 
 	// Ensure audit dir is empty before run
-	_ = os.RemoveAll(filepath.Join(".goagent"))
+	if err := os.RemoveAll(filepath.Join(".goagent")); err != nil {
+		t.Logf("cleanup: %v", err)
+	}
 
 	spec := ToolSpec{Name: "echo", Command: []string{bin}, TimeoutSec: 2}
 	out, err := RunToolWithJSON(context.Background(), spec, []byte(`{"ok":true}`), 5*time.Second)
@@ -132,25 +134,7 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 
 	// Find today's audit log
 	auditDir := filepath.Join(".goagent", "audit")
-	// Allow small delay for file write
-	deadline := time.Now().Add(2 * time.Second)
-	var logFile string
-	for {
-		entries, _ := os.ReadDir(auditDir)
-		for _, e := range entries {
-			if !e.IsDir() {
-				logFile = filepath.Join(auditDir, e.Name())
-				break
-			}
-		}
-		if logFile != "" || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if logFile == "" {
-		t.Fatalf("audit log not created in %s", auditDir)
-	}
+	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
 	data, err := os.ReadFile(logFile)
 	if err != nil {
 		t.Fatalf("read audit: %v", err)
@@ -187,7 +171,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 	}
 
 	// Clean audit dir
-	_ = os.RemoveAll(filepath.Join(".goagent"))
+	if err := os.RemoveAll(filepath.Join(".goagent")); err != nil {
+		t.Logf("cleanup: %v", err)
+	}
 
 	// Freeze time around midnight UTC so successive calls land in different files
 	orig := timeNow
@@ -230,11 +216,19 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 	}
 
 	// Ensure each file has at least one line
-	if b, _ := os.ReadFile(want1); len(b) == 0 || b[len(b)-1] != '\n' {
-		t.Fatalf("first audit file empty or not newline terminated")
+	if b, err := os.ReadFile(want1); err == nil {
+		if len(b) == 0 || b[len(b)-1] != '\n' {
+			t.Fatalf("first audit file empty or not newline terminated")
+		}
+	} else {
+		t.Fatalf("read %s: %v", want1, err)
 	}
-	if b, _ := os.ReadFile(want2); len(b) == 0 || b[len(b)-1] != '\n' {
-		t.Fatalf("second audit file empty or not newline terminated")
+	if b, err := os.ReadFile(want2); err == nil {
+		if len(b) == 0 || b[len(b)-1] != '\n' {
+			t.Fatalf("second audit file empty or not newline terminated")
+		}
+	} else {
+		t.Fatalf("read %s: %v", want2, err)
 	}
 }
 
@@ -261,7 +255,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 	}
 
 	// Clean audit dir
-	_ = os.RemoveAll(filepath.Join(".goagent"))
+	if err := os.RemoveAll(filepath.Join(".goagent")); err != nil {
+		t.Logf("cleanup: %v", err)
+	}
 
 	// Use argv containing sensitive literals
 	spec := ToolSpec{Name: "echo", Command: []string{bin, "--token=sk-test-1234567890", "--note=contains-secret"}, TimeoutSec: 2}
@@ -271,24 +267,7 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 
 	// Locate today's audit file
 	auditDir := filepath.Join(".goagent", "audit")
-	deadline := time.Now().Add(2 * time.Second)
-	var logFile string
-	for {
-		entries, _ := os.ReadDir(auditDir)
-		for _, e := range entries {
-			if !e.IsDir() {
-				logFile = filepath.Join(auditDir, e.Name())
-				break
-			}
-		}
-		if logFile != "" || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if logFile == "" {
-		t.Fatalf("audit log not created in %s", auditDir)
-	}
+	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
 	data, err := os.ReadFile(logFile)
 	if err != nil {
 		t.Fatalf("read audit: %v", err)
@@ -303,6 +282,26 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 				t.Fatalf("expected redaction, found sensitive substrings in audit: %s", contains)
 			}
 		}
+	}
+}
+
+// waitForAuditFile polls the audit directory until a file appears or timeout elapses.
+func waitForAuditFile(t *testing.T, auditDir string, timeout time.Duration) string {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		entries, err := os.ReadDir(auditDir)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					return filepath.Join(auditDir, e.Name())
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("audit log not created in %s", auditDir)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

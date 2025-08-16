@@ -22,7 +22,10 @@ func TestLoadManifest_OK(t *testing.T) {
 			},
 		},
 	}
-	b, _ := json.Marshal(data)
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	if err := os.WriteFile(file, b, 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -103,7 +106,10 @@ func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
 					},
 				},
 			}
-			b, _ := json.Marshal(data)
+			b, err2 := json.Marshal(data)
+			if err2 != nil {
+				t.Fatalf("marshal: %v", err2)
+			}
 			if err := os.WriteFile(file, b, 0o644); err != nil {
 				t.Fatalf("write: %v", err)
 			}

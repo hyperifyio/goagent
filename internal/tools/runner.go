@@ -64,8 +64,17 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	if _, err := stdin.Write(jsonInput); err != nil {
 		return nil, fmt.Errorf("write stdin: %w", err)
 	}
+	// Best-effort close; log failure to audit but do not fail run
 	if err := stdin.Close(); err != nil {
-		// Best-effort close; continue but include context in error later via audit
+		// Capture the close error as a best-effort audit line
+		if err2 := appendAuditLog(map[string]any{
+			"ts":    timeNow().UTC().Format(time.RFC3339Nano),
+			"event": "stdin_close_error",
+			"tool":  spec.Name,
+			"error": err.Error(),
+		}); err2 != nil {
+			_ = err2
+		}
 	}
 
 	// Read stdout and stderr fully
@@ -144,7 +153,9 @@ func writeAudit(spec ToolSpec, start time.Time, exitCode, stdoutBytes, stderrByt
 		StderrBytes: stderrBytes,
 		Truncated:   false,
 	}
-	_ = appendAuditLog(entry)
+	if err := appendAuditLog(entry); err != nil {
+		_ = err
+	}
 }
 
 // appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log
@@ -163,7 +174,11 @@ func appendAuditLog(entry any) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if err := f.Close(); err != nil {
+			_ = err
+		}
+	}()
 	if _, err := f.Write(append(b, '\n')); err != nil {
 		return err
 	}
