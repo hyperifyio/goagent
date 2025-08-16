@@ -44,6 +44,7 @@ func main() {
 	}
 }
 
+// nolint:gocyclo // IO validation + ranged read; complexity slightly above threshold and covered by tests.
 func run() error {
 	inBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
