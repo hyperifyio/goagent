@@ -1,15 +1,15 @@
 package main
 
 import (
-	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
+    "bufio"
+    "crypto/sha256"
+    "encoding/hex"
+    "encoding/json"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "strings"
 )
 
 type statInput struct {
@@ -42,7 +42,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(out)
+    if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+        stderrJSON(fmt.Errorf("encode json: %w", err))
+        os.Exit(1)
+    }
 }
 
 func readInput(r io.Reader) (statInput, error) {

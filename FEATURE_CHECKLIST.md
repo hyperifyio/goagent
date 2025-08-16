@@ -225,6 +225,7 @@
 * [ ] Makefile: preserve the logs directory during the clean target by removing any deletion of logs while keeping other artifact removals; DoD: from a clean clone create a sentinel file under logs, build artifacts, run clean, verify the sentinel remains and artifacts are gone, repo status is clean, all gates (lint/vet/format/tests/security/secret) green, one peer review completed.
   - [x] [S01:clean-preserve-logs-verified] Verified `make clean` preserves `logs/` (sentinel survives) and removes artifacts (`tools/bin`, `bin`, `reports`, `.goagent`).
   - [ ] [S02:clean-lint-fixes-tools] Resolve repo-wide `golangci-lint` findings (errcheck/gocyclo in `tools/cmd/*`) so quality gates are green for this item.
+    - [x] [S02d:errcheck-encode-and-visits] Check json.Encode errors in `fs_listdir`, `fs_read_lines`, `fs_stat`; handle `WalkDir`/`Info`/visit errors deterministically; update tests to check Unmarshal and cleanup removes.
     - [x] [S02a:lint-errcheck-fs_read_write] Fix errcheck in `tools/cmd/fs_read_file` and `tools/cmd/fs_write_file`; tests green.
   - [x] [S02b:lint-errcheck-batch-2] Address remaining errcheck in `get_time`, `fs_append_file`, and `fs_apply_patch` (encode/close and unsafe ignores); re-run lint.
     - [x] [S02c:lint-errcheck-fs_move] Address errcheck in `tools/cmd/fs_move` and its tests (check json.Encode, close defers, test Unmarshal); tests green.

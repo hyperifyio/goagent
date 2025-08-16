@@ -16,7 +16,11 @@ func TestFsListdir_Symlink_EntryPresent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    t.Cleanup(func() {
+        if err := os.RemoveAll(tmpDirAbs); err != nil {
+            t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+        }
+    })
 	base := filepath.Base(tmpDirAbs)
 
 	// Create target file and symlink next to it
