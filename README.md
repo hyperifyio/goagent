@@ -75,9 +75,9 @@ sudo apt-get update && sudo apt-get install -y ripgrep
 # - macOS (Homebrew)
 brew install ripgrep
 
-# golangci-lint (installs into $(go env GOPATH)/bin)
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
-export PATH="$(go env GOPATH)/bin:$PATH"
+# golangci-lint (pinned; installs into ./bin via Makefile)
+make install-golangci
+./bin/golangci-lint version
 ```
 
 Optional environment (flags take precedence):

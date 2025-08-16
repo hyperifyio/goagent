@@ -13,6 +13,9 @@ LD_FLAGS ?= -s -w -buildid=
 # Pin golangci-lint to a version compatible with current Go
 GOLANGCI_LINT_VERSION ?= v1.62.0
 
+# Deterministic local bin directory for tool installs
+GOBIN ?= $(CURDIR)/bin
+
 # Executable suffix for Windows builds
 EXE :=
 ifeq ($(GOOS),windows)
@@ -36,7 +39,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version
+.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version install-golangci
 
 tidy:
 	$(GO) mod tidy
@@ -160,7 +163,7 @@ test-clean-logs:
 lint:
 	@$(MAKE) check-go-version
 	@set -euo pipefail; \
-		LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint$(EXE)"; \
+		LINTBIN="$(GOBIN)/golangci-lint$(EXE)"; \
 	NEED_INSTALL=0; \
 	if [ ! -x "$$LINTBIN" ]; then \
 	  NEED_INSTALL=1; \
@@ -169,8 +172,8 @@ lint:
 	  if [ "$$CUR_VER" != "$(GOLANGCI_LINT_VERSION)" ]; then NEED_INSTALL=1; fi; \
 	fi; \
 	if [ "$$NEED_INSTALL" = "1" ]; then \
-	  echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
-		  GOBIN="$$($(GO) env GOPATH)/bin" GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+	  echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) into $(GOBIN)..."; \
+	  $(MAKE) install-golangci; \
 	fi; \
 	"$$LINTBIN" version; \
 	"$$LINTBIN" run --timeout=5m; \
@@ -218,6 +221,13 @@ ensure-rg:
 	rm -rf "$$TMP"; \
 	bin/rg --version | head -n1; \
 	echo "ripgrep installed at ./bin/rg"
+
+# Install pinned golangci-lint into ./bin using the local Go toolchain
+install-golangci:
+	@set -euo pipefail; \
+	mkdir -p "$(GOBIN)"; \
+	GOBIN="$(GOBIN)" GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+	"$(GOBIN)/golangci-lint$(EXE)" version
 
 # Auto-format Go sources in-place using gofmt -s
 fmt:
