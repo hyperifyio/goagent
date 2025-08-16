@@ -47,23 +47,10 @@ func runFsAppend(t *testing.T, bin string, input any) (fsAppendOutput, string, i
 	return out, stderr.String(), code
 }
 
-// makeRepoRelTempDir creates a temporary directory under the repository root
-// (current working directory in tests) and returns the relative path.
-func makeRepoRelTempDir(t *testing.T, prefix string) string {
-	t.Helper()
-	tmpAbs, err := os.MkdirTemp(".", prefix)
-	if err != nil {
-		t.Fatalf("mkdir temp under repo: %v", err)
-	}
-	base := filepath.Base(tmpAbs)
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
-	return base
-}
-
 func TestFsAppend_DoubleAppend(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_append_file")
 
-	dir := makeRepoRelTempDir(t, "fsappend-double-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsappend-double-")
 	path := filepath.Join(dir, "hello.txt")
 
 	part1 := []byte("hello")
@@ -117,7 +104,7 @@ func TestFsAppend_Validation_MissingPath(t *testing.T) {
 
 func TestFsAppend_Validation_MissingContent(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_append_file")
-	dir := makeRepoRelTempDir(t, "fsappend-validate-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsappend-validate-")
 	path := filepath.Join(dir, "x.txt")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
 		"path":          path,
@@ -162,7 +149,7 @@ func TestFsAppend_Validation_PathEscape(t *testing.T) {
 
 func TestFsAppend_Validation_BadBase64(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_append_file")
-	dir := makeRepoRelTempDir(t, "fsappend-validate-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsappend-validate-")
 	path := filepath.Join(dir, "bad.txt")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
 		"path":          path,
@@ -179,7 +166,7 @@ func TestFsAppend_Validation_BadBase64(t *testing.T) {
 func TestFsAppend_ConcurrentWriters(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_append_file")
 
-	dir := makeRepoRelTempDir(t, "fsappend-concurrent-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsappend-concurrent-")
 	path := filepath.Join(dir, "concurrent.txt")
 
 	// Distinct payloads to allow order-agnostic verification via counts
