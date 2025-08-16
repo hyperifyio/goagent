@@ -82,7 +82,7 @@ clean:
 	rm -rf reports
 	# Remove local audit/log artifacts created during tests
 	rm -rf .goagent
-	rm -rf logs
+	#rm -rf logs
 
 lint:
 	@set -euo pipefail; \
