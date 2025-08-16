@@ -43,7 +43,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(mkdirpOutput{Created: created})
+	if err := json.NewEncoder(os.Stdout).Encode(mkdirpOutput{Created: created}); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (mkdirpInput, error) {
