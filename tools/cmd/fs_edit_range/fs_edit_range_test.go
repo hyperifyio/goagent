@@ -22,7 +22,7 @@ type fsEditRangeOutput struct {
 	NewSha256     string `json:"newSha256"`
 }
 
-// buildFsEditRangeTool builds ./tools/fs_edit_range into a temporary binary.
+// buildFsEditRangeTool builds ./tools/cmd/fs_edit_range into a temporary binary.
 func buildFsEditRangeTool(t *testing.T) string { return testutil.BuildTool(t, "fs_edit_range") }
 
 // runFsEditRange executes the fs_edit_range tool with given JSON input.

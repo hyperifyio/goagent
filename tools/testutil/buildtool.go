@@ -17,8 +17,8 @@ import (
 // repository path hygiene rules in linters/tests):
 //   1) ./tools/cmd/<name>
 //   2) ./tools/timecli (for name == "get_time")
-//   3) ./tools/<name> (directory)
-//   4) ./tools/<name>.go (single-file tool)
+//   3) legacy directory: tools/<name>
+//   4) legacy single-file: tools/<name>.go
 func BuildTool(t *testing.T, name string) string {
     t.Helper()
 
