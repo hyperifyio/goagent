@@ -155,6 +155,7 @@ test-clean-logs:
 	echo "test-clean-logs: OK"
 
 lint:
+	@$(MAKE) check-go-version
 	@set -euo pipefail; \
 		LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint$(EXE)"; \
 	NEED_INSTALL=0; \
