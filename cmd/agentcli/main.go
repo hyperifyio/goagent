@@ -28,6 +28,8 @@ type cliConfig struct {
     timeout      time.Duration // deprecated global timeout; kept for backward compatibility
     httpTimeout  time.Duration // resolved HTTP timeout (final value after env/flags/global)
     toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
+    httpRetries  int           // number of retries for HTTP
+    httpBackoff  time.Duration // base backoff between retries
 	temperature  float64
 	debug        bool
 	capabilities bool
@@ -80,6 +82,8 @@ func parseFlags() (cliConfig, int) {
     flag.DurationVar(&cfg.httpTimeout, "http-timeout", 0, "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
     flag.DurationVar(&cfg.toolTimeout, "tool-timeout", 0, "Per-tool timeout (falls back to -timeout if unset)")
     flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
+    flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
+    flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
     flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
     flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.Parse()
@@ -177,7 +181,8 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
 
-    httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.httpTimeout)
+    // Configure HTTP client with retry policy
+    httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
 
 	messages := []oai.Message{
 		{Role: oai.RoleSystem, Content: cfg.systemPrompt},

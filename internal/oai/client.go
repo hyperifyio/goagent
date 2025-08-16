@@ -3,12 +3,14 @@ package oai
 import (
     "bytes"
     "context"
+    "crypto/rand"
     "encoding/json"
     "errors"
     "fmt"
     "io"
     "net"
     "net/http"
+    "encoding/hex"
     "strings"
     "time"
 )
@@ -72,6 +74,8 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
     }
 
     var lastErr error
+    // Generate a stable Idempotency-Key used across all attempts
+    idemKey := generateIdempotencyKey()
     for attempt := 0; attempt < attempts; attempt++ {
         httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
         if nerr != nil {
@@ -81,6 +85,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
         if c.apiKey != "" {
             httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
         }
+        httpReq.Header.Set("Idempotency-Key", idemKey)
 
         resp, derr := c.httpClient.Do(httpReq)
         if derr != nil {
@@ -161,4 +166,14 @@ func sleepBackoff(base time.Duration, attempt int) {
         d = 2 * time.Second
     }
     time.Sleep(d)
+}
+
+// generateIdempotencyKey returns a random hex string suitable for Idempotency-Key.
+func generateIdempotencyKey() string {
+    var b [16]byte
+    if _, err := rand.Read(b[:]); err != nil {
+        // Fallback to timestamp-based key if crypto/rand fails; extremely unlikely
+        return fmt.Sprintf("goagent-%d", time.Now().UnixNano())
+    }
+    return "goagent-" + hex.EncodeToString(b[:])
 }

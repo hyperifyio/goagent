@@ -75,8 +75,19 @@ func TestCreateChatCompletion_HTTPError(t *testing.T) {
 // https://github.com/hyperifyio/goagent/issues/216
 func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
     attempts := 0
+    var firstIdem string
     ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         attempts++
+        // Assert Idempotency-Key header is present and stable across attempts
+        idem := r.Header.Get("Idempotency-Key")
+        if idem == "" {
+            t.Fatalf("missing Idempotency-Key header")
+        }
+        if firstIdem == "" {
+            firstIdem = idem
+        } else if firstIdem != idem {
+            t.Fatalf("Idempotency-Key changed across retries: %q != %q", firstIdem, idem)
+        }
         if attempts == 1 {
             // Simulate a slow server to trigger client timeout
             time.Sleep(500 * time.Millisecond)
