@@ -26,7 +26,7 @@ func runExec(t *testing.T, bin string, input any) execOutput {
 	if err != nil {
 		t.Fatalf("marshal input: %v", err)
 	}
-	cmd := exec.Command(bin)
+    cmd := exec.Command(bin)
 	cmd.Stdin = bytes.NewReader(data)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -44,6 +44,33 @@ func runExec(t *testing.T, bin string, input any) execOutput {
 		t.Fatalf("durationMs must be >= 0, got %d", parsed.DurationMs)
 	}
 	return parsed
+}
+
+// TestExec_InvalidJSON verifies stderr JSON error contract and non-zero exit
+func TestExec_InvalidJSON(t *testing.T) {
+    bin := testutil.BuildTool(t, "exec")
+    // Run with invalid JSON (not an object)
+    cmd := exec.Command(bin)
+    cmd.Stdin = strings.NewReader("not-json")
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    err := cmd.Run()
+    if err == nil {
+        t.Fatalf("expected non-zero exit for invalid JSON")
+    }
+    // Stderr must be single-line JSON: {"error":"..."}
+    line := strings.TrimSpace(stderr.String())
+    if line == "" || !strings.HasPrefix(line, "{") || !strings.HasSuffix(line, "}") || strings.Contains(line, "\n") {
+        t.Fatalf("stderr not single-line JSON: %q", line)
+    }
+    var payload map[string]any
+    if err := json.Unmarshal([]byte(line), &payload); err != nil {
+        t.Fatalf("stderr not JSON parseable: %v raw=%q", err, line)
+    }
+    if _, ok := payload["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' field: %v", payload)
+    }
 }
 
 func TestExec_SuccessEcho(t *testing.T) {
