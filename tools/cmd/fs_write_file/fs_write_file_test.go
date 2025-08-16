@@ -141,3 +141,19 @@ func TestFsWrite_MissingParent(t *testing.T) {
 		t.Fatalf("stderr should contain MISSING_PARENT, got %q", stderr)
 	}
 }
+
+// TestFsWrite_ErrorJSON_PathRequired verifies standardized error contract on missing required fields.
+func TestFsWrite_ErrorJSON_PathRequired(t *testing.T) {
+    bin := testutil.BuildTool(t, "fs_write_file")
+    // Omit path to trigger validation error in readInput
+    _, stderr, code := runFsWrite(t, bin, map[string]any{
+        "contentBase64": base64.StdEncoding.EncodeToString([]byte("hello")),
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit code for missing path")
+    }
+    s := strings.TrimSpace(stderr)
+    if s == "" || !strings.Contains(s, "\"error\"") {
+        t.Fatalf("stderr should contain JSON with 'error' field, got: %q", stderr)
+    }
+}
