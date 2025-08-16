@@ -43,7 +43,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(searchOutput{Matches: matches, Truncated: truncated})
+	if err := json.NewEncoder(os.Stdout).Encode(searchOutput{Matches: matches, Truncated: truncated}); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (searchInput, error) {
@@ -61,6 +64,7 @@ func readInput(r io.Reader) (searchInput, error) {
 	return in, nil
 }
 
+// nolint:gocyclo // Coordinating walk, filter, and scan raises complexity; covered by tests.
 func search(in searchInput) ([]match, bool, error) {
 	var rx *regexp.Regexp
 	if in.Regex {
