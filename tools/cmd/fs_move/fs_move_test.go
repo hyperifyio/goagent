@@ -50,18 +50,6 @@ func runFsMove(t *testing.T, bin string, input any) (fsMoveOutput, string, int) 
 	return out, stderr.String(), code
 }
 
-// makeRepoRelTempDir creates a temporary directory under the repository root
-// (current working directory in tests) and returns the relative path.
-func makeRepoRelTempDir(t *testing.T, prefix string) string {
-	t.Helper()
-	tmpAbs, err := os.MkdirTemp(".", prefix)
-	if err != nil {
-		t.Fatalf("mkdir temp under repo: %v", err)
-	}
-	base := filepath.Base(tmpAbs)
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
-	return base
-}
 
 // TestFsMove_RenameSimple_NoOverwrite expresses the basic contract: renaming a file
 // within the same filesystem should succeed when destination does not exist. The tool
@@ -71,7 +59,7 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 	// Build (will fail until fs_move is implemented)
 	bin := buildFsMoveTool(t)
 
-	dir := makeRepoRelTempDir(t, "fsmove-basic-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsmove-basic-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	content := []byte("hello")
@@ -105,7 +93,7 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 // clobber an existing destination when overwrite is false or omitted.
 func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
 	bin := buildFsMoveTool(t)
-	dir := makeRepoRelTempDir(t, "fsmove-overlap-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsmove-overlap-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	if err := os.WriteFile(src, []byte("one"), 0o644); err != nil {
@@ -129,7 +117,7 @@ func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
 // existing destination when overwrite is true.
 func TestFsMove_DestinationExists_OverwriteTrue(t *testing.T) {
 	bin := buildFsMoveTool(t)
-	dir := makeRepoRelTempDir(t, "fsmove-overwrite-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsmove-overwrite-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {
