@@ -32,7 +32,7 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
     if out, err := exec.Command("go", "build", "-o", fsWrite, filepath.Join(repoRoot, "tools", "fs_write_file")).CombinedOutput(); err != nil {
         t.Fatalf("build fs_write_file: %v: %s", err, string(out))
     }
-    if out, err := exec.Command("go", "build", "-o", fsRead, filepath.Join(repoRoot, "tools", "fs_read_file.go")).CombinedOutput(); err != nil {
+    if out, err := exec.Command("go", "build", "-o", fsRead, filepath.Join(repoRoot, "tools", "cmd", "fs_read_file")).CombinedOutput(); err != nil {
         t.Fatalf("build fs_read_file: %v: %s", err, string(out))
     }
 

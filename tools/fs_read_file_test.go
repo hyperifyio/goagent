@@ -3,14 +3,16 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "encoding/base64"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
+
+    "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsReadOutput struct {
@@ -19,20 +21,7 @@ type fsReadOutput struct {
 	EOF           bool   `json:"eof"`
 }
 
-// buildFsReadTool builds ./tools/fs_read_file into a temporary binary.
-func buildFsReadTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-read-file")
-	// Build from within the tools package directory, targeting the single file.
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_read_file.go")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_read_file tool: %v\n%s", err, string(out))
-	}
-	return binPath
-}
+// build via tools/testutil.BuildTool after migration to tools/cmd/fs_read_file
 
 // runFsRead runs the built fs_read_file tool with the given JSON input and decodes stdout.
 func runFsRead(t *testing.T, bin string, input any) (fsReadOutput, string, int) {
@@ -78,7 +67,7 @@ func makeRepoRelTempFile(t *testing.T, dirPrefix string, data []byte) (relPath s
 }
 
 func TestFsRead_TextFile(t *testing.T) {
-	bin := buildFsReadTool(t)
+    bin := testutil.BuildTool(t, "fs_read_file")
 	content := []byte("hello world\n")
 	path := makeRepoRelTempFile(t, "fsread-text-", content)
 	out, stderr, code := runFsRead(t, bin, map[string]any{
@@ -103,7 +92,7 @@ func TestFsRead_TextFile(t *testing.T) {
 }
 
 func TestFsRead_BinaryRoundTrip(t *testing.T) {
-	bin := buildFsReadTool(t)
+    bin := testutil.BuildTool(t, "fs_read_file")
 	data := []byte{0x00, 0x10, 0xFF, 0x42, 0x00}
 	path := makeRepoRelTempFile(t, "fsread-bin-", data)
 	out, stderr, code := runFsRead(t, bin, map[string]any{"path": path})
@@ -120,7 +109,7 @@ func TestFsRead_BinaryRoundTrip(t *testing.T) {
 }
 
 func TestFsRead_Ranges(t *testing.T) {
-	bin := buildFsReadTool(t)
+    bin := testutil.BuildTool(t, "fs_read_file")
 	data := []byte("abcdefg")
 	path := makeRepoRelTempFile(t, "fsread-range-", data)
 	// offset=2, max=3 -> cde, eof=false
@@ -144,7 +133,7 @@ func TestFsRead_Ranges(t *testing.T) {
 }
 
 func TestFsRead_NotFound(t *testing.T) {
-	bin := buildFsReadTool(t)
+    bin := testutil.BuildTool(t, "fs_read_file")
 	_, stderr, code := runFsRead(t, bin, map[string]any{"path": "this/does/not/exist.txt"})
 	if code == 0 {
 		t.Fatalf("expected non-zero exit for missing file")
@@ -158,7 +147,7 @@ func TestFsRead_NotFound(t *testing.T) {
 // the tool writes a single-line JSON object to stderr with an "error" key
 // and exits non-zero.
 func TestFsRead_ErrorJSON(t *testing.T) {
-    bin := buildFsReadTool(t)
+    bin := testutil.BuildTool(t, "fs_read_file")
 
     // Use an absolute path to trigger validation failure (repo-relative enforced).
     abs := string(os.PathSeparator) + filepath.Join("tmp", "fsread-abs.txt")
