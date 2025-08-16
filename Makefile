@@ -5,6 +5,9 @@ CGO_ENABLED ?= 0
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 
+# Pin golangci-lint to a version compatible with current Go
+GOLANGCI_LINT_VERSION ?= v1.60.3
+
 # Executable suffix for Windows builds
 EXE :=
 ifeq ($(GOOS),windows)
@@ -73,9 +76,16 @@ clean:
 lint:
 	@set -euo pipefail; \
 	LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint"; \
+	NEED_INSTALL=0; \
 	if [ ! -x "$$LINTBIN" ]; then \
-		echo "Installing golangci-lint..."; \
-		GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1; \
+	  NEED_INSTALL=1; \
+	else \
+	  CUR_VER="$$($$LINTBIN version | sed -nE 's/.*version ([v0-9\.]+).*/\1/p')"; \
+	  if [ "$$CUR_VER" != "$(GOLANGCI_LINT_VERSION)" ]; then NEED_INSTALL=1; fi; \
+	fi; \
+	if [ "$$NEED_INSTALL" = "1" ]; then \
+	  echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
+	  GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
 	fi; \
 	"$$LINTBIN" version; \
 	"$$LINTBIN" run --timeout=5m; \
