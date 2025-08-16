@@ -36,7 +36,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap
+.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg
 
 tidy:
 	$(GO) mod tidy
@@ -157,8 +157,48 @@ lint:
 	"$$LINTBIN" run --timeout=5m; \
 	$(GO) vet ./...; \
 	$(MAKE) fmtcheck; \
-	$(MAKE) check-tools-paths; \
-	$(MAKE) verify-manifest-paths
+	$(MAKE) ensure-rg; \
+	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) check-tools-paths; \
+	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) verify-manifest-paths
+
+## Pin ripgrep for optional local, non-root install when missing
+RG_VERSION ?= 14.1.0
+
+# Ensure ripgrep (rg) is available; if not, download a static build into ./bin/rg
+ensure-rg:
+	@set -euo pipefail; \
+	if command -v rg >/dev/null 2>&1; then \
+	  exit 0; \
+	fi; \
+	echo "ripgrep (rg) not found; installing to ./bin/rg (version $(RG_VERSION))"; \
+	mkdir -p bin; \
+	OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	ARCH=$$(uname -m); \
+	case "$$OS" in \
+	  linux) TOS=unknown-linux-musl;; \
+	  darwin) TOS=apple-darwin;; \
+	  *) echo "Unsupported OS for auto-install: $$OS"; exit 1;; \
+	esac; \
+	case "$$ARCH" in \
+	  x86_64|amd64) TARCH=x86_64;; \
+	  arm64|aarch64) TARCH=aarch64;; \
+	  *) echo "Unsupported arch for auto-install: $$ARCH"; exit 1;; \
+	esac; \
+	URL="https://github.com/BurntSushi/ripgrep/releases/download/$(RG_VERSION)/ripgrep-$(RG_VERSION)-$$TARCH-$$TOS.tar.gz"; \
+	TMP=$$(mktemp -d 2>/dev/null || mktemp -d -t rgdl); \
+	echo "Downloading $$URL"; \
+	if ! curl -fsSL "$$URL" | tar -xz -C "$$TMP"; then \
+	  echo "Failed to download/extract ripgrep archive"; rm -rf "$$TMP"; exit 1; \
+	fi; \
+	SRC=$$(find "$$TMP" -type f -name rg -perm -u+x | head -n1); \
+	if [ -z "$$SRC" ]; then \
+	  echo "rg binary not found in archive"; rm -rf "$$TMP"; exit 1; \
+	fi; \
+	mv "$$SRC" bin/rg; \
+	chmod +x bin/rg; \
+	rm -rf "$$TMP"; \
+	bin/rg --version | head -n1; \
+	echo "ripgrep installed at ./bin/rg"
 
 # Auto-format Go sources in-place using gofmt -s
 fmt:
