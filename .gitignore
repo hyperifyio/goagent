@@ -14,3 +14,10 @@ tests/
 coverage.out
 *.coverprofile
 coverage.html
+
+# Common local artifacts
+dist/
+.DS_Store
+go.work
+.idea/
+.vscode/
