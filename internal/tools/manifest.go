@@ -24,6 +24,8 @@ type Manifest struct {
 }
 
 // LoadManifest reads tools.json and returns a name->spec registry and an OpenAI-compatible tools array.
+// Relative command paths in the manifest are validated and then resolved relative to the manifest's directory,
+// so they do not depend on the process working directory.
 func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) {
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -36,7 +38,8 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 	registry := make(map[string]ToolSpec)
 	var oaiTools []oai.Tool
 	nameSeen := make(map[string]struct{})
-	for i, t := range man.Tools {
+    manifestDir := filepath.Dir(manifestPath)
+    for i, t := range man.Tools {
 		if t.Name == "" {
 			return nil, nil, fmt.Errorf("tool[%d]: name is required", i)
 		}
@@ -50,7 +53,7 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 		// S52/S30: Harden command[0] validation. For any relative program path,
 		// enforce the canonical tools bin prefix and prevent path escapes.
 		cmd0 := t.Command[0]
-		if !filepath.IsAbs(cmd0) {
+        if !filepath.IsAbs(cmd0) {
 			// Normalize separators first (convert backslashes to slashes cross‑platform),
 			// then apply a platform-agnostic clean.
 			raw := strings.ReplaceAll(cmd0, "\\", "/")
@@ -68,12 +71,23 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 				if !(strings.HasPrefix(norm, "./tools/bin/")) {
 					return nil, nil, fmt.Errorf("tool[%d] %q: command[0] escapes ./tools/bin after normalization (got %q -> %q)", i, t.Name, cmd0, norm)
 				}
-			} else {
+            } else {
 				// Enforce canonical prefix for all other relative commands
 				if !strings.HasPrefix(norm, "./tools/bin/") {
 					return nil, nil, fmt.Errorf("tool[%d] %q: relative command[0] must start with ./tools/bin/", i, t.Name)
 				}
 			}
+            // Resolve relative program path against the manifest directory to avoid dependence on process CWD
+            // Keep validation based on the normalized forward-slash path, but compute a concrete absolute filesystem path.
+            // Example: manifest in /repo/sub/manifest/tools.json and command "./tools/bin/name" -> /repo/sub/manifest/tools/bin/name
+            // Trim leading "./" for joining, then convert to OS-specific separators.
+            trimmed := strings.TrimPrefix(norm, "./")
+            resolved := filepath.Join(manifestDir, filepath.FromSlash(trimmed))
+            absResolved, errAbs := filepath.Abs(resolved)
+            if errAbs != nil {
+                return nil, nil, fmt.Errorf("tool[%d] %q: resolve command[0]: %v", i, t.Name, errAbs)
+            }
+            t.Command[0] = absResolved
 		}
 		registry[t.Name] = t
 		// Build OpenAI tools entry
