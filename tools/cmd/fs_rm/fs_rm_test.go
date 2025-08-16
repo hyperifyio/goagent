@@ -44,25 +44,14 @@ func runFsRm(t *testing.T, bin string, input any) (fsRmOutput, string, int) {
 	return out, stderr.String(), code
 }
 
-// makeRepoRelTempDir creates a temporary directory under the repository root
-// (current working directory in tests) and returns the relative path.
-func makeRepoRelTempDir(t *testing.T, prefix string) string {
-	t.Helper()
-	tmpAbs, err := os.MkdirTemp(".", prefix)
-	if err != nil {
-		t.Fatalf("mkdir temp under repo: %v", err)
-	}
-	base := filepath.Base(tmpAbs)
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
-	return base
-}
+// Use shared helper from tools/testutil instead of local duplicate.
 
 // TestFsRm_DeleteFile expresses the contract: deleting a regular file succeeds,
 // tool exits 0, outputs {"removed":true}, and the file no longer exists.
 func TestFsRm_DeleteFile(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-	dir := makeRepoRelTempDir(t, "fsrm-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsrm-")
 	path := filepath.Join(dir, "target.txt")
 	if err := os.WriteFile(path, []byte("data"), 0o644); err != nil {
 		t.Fatalf("seed file: %v", err)
@@ -88,7 +77,7 @@ func TestFsRm_DeleteFile(t *testing.T) {
 func TestFsRm_DeleteDirRecursive(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-	dir := makeRepoRelTempDir(t, "fsrm-dir-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsrm-dir-")
 	deep := filepath.Join(dir, "a", "b")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatalf("mkdir tree: %v", err)
@@ -140,7 +129,7 @@ func TestFsRm_ErrorJSON_PathRequired(t *testing.T) {
 func TestFsRm_ForceOnMissing(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-	dir := makeRepoRelTempDir(t, "fsrm-missing-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsrm-missing-")
 	path := filepath.Join(dir, "absent.txt")
 
 	out, stderr, code := runFsRm(t, bin, map[string]any{
