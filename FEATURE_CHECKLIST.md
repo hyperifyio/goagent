@@ -134,7 +134,7 @@
   - [x] [S10:l90-migrate-fs_write_file] Move `tools/fs_write_file/main.go` to `tools/cmd/fs_write_file/fs_write_file.go`, update its test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
   - [x] [S11:l90-migrate-fs_append_file] Move `tools/fs_append_file/main.go` to `tools/cmd/fs_append_file/fs_append_file.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
   - [x] [S12:l90-migrate-fs_rm] Move `tools/fs_rm/main.go` to `tools/cmd/fs_rm/fs_rm.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
-  - [ ] [S13:l90-migrate-fs_move] Move `tools/fs_move/main.go` to `tools/cmd/fs_move/fs_move.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
+  - [x] [S13:l90-migrate-fs_move] Move `tools/fs_move/main.go` to `tools/cmd/fs_move/fs_move.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
   - [ ] [S14:l90-migrate-fs_search] Move `tools/fs_search/main.go` to `tools/cmd/fs_search/fs_search.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
   - [ ] [S15:l90-migrate-fs_apply_patch] Move `tools/fs_apply_patch/main.go` to `tools/cmd/fs_apply_patch/fs_apply_patch.go`, update test and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
   - [ ] [S16:l90-migrate-fs_read_lines] Move `tools/fs_read_lines/main.go` to `tools/cmd/fs_read_lines/fs_read_lines.go`, update tests (`fs_read_lines*_test.go`) and `Makefile`; DoD: targeted tests pass, binary builds from new path, suite green.
