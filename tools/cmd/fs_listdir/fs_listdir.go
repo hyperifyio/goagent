@@ -1,16 +1,16 @@
 package main
 
 import (
-    "bufio"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "io"
-    "io/fs"
-    "os"
-    "path/filepath"
-    "sort"
-    "strings"
+	"bufio"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 )
 
 type listInput struct {
@@ -49,10 +49,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-    if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
-        stderrJSON(fmt.Errorf("encode json: %w", err))
-        os.Exit(1)
-    }
+	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (listInput, error) {
@@ -81,6 +81,7 @@ func validatePath(p string) error {
 	return nil
 }
 
+// nolint:gocyclo // Traversal + filtering logic increases complexity; validated by tests.
 func list(in listInput) (listOutput, error) {
 	var entries []entry
 	wildcards := in.Globs
@@ -95,7 +96,7 @@ func list(in listInput) (listOutput, error) {
 	if in.Path == "." {
 		in.Path = "."
 	}
-    visit := func(path string, d fs.DirEntry, err error) error {
+	visit := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -123,11 +124,11 @@ func list(in listInput) (listOutput, error) {
 				return nil
 			}
 		}
-        info, infoErr := d.Info()
-        if infoErr != nil {
-            // If we cannot stat the entry, skip it silently
-            return nil
-        }
+		info, infoErr := d.Info()
+		if infoErr != nil {
+			// If we cannot stat the entry, skip it silently
+			return nil
+		}
 		mode := info.Mode()
 		var etype string
 		if d.IsDir() {
@@ -150,25 +151,25 @@ func list(in listInput) (listOutput, error) {
 		return nil
 	}
 	if in.Recursive {
-        if err := filepath.WalkDir(in.Path, visit); err != nil && !errors.Is(err, io.EOF) {
-            return listOutput{}, err
-        }
-    } else {
+		if err := filepath.WalkDir(in.Path, visit); err != nil && !errors.Is(err, io.EOF) {
+			return listOutput{}, err
+		}
+	} else {
 		de, err := os.ReadDir(in.Path)
 		if err != nil {
 			return listOutput{}, err
 		}
 		for _, d := range de {
-            if err := visit(filepath.Join(in.Path, d.Name()), d, nil); err != nil {
-                if errors.Is(err, io.EOF) {
-                    break
-                }
-                if errors.Is(err, filepath.SkipDir) {
-                    // In non-recursive mode, skipping a directory is equivalent to ignoring it.
-                    continue
-                }
-                return listOutput{}, err
-            }
+			if err := visit(filepath.Join(in.Path, d.Name()), d, nil); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if errors.Is(err, filepath.SkipDir) {
+					// In non-recursive mode, skipping a directory is equivalent to ignoring it.
+					continue
+				}
+				return listOutput{}, err
+			}
 		}
 	}
 	// stable ordering: dirs first, then files, lexicographic

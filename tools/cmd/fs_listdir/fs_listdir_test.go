@@ -51,10 +51,10 @@ func runFsListdir(t *testing.T, bin string, input any) (fsListdirOutput, string,
 			code = 1
 		}
 	}
-    var out fsListdirOutput
-    if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
-        t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
-    }
+	var out fsListdirOutput
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+		t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+	}
 	return out, stderr.String(), code
 }
 
@@ -65,11 +65,11 @@ func TestFsListdir_EmptyDir_NonRecursive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-    t.Cleanup(func() {
-        if err := os.RemoveAll(tmpDirAbs); err != nil {
-            t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
-        }
-    })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 
 	bin := testutil.BuildTool(t, "fs_listdir")
@@ -102,11 +102,11 @@ func TestFsListdir_FilesDirsOrder_HiddenFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-    t.Cleanup(func() {
-        if err := os.RemoveAll(tmpDirAbs); err != nil {
-            t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
-        }
-    })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 
 	// Visible directory and file
