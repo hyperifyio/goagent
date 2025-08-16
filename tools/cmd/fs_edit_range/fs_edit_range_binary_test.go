@@ -21,7 +21,11 @@ func TestFsEditRange_BinaryContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "data.bin")
 	orig := []byte{0x00, 0x01, 0x02, 0xFF, 0x10, 0x11}

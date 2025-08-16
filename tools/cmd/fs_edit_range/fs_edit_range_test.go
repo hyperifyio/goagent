@@ -48,7 +48,9 @@ func runFsEditRange(t *testing.T, bin string, input any) (fsEditRangeOutput, str
 		}
 	}
 	var out fsEditRangeOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+		t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+	}
 	return out, stderr.String(), code
 }
 
@@ -62,7 +64,11 @@ func TestFsEditRange_MidFile_Splicing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "data.bin")
 	orig := []byte("abcdef") // indices: 0 1 2 3 4 5
@@ -112,7 +118,11 @@ func TestFsEditRange_Beginning_Splicing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "data.bin")
 	orig := []byte("abcdef")
@@ -160,7 +170,11 @@ func TestFsEditRange_End_Splicing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "data.bin")
 	orig := []byte("abcdef")

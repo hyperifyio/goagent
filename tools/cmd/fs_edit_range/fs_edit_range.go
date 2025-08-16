@@ -45,7 +45,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(out)
+	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (editInput, error) {
@@ -82,7 +85,10 @@ func validatePath(p string) error {
 
 func applyEdit(in editInput) (editOutput, error) {
 	muIface, _ := editLocks.LoadOrStore(in.Path, &sync.Mutex{})
-	mu := muIface.(*sync.Mutex)
+	mu, ok := muIface.(*sync.Mutex)
+	if !ok {
+		return editOutput{}, errors.New("internal lock type assertion failed")
+	}
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -90,7 +96,10 @@ func applyEdit(in editInput) (editOutput, error) {
 	if err != nil {
 		return editOutput{}, err
 	}
-	replacement, _ := base64.StdEncoding.DecodeString(in.ReplacementBase64)
+	replacement, err := base64.StdEncoding.DecodeString(in.ReplacementBase64)
+	if err != nil {
+		return editOutput{}, fmt.Errorf("BAD_BASE64: %w", err)
+	}
 	if in.StartByte > len(data) {
 		in.StartByte = len(data)
 	}
