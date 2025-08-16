@@ -158,13 +158,16 @@ func writeAudit(spec ToolSpec, start time.Time, exitCode, stdoutBytes, stderrByt
 	}
 }
 
-// appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log
+// appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log under the repository root.
+// The repository root is determined by walking upward from the current working directory
+// until a directory containing go.mod is found. If no go.mod is found, falls back to CWD.
 func appendAuditLog(entry any) error {
 	b, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(".goagent", "audit")
+	root := moduleRoot()
+	dir := filepath.Join(root, ".goagent", "audit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -183,6 +186,27 @@ func appendAuditLog(entry any) error {
 		return err
 	}
 	return nil
+}
+
+// moduleRoot walks upward from the current working directory to locate the directory
+// containing go.mod. If none is found, it returns the current working directory.
+func moduleRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return "."
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached filesystem root; fallback to original cwd
+			return cwd
+		}
+		dir = parent
+	}
 }
 
 // redactSensitiveStrings applies redactSensitiveString to each element and returns a new slice.
