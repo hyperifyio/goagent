@@ -48,7 +48,9 @@ func runFsStat(t *testing.T, bin string, input any) (fsStatOutput, string, int) 
 		}
 	}
 	var out fsStatOutput
-	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
+	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out); err != nil {
+		t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+	}
 	return out, stderr.String(), code
 }
 
@@ -65,7 +67,11 @@ func makeRepoRelTempFile(t *testing.T, dirPrefix string, data []byte) (relPath s
 	if err := os.WriteFile(fileRel, data, 0o644); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(base); err != nil {
+			t.Logf("cleanup remove %s: %v", base, err)
+		}
+	})
 	return fileRel
 }
 
@@ -127,7 +133,11 @@ func TestFsStat_Symlink_NoFollow(t *testing.T) {
 	if err := os.Symlink(filepath.Base(target), link); err != nil {
 		t.Fatalf("symlink: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Remove(link) })
+	t.Cleanup(func() {
+		if err := os.Remove(link); err != nil {
+			t.Logf("cleanup remove %s: %v", link, err)
+		}
+	})
 
 	out, stderr, code := runFsStat(t, bin, map[string]any{
 		"path":           link,
@@ -155,7 +165,11 @@ func TestFsStat_Symlink_Follow(t *testing.T) {
 	if err := os.Symlink(filepath.Base(target), link); err != nil {
 		t.Fatalf("symlink: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Remove(link) })
+	t.Cleanup(func() {
+		if err := os.Remove(link); err != nil {
+			t.Logf("cleanup remove %s: %v", link, err)
+		}
+	})
 
 	out, stderr, code := runFsStat(t, bin, map[string]any{
 		"path":           link,
