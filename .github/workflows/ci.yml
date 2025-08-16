@@ -71,6 +71,10 @@ jobs:
         shell: bash
         run: make test
 
+      - name: Test clean-logs guard
+        shell: bash
+        run: make test-clean-logs
+
       - name: Build
         shell: bash
         run: make build

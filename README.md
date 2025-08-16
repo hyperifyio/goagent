@@ -318,6 +318,15 @@ make lint
 make fmt   # apply gofmt -s -w to the repo
 ```
 
+Guarded logs cleanup:
+```bash
+# Only removes ./logs when ./logs/STATE trimmed equals DOWN
+make clean-logs
+
+# End-to-end verification of the guard logic (creates temp dirs)
+make test-clean-logs
+```
+
 Reproducible builds: the `Makefile` uses `-trimpath` and stripped `-ldflags` with VCS stamping disabled so two clean builds produce identical binaries. Verify locally by running two consecutive `make clean build build-tools` and comparing `sha256sum` outputs.
 
 ## Contributing

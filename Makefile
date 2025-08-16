@@ -36,7 +36,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean lint fmt fmtcheck verify-manifest-paths bootstrap
+.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap
 
 tidy:
 	$(GO) mod tidy
@@ -82,7 +82,62 @@ clean:
 	rm -rf reports
 	# Remove local audit/log artifacts created during tests
 	rm -rf .goagent
-	#rm -rf logs
+	# Intentionally preserve logs/ here; see clean-logs for guarded deletion
+	# rm -rf logs
+
+# Guarded logs cleanup: only delete when STATE equals DOWN
+# Usage:
+#   make clean-logs                 # operates on ./logs (default)
+#   make clean-logs LOGS_DIR=path   # operate on a specific logs dir (used by tests)
+LOGS_DIR ?= logs
+clean-logs:
+	@set -euo pipefail; \
+	DIR="$(LOGS_DIR)"; \
+	if [ ! -d "$$DIR" ]; then \
+	  echo "clean-logs: $$DIR not present; skipping"; \
+	  exit 0; \
+	fi; \
+	STATE=$$(tr -d ' \t\r\n' < "$$DIR/STATE" 2>/dev/null || true); \
+	if [ "$$STATE" = "DOWN" ]; then \
+	  rm -rf "$$DIR"; \
+	  echo "clean-logs: removed $$DIR"; \
+	else \
+	  echo "clean-logs: skipped ($$DIR/STATE='$$STATE')"; \
+	fi
+
+# Aggregate clean: normal clean then guarded logs cleanup
+clean-all:
+	@$(MAKE) clean
+	@$(MAKE) clean-logs
+
+# Deterministic tests for clean-logs behavior across cases
+# - DOWN => directory removed
+# - non-DOWN => directory preserved
+# - missing STATE => directory preserved
+test-clean-logs:
+	@set -euo pipefail; \
+	TMP=$$(mktemp -d 2>/dev/null || mktemp -d -t clogs); \
+	LD="$$TMP/logs"; \
+	: # Case A: allowed removal when STATE=DOWN; \
+	mkdir -p "$$LD"; \
+	echo DOWN > "$$LD/STATE"; \
+	touch "$$LD/file"; \
+	$(MAKE) -s clean-logs LOGS_DIR="$$LD"; \
+	if [ -d "$$LD" ]; then echo "test-clean-logs: expected removal when STATE=DOWN"; rm -rf "$$TMP"; exit 1; fi; \
+	: # Case B: blocked when STATE!=DOWN; \
+	mkdir -p "$$LD"; \
+	echo UP > "$$LD/STATE"; \
+	$(MAKE) -s clean-logs LOGS_DIR="$$LD"; \
+	if [ ! -d "$$LD" ]; then echo "test-clean-logs: unexpected removal when STATE!=DOWN"; rm -rf "$$TMP"; exit 1; fi; \
+	: # Case C: blocked when STATE missing; \
+	rm -rf "$$LD"; \
+	mkdir -p "$$LD"; \
+	rm -f "$$LD/STATE"; \
+	$(MAKE) -s clean-logs LOGS_DIR="$$LD"; \
+	if [ ! -d "$$LD" ]; then echo "test-clean-logs: unexpected removal when STATE missing"; rm -rf "$$TMP"; exit 1; fi; \
+	# Cleanup; \
+	rm -rf "$$TMP"; \
+	echo "test-clean-logs: OK"
 
 lint:
 	@set -euo pipefail; \
