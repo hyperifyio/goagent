@@ -17,12 +17,12 @@ type fsWriteOutput struct {
 	BytesWritten int `json:"bytesWritten"`
 }
 
-// buildFsWriteTool builds ./tools/fs_write_file.go into a temporary binary.
+// buildFsWriteTool builds ./tools/cmd/fs_write_file into a temporary binary.
 func buildFsWriteTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-write-file")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_write_file")
+    cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_write_file")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
