@@ -94,16 +94,27 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 	}
 
 	// Change working directory to the temp dir so relative ./tools/bin/* resolve
-	oldWD, _ := os.Getwd()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatalf("chdir tmp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chdir(oldWD) })
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Errorf("cleanup chdir back: %v", err)
+		}
+	})
 
 	// Prepare the file path and content for the tool calls (relative to current working directory)
 	targetRelPath := "tmp_tools_it_demo.txt"
 	// Ensure cleanup
-	t.Cleanup(func() { _ = os.Remove(targetRelPath) })
+	t.Cleanup(func() {
+		if err := os.Remove(targetRelPath); err != nil && !os.IsNotExist(err) {
+			t.Errorf("cleanup remove: %v", err)
+		}
+	})
 	content := []byte("hello world")
 	contentB64 := base64.StdEncoding.EncodeToString(content)
 
@@ -153,7 +164,9 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 					},
 				}},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode resp step1: %v", err)
+			}
 		case 2:
 			// Final message
 			resp := oai.ChatCompletionsResponse{
@@ -167,7 +180,9 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 					Message:      oai.Message{Role: oai.RoleAssistant, Content: "ok"},
 				}},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode resp step2: %v", err)
+			}
 		default:
 			t.Fatalf("unexpected extra request step=%d", step)
 		}
