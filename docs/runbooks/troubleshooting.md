@@ -80,6 +80,50 @@ echo '{"cmd":"timeout","args":["/T","1"],"timeoutSec":2}' | ./tools/bin/exec.exe
 rg -n "http_attempt" .goagent/audit || true
 ```
 
+## fs_search exclusions and file size limits
+- Behavior: `fs_search` intentionally skips known binary/output directories to keep scans fast and predictable: `.git/`, `bin/`, `logs/`, and `tools/bin/` are excluded. It also enforces a per‑file size cap of 1 MiB.
+- Symptom: expected matches inside excluded folders are not returned, or the tool exits non‑zero with a `FILE_TOO_LARGE` message.
+- Fix:
+```bash
+# Verify exclusion behavior (create a file in an excluded dir and one in a normal dir)
+mkdir -p tmp_search_demo/{bin,logs,ok}
+printf 'NEEDLE' > tmp_search_demo/bin/skip.txt
+printf 'NEEDLE' > tmp_search_demo/ok/scan.txt
+
+echo '{"query":"NEEDLE","globs":["**/*.txt"],"maxResults":10}' | ./tools/bin/fs_search | jq .
+# Expect only tmp_search_demo/ok/scan.txt to appear; files under bin/ or logs/ are skipped
+
+# Demonstrate FILE_TOO_LARGE
+python3 - <<'PY'
+from pathlib import Path
+p = Path('tmp_search_demo/ok/big.bin')
+p.write_bytes(b'A' * (1024*1024 + 1))
+print(p, p.stat().st_size)
+PY
+echo '{"query":"A","globs":["tmp_search_demo/ok/big.bin"]}' | ./tools/bin/fs_search || true
+# Expect non-zero exit and stderr JSON containing "FILE_TOO_LARGE"
+
+rm -rf tmp_search_demo
+```
+
+On Windows (PowerShell), use the `.exe` binary:
+```powershell
+New-Item -ItemType Directory -Force tmp_search_demo/bin,tmp_search_demo/logs,tmp_search_demo/ok | Out-Null
+Set-Content -NoNewline -Path tmp_search_demo/bin/skip.txt -Value NEEDLE
+Set-Content -NoNewline -Path tmp_search_demo/ok/scan.txt -Value NEEDLE
+echo '{"query":"NEEDLE","globs":["**/*.txt"],"maxResults":10}' | ./tools/bin/fs_search.exe | jq .
+
+# FILE_TOO_LARGE (PowerShell)
+python - <<'PY'
+from pathlib import Path
+p = Path('tmp_search_demo/ok/big.bin')
+p.write_bytes(b'A' * (1024*1024 + 1))
+print(p, p.stat().st_size)
+PY
+echo '{"query":"A","globs":["tmp_search_demo/ok/big.bin"]}' | ./tools/bin/fs_search.exe; if ($LASTEXITCODE -eq 0) { Write-Error 'expected non-zero' }
+Remove-Item -Recurse -Force tmp_search_demo
+```
+
 ## HTTP errors to the API
 ### Inspecting HTTP retry attempts
 - When retries are enabled (`-http-retries > 0`), each attempt is logged to `.goagent/audit/YYYYMMDD.log` as an `http_attempt` entry with fields `{attempt,max,status,backoffMs,endpoint}`.
