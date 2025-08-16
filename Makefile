@@ -114,16 +114,18 @@ clean-all:
 # Usage: make check-go-version
 check-go-version:
 	@set -euo pipefail; \
-	MOD_GO=$$(awk '/^go [0-9]+\.[0-9]+/ {print $$2; exit}' go.mod); \
-	if [ -z "$$MOD_GO" ]; then echo "check-go-version: unable to parse go.mod"; exit 2; fi; \
-	SYS_GO=$$(go version | sed -E 's/.*go([0-9]+\.[0-9]+).*/\1/'); \
-	if [ -z "$$SYS_GO" ]; then echo "check-go-version: unable to parse 'go version' output"; exit 2; fi; \
-	if [ "$$SYS_GO" != "$$MOD_GO" ]; then \
-	  echo "Go toolchain mismatch: system $$SYS_GO != go.mod $$MOD_GO"; \
-	  echo "Hint: install Go $$MOD_GO (see https://go.dev/dl) or use a version manager, then re-run 'make check-go-version'."; \
-	  exit 2; \
-	fi; \
-	echo "check-go-version: OK (system $$SYS_GO matches go.mod $$MOD_GO)"
+		# Extract version declared in go.mod and normalize to major.minor (ignore patch)
+		MOD_GO=$$(grep -E '^go [0-9]+\.[0-9]+' go.mod | head -n1 | awk '{print $$2}' | cut -d. -f1,2 | tr -d ' \t\r\n'); \
+		if [ -z "$$MOD_GO" ]; then echo "check-go-version: unable to parse major.minor from go.mod"; exit 2; fi; \
+		# Extract system Go major.minor
+		SYS_GO=$$(go env GOVERSION | sed -E 's/^go([0-9]+\.[0-9]+).*/\1/' | tr -d ' \t\r\n'); \
+		if [ -z "$$SYS_GO" ]; then echo "check-go-version: unable to parse 'go version' output"; exit 2; fi; \
+		if [ "$$SYS_GO" != "$$MOD_GO" ]; then \
+		  echo "Go toolchain mismatch: system $$SYS_GO != go.mod $$MOD_GO"; \
+		  echo "Hint: install Go $$MOD_GO (see https://go.dev/dl) or use a version manager, then re-run 'make check-go-version'."; \
+		  exit 2; \
+		fi; \
+		echo "check-go-version: OK (system $$SYS_GO matches go.mod $$MOD_GO)"
 
 # Deterministic tests for clean-logs behavior across cases
 # - DOWN => directory removed
