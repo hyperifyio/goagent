@@ -6,3 +6,11 @@ logs/
 
 # Ignore built tool binaries only; keep sources tracked
 tools/bin/**
+
+# Test reports and coverage artifacts
+# Keep the working tree clean after local test runs
+reports/
+tests/
+coverage.out
+*.coverprofile
+coverage.html
