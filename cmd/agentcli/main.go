@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,27 +76,31 @@ func parseFlags() (cliConfig, int) {
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
 	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
 	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
-	flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
-	// Deprecated global timeout retained as a fallback if the split timeouts are not provided
-	flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
-	// New split timeouts
-	flag.DurationVar(&cfg.httpTimeout, "http-timeout", 0, "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
-	flag.DurationVar(&cfg.toolTimeout, "tool-timeout", 0, "Per-tool timeout (falls back to -timeout if unset)")
+    flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
+    // Deprecated global timeout retained as a fallback if the split timeouts are not provided
+    // Accept plain seconds (e.g., 300 => 300s) in addition to Go duration strings.
+    cfg.timeout = 30 * time.Second
+    flag.Var((*durationFlexValue)(&cfg.timeout), "timeout", "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
+    // New split timeouts (default to 0; accept plain seconds or Go duration strings)
+    cfg.httpTimeout = 0
+    cfg.toolTimeout = 0
+    flag.Var((*durationFlexValue)(&cfg.httpTimeout), "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+    flag.Var((*durationFlexValue)(&cfg.toolTimeout), "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
 	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
-	flag.Parse()
+    _ = flag.CommandLine.Parse(os.Args[1:])
 
-	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
 	if cfg.httpTimeout <= 0 {
-		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_TIMEOUT")); v != "" {
-			if d, err := time.ParseDuration(v); err == nil && d > 0 {
-				cfg.httpTimeout = d
-			}
-		}
+        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_TIMEOUT")); v != "" {
+            if d, err := parseDurationFlexible(v); err == nil && d > 0 {
+                cfg.httpTimeout = d
+            }
+        }
 	}
 	if cfg.httpTimeout <= 0 {
 		if cfg.timeout > 0 {
@@ -410,6 +415,53 @@ func printCapabilities(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		safeFprintf(stdout, "- %s: %s\n", name, desc)
 	}
 	return 0
+}
+
+// durationFlexValue implements flag.Value to parse durations that accept either
+// standard Go duration strings (e.g., "300s", "5m") or plain integer seconds
+// (e.g., "300").
+type durationFlexValue time.Duration
+
+func (d *durationFlexValue) String() string { return time.Duration(*d).String() }
+
+func (d *durationFlexValue) Set(s string) error {
+	dur, err := parseDurationFlexible(s)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	*d = durationFlexValue(dur)
+ 	return nil
+}
+
+// parseDurationFlexible parses a duration allowing either Go duration syntax
+// or a plain integer representing seconds.
+func parseDurationFlexible(raw string) (time.Duration, error) {
+ 	s := strings.TrimSpace(raw)
+ 	if s == "" {
+ 		return 0, fmt.Errorf("empty duration")
+ 	}
+ 	if d, err := time.ParseDuration(s); err == nil {
+ 		return d, nil
+ 	}
+ 	// Accept plain integer seconds
+ 	allDigits := true
+ 	for _, r := range s {
+ 		if r < '0' || r > '9' {
+ 			allDigits = false
+ 			break
+ 		}
+ 	}
+ 	if allDigits {
+ 		n, err := strconv.ParseInt(s, 10, 64)
+ 		if err != nil {
+ 			return 0, err
+ 		}
+ 		if n <= 0 {
+ 			return 0, fmt.Errorf("duration seconds must be > 0")
+ 		}
+ 		return time.Duration(n) * time.Second, nil
+ 	}
+ 	return 0, fmt.Errorf("invalid duration: %q", raw)
 }
 
 // safeFprintln writes a line to w and intentionally ignores write errors.
