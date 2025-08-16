@@ -48,7 +48,7 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_mkdirp")
 
-    dir := testutil.MakeRepoRelTempDir(t, "fsmkdirp-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsmkdirp-")
 	deep := filepath.Join(dir, "a", "b", "c")
 
 	// First call should create directories

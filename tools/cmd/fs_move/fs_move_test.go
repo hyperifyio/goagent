@@ -50,7 +50,6 @@ func runFsMove(t *testing.T, bin string, input any) (fsMoveOutput, string, int) 
 	return out, stderr.String(), code
 }
 
-
 // TestFsMove_RenameSimple_NoOverwrite expresses the basic contract: renaming a file
 // within the same filesystem should succeed when destination does not exist. The tool
 // exits 0, outputs {"moved":true}, and the source disappears while destination appears
@@ -59,7 +58,7 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 	// Build (will fail until fs_move is implemented)
 	bin := buildFsMoveTool(t)
 
-    dir := testutil.MakeRepoRelTempDir(t, "fsmove-basic-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsmove-basic-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	content := []byte("hello")
@@ -93,7 +92,7 @@ func TestFsMove_RenameSimple_NoOverwrite(t *testing.T) {
 // clobber an existing destination when overwrite is false or omitted.
 func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
 	bin := buildFsMoveTool(t)
-    dir := testutil.MakeRepoRelTempDir(t, "fsmove-overlap-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsmove-overlap-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	if err := os.WriteFile(src, []byte("one"), 0o644); err != nil {
@@ -117,7 +116,7 @@ func TestFsMove_DestinationExists_OverwriteFalse(t *testing.T) {
 // existing destination when overwrite is true.
 func TestFsMove_DestinationExists_OverwriteTrue(t *testing.T) {
 	bin := buildFsMoveTool(t)
-    dir := testutil.MakeRepoRelTempDir(t, "fsmove-overwrite-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsmove-overwrite-")
 	src := filepath.Join(dir, "a.txt")
 	dst := filepath.Join(dir, "b.txt")
 	if err := os.WriteFile(src, []byte("new"), 0o644); err != nil {

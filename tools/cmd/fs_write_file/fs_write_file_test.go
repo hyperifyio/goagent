@@ -50,7 +50,7 @@ func runFsWrite(t *testing.T, bin string, input any) (fsWriteOutput, string, int
 
 func TestFsWrite_CreateText(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_write_file")
-    dir := testutil.MakeRepoRelTempDir(t, "fswrite-text-")
+	dir := testutil.MakeRepoRelTempDir(t, "fswrite-text-")
 	path := filepath.Join(dir, "hello.txt")
 	content := []byte("hello world\n")
 	out, stderr, code := runFsWrite(t, bin, map[string]any{
@@ -74,7 +74,7 @@ func TestFsWrite_CreateText(t *testing.T) {
 
 func TestFsWrite_Overwrite(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_write_file")
-    dir := testutil.MakeRepoRelTempDir(t, "fswrite-over-")
+	dir := testutil.MakeRepoRelTempDir(t, "fswrite-over-")
 	path := filepath.Join(dir, "data.bin")
 	// Seed with initial content
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
@@ -99,7 +99,7 @@ func TestFsWrite_Overwrite(t *testing.T) {
 
 func TestFsWrite_Binary(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_write_file")
-    dir := testutil.MakeRepoRelTempDir(t, "fswrite-bin-")
+	dir := testutil.MakeRepoRelTempDir(t, "fswrite-bin-")
 	path := filepath.Join(dir, "bytes.bin")
 	data := []byte{0x00, 0x10, 0xFF, 0x42, 0x00}
 	out, stderr, code := runFsWrite(t, bin, map[string]any{

@@ -51,7 +51,7 @@ func runFsRm(t *testing.T, bin string, input any) (fsRmOutput, string, int) {
 func TestFsRm_DeleteFile(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-    dir := testutil.MakeRepoRelTempDir(t, "fsrm-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsrm-")
 	path := filepath.Join(dir, "target.txt")
 	if err := os.WriteFile(path, []byte("data"), 0o644); err != nil {
 		t.Fatalf("seed file: %v", err)
@@ -77,7 +77,7 @@ func TestFsRm_DeleteFile(t *testing.T) {
 func TestFsRm_DeleteDirRecursive(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-    dir := testutil.MakeRepoRelTempDir(t, "fsrm-dir-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsrm-dir-")
 	deep := filepath.Join(dir, "a", "b")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatalf("mkdir tree: %v", err)
@@ -129,7 +129,7 @@ func TestFsRm_ErrorJSON_PathRequired(t *testing.T) {
 func TestFsRm_ForceOnMissing(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_rm")
 
-    dir := testutil.MakeRepoRelTempDir(t, "fsrm-missing-")
+	dir := testutil.MakeRepoRelTempDir(t, "fsrm-missing-")
 	path := filepath.Join(dir, "absent.txt")
 
 	out, stderr, code := runFsRm(t, bin, map[string]any{
