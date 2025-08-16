@@ -134,3 +134,40 @@ func TestIsRetryableError_ContextDeadline(t *testing.T) {
         t.Fatal("unexpected retryable for generic error")
     }
 }
+
+// https://github.com/hyperifyio/goagent/issues/216
+func TestCreateChatCompletion_RetryAfter_HeaderSeconds(t *testing.T) {
+    attempts := 0
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        attempts++
+        if attempts == 1 {
+            w.Header().Set("Retry-After", "0") // zero should fallback to backoff, but we will return 429 to test path
+            w.WriteHeader(http.StatusTooManyRequests)
+            _, _ = w.Write([]byte(`{"error":"rate limited"}`))
+            return
+        }
+        var req ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { t.Fatalf("bad json: %v", err) }
+        resp := ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}}
+        if err := json.NewEncoder(w).Encode(resp); err != nil { panic(err) }
+    }))
+    defer ts.Close()
+
+    c := NewClientWithRetry(ts.URL, "", 1*time.Second, RetryPolicy{MaxRetries: 2, Backoff: 1 * time.Millisecond})
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    out, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+    if err != nil { t.Fatalf("unexpected error: %v", err) }
+    if out.Choices[0].Message.Content != "ok" { t.Fatalf("unexpected content: %+v", out) }
+    if attempts < 2 { t.Fatalf("expected retry, got attempts=%d", attempts) }
+}
+
+// https://github.com/hyperifyio/goagent/issues/216
+func TestRetryAfter_HTTPDate(t *testing.T) {
+    // Validate header parsing helper directly
+    now := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+    date := now.Add(2 * time.Second).UTC().Format(http.TimeFormat)
+    if d, ok := retryAfterDuration(date, now); !ok || d < 1900*time.Millisecond || d > 2100*time.Millisecond {
+        t.Fatalf("unexpected duration: %v ok=%v", d, ok)
+    }
+}

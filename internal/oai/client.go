@@ -110,7 +110,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
         if resp.StatusCode < 200 || resp.StatusCode >= 300 {
             // Retry on 429 and 5xx; otherwise return immediately
             if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
-                sleepBackoff(c.retry.Backoff, attempt)
+                // Respect Retry-After when present; otherwise use exponential backoff
+                if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
+                    sleepFor(ra)
+                } else {
+                    sleepBackoff(c.retry.Backoff, attempt)
+                }
                 continue
             }
             return zero, fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(respBody), 2000))
@@ -164,6 +169,36 @@ func sleepBackoff(base time.Duration, attempt int) {
     d := base << attempt
     if d > 2*time.Second {
         d = 2 * time.Second
+    }
+    time.Sleep(d)
+}
+
+// retryAfterDuration parses the Retry-After header which may be seconds or HTTP-date.
+// Returns (duration, true) when valid; otherwise (0, false).
+func retryAfterDuration(h string, now time.Time) (time.Duration, bool) {
+    h = strings.TrimSpace(h)
+    if h == "" {
+        return 0, false
+    }
+    // Try integer seconds first
+    if secs, err := time.ParseDuration(h + "s"); err == nil {
+        if secs > 0 {
+            return secs, true
+        }
+    }
+    // Try HTTP-date formats per RFC 7231 (use http.TimeFormat)
+    if t, err := time.Parse(http.TimeFormat, h); err == nil {
+        if t.After(now) {
+            return t.Sub(now), true
+        }
+    }
+    return 0, false
+}
+
+// sleepFor sleeps for the provided duration; extracted for testability.
+func sleepFor(d time.Duration) {
+    if d <= 0 {
+        return
     }
     time.Sleep(d)
 }
