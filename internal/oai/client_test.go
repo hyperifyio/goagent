@@ -74,6 +74,104 @@ func TestCreateChatCompletion_HTTPError(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/1
+// Ensure encoder omits temperature when SupportsTemperature == false and includes when true.
+func TestCreateChatCompletion_TemperatureOmissionAndInclusion(t *testing.T) {
+	t.Run("OmitWhenUnsupported", func(t *testing.T) {
+		// Model id that does not support temperature per capabilities
+		req := ChatCompletionsRequest{Model: "o3-mini", Messages: []Message{{Role: RoleUser, Content: "x"}}}
+		b, err := json.Marshal(req)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		got := string(b)
+		if strings.Contains(got, "temperature") {
+			t.Fatalf("expected no temperature field, got: %s", got)
+		}
+	})
+
+	t.Run("IncludeWhenSupported", func(t *testing.T) {
+		temp := 0.7
+		req := ChatCompletionsRequest{Model: "oss-gpt-20b", Messages: []Message{{Role: RoleUser, Content: "x"}}, Temperature: &temp}
+		b, err := json.Marshal(req)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		got := string(b)
+		if !strings.Contains(got, "\"temperature\":0.7") {
+			t.Fatalf("expected temperature field, got: %s", got)
+		}
+	})
+}
+
+// Ensure client strips temperature for unsupported models right before HTTP.
+func TestCreateChatCompletion_TemperatureStrippedWhenUnsupported(t *testing.T) {
+	// Spin up a server that captures incoming request JSON
+	var seenTemp *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req ChatCompletionsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		seenTemp = req.Temperature
+		// Respond with minimal valid JSON
+		resp := ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewClientWithRetry(srv.URL, "", 2*time.Second, RetryPolicy{MaxRetries: 0})
+
+	// Case: unsupported model with temperature set -> should be stripped
+	temp := 0.9
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "o3-mini", Messages: []Message{{Role: RoleUser, Content: "x"}}, Temperature: &temp})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if seenTemp != nil {
+		t.Fatalf("expected temperature to be omitted; got %v", *seenTemp)
+	}
+}
+
+// Ensure client preserves temperature for supported models.
+func TestCreateChatCompletion_TemperaturePreservedWhenSupported(t *testing.T) {
+	var seenTemp *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ChatCompletionsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		seenTemp = req.Temperature
+		resp := ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewClientWithRetry(srv.URL, "", 2*time.Second, RetryPolicy{MaxRetries: 0})
+	temp := 0.7
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "oss-gpt-20b", Messages: []Message{{Role: RoleUser, Content: "x"}}, Temperature: &temp})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if seenTemp == nil || *seenTemp != 0.7 {
+		if seenTemp == nil {
+			t.Fatalf("expected temperature to be present")
+		}
+		t.Fatalf("expected temperature 0.7, got %v", *seenTemp)
+	}
+}
+
 // https://github.com/hyperifyio/goagent/issues/216
 func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
 	attempts := 0

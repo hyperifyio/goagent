@@ -65,6 +65,11 @@ func NewClientWithRetry(baseURL, apiKey string, timeout time.Duration, retry Ret
 
 // nolint:gocyclo // Orchestrates retries and timing; complexity acceptable and tested.
 func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRequest) (ChatCompletionsResponse, error) {
+	// Encoder guard: omit temperature entirely for models that do not support it.
+	// This complements higher-level callers which may or may not set the field.
+	if !SupportsTemperature(req.Model) {
+		req.Temperature = nil
+	}
 	var zero ChatCompletionsResponse
 	body, err := json.Marshal(req)
 	if err != nil {
