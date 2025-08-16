@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ develop, main, master ]
+  pull_request:
+    branches: [ '**' ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install ripgrep (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Install ripgrep (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ripgrep
+
+      - name: Install make and ripgrep (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install -y make ripgrep
+          echo "make version:"; make --version || true
+          echo "rg version:"; rg --version || true
+
+      - name: Print Go env
+        run: go env
+
+      - name: Tidy
+        shell: bash
+        run: make tidy
+
+      - name: Lint
+        shell: bash
+        run: make lint
+
+      - name: Test
+        shell: bash
+        run: make test
+
+      - name: Build
+        shell: bash
+        run: make build
+
+      - name: Build tools
+        shell: bash
+        run: make build-tools
