@@ -120,7 +120,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		httpReq.Header.Set("Idempotency-Key", idemKey)
 		httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace))
 
-		resp, derr := c.httpClient.Do(httpReq)
+        resp, derr := c.httpClient.Do(httpReq)
 		if derr != nil {
 			lastErr = derr
 			// Log attempt with error
@@ -134,7 +134,14 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				sleepFor(back)
 				continue
 			}
-			return zero, fmt.Errorf("http do: %w", derr)
+            // Upgrade error with base URL, configured timeout, and actionable hint
+            hint := userHintForCause(ctx, derr)
+            // c.httpClient.Timeout reflects configured HTTP timeout
+            tmo := c.httpClient.Timeout
+            if hint != "" {
+                return zero, fmt.Errorf("chat POST failed: %v (base=%s, http-timeout=%s). Hint: %s", derr, c.baseURL, tmo, hint)
+            }
+            return zero, fmt.Errorf("chat POST failed: %v (base=%s, http-timeout=%s)", derr, c.baseURL, tmo)
 		}
 
 		respBody, readErr := io.ReadAll(resp.Body)
