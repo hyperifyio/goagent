@@ -40,7 +40,9 @@ func runFsRm(t *testing.T, bin string, input any) (fsRmOutput, string, int) {
 		}
 	}
 	var out fsRmOutput
-	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
+	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out); err != nil {
+		t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+	}
 	return out, stderr.String(), code
 }
 

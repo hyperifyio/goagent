@@ -35,7 +35,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(rmOutput{Removed: removed})
+	if err := json.NewEncoder(os.Stdout).Encode(rmOutput{Removed: removed}); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (rmInput, error) {
