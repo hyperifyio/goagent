@@ -13,11 +13,9 @@ import (
 // BuildTool builds the named tool binary into a test-scoped temporary
 // directory and returns the absolute path to the produced executable.
 //
-// Priority order for source discovery (absolute paths used to satisfy
-// repository path hygiene rules in linters/tests):
-//  1. tools/cmd/<name> (canonical layout)
-//  2. legacy directory: tools/<name>
-//  3. legacy single-file: tools/<name>.go
+// Source discovery (absolute paths used to satisfy repository path hygiene
+// rules in linters/tests):
+//  - tools/cmd/<name> (canonical layout only)
 func BuildTool(t *testing.T, name string) string {
 	t.Helper()
 
@@ -33,16 +31,9 @@ func BuildTool(t *testing.T, name string) string {
 	}
 	outPath := filepath.Join(t.TempDir(), binName)
 
-	// Candidate source locations in priority order
-	var candidates []string
-	candidates = append(candidates, filepath.Join(repoRoot, "tools", "cmd", name))
-	if name == "get_time" {
-		candidates = append(candidates, filepath.Join(repoRoot, "tools", "timecli"))
-	}
-	candidates = append(candidates,
-		filepath.Join(repoRoot, "tools", name),
-		filepath.Join(repoRoot, "tools", name+".go"),
-	)
+    // Candidate source locations (canonical layout only)
+    var candidates []string
+    candidates = append(candidates, filepath.Join(repoRoot, "tools", "cmd", name))
 
 	var srcPath string
 	for _, c := range candidates {
