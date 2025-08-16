@@ -3,31 +3,24 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
     "strings"
-	"testing"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsMoveOutput struct {
 	Moved bool `json:"moved"`
 }
 
-// buildFsMoveTool builds ./tools/fs_move into a temporary binary.
+// buildFsMoveTool builds the fs_move tool using shared helper.
 func buildFsMoveTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-move")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_move")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_move tool: %v\n%s", err, string(out))
-	}
-	return binPath
+    return testutil.BuildTool(t, "fs_move")
 }
 
 // runFsMove runs the built fs_move tool with the given JSON input and decodes stdout.
