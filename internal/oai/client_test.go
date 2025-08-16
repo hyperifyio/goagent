@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
     "errors"
+    "os"
+    "path/filepath"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -123,6 +125,24 @@ func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
     }
     if attempts < 2 {
         t.Fatalf("expected at least 2 attempts, got %d", attempts)
+    }
+
+    // Verify audit log contains http_attempt entries
+    auditDir := filepath.Join(".goagent", "audit")
+    // Allow a brief moment for file flush on slow FS
+    time.Sleep(10 * time.Millisecond)
+    entries, err := os.ReadDir(auditDir)
+    if err != nil || len(entries) == 0 {
+        t.Fatalf("expected audit file in %s: %v", auditDir, err)
+    }
+    // Read the latest file and ensure it has at least two http_attempt lines
+    latest := filepath.Join(auditDir, entries[len(entries)-1].Name())
+    b, rerr := os.ReadFile(latest)
+    if rerr != nil {
+        t.Fatalf("read audit: %v", rerr)
+    }
+    if !strings.Contains(string(b), "\"event\":\"http_attempt\"") {
+        t.Fatalf("expected http_attempt audit entries, got: %s", string(b))
     }
 }
 

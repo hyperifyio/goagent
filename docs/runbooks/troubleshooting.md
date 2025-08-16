@@ -60,6 +60,10 @@ echo '{"cmd":"timeout","args":["/T","1"],"timeoutSec":2}' | ./tools/bin/exec.exe
 ```
 
 ## HTTP errors to the API
+### Inspecting HTTP retry attempts
+- When retries are enabled (`-http-retries > 0`), each attempt is logged to `.goagent/audit/YYYYMMDD.log` as an `http_attempt` entry with fields `{attempt,max,status,backoffMs,endpoint}`.
+- Use this to confirm whether `Retry-After` or exponential backoff was applied and how many attempts occurred.
+
 - Symptom: non-2xx from the Chat Completions endpoint with body included.
 - Fix: ensure `OAI_BASE_URL`, `OAI_MODEL`, and `OAI_API_KEY` (if required) are set correctly.
 ```bash

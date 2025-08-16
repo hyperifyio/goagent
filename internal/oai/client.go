@@ -8,9 +8,11 @@ import (
     "errors"
     "fmt"
     "io"
+    "encoding/hex"
     "net"
     "net/http"
-    "encoding/hex"
+    "os"
+    "path/filepath"
     "strings"
     "time"
 )
@@ -90,8 +92,13 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
         resp, derr := c.httpClient.Do(httpReq)
         if derr != nil {
             lastErr = derr
+            // Log attempt with error
+            logHTTPAttempt(attempt+1, attempts, 0, 0, endpoint, derr.Error())
             if attempt < attempts-1 && isRetryableError(derr) {
-                sleepBackoff(c.retry.Backoff, attempt)
+                // compute backoff for audit then sleep
+                back := backoffDuration(c.retry.Backoff, attempt)
+                logHTTPAttempt(attempt+1, attempts, 0, back.Milliseconds(), endpoint, derr.Error())
+                sleepFor(back)
                 continue
             }
             return zero, fmt.Errorf("http do: %w", derr)
@@ -101,8 +108,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
         _ = resp.Body.Close() // best-effort close
         if readErr != nil {
             lastErr = readErr
+            // Log attempt with read error
+            logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, readErr.Error())
             if attempt < attempts-1 && isRetryableError(readErr) {
-                sleepBackoff(c.retry.Backoff, attempt)
+                back := backoffDuration(c.retry.Backoff, attempt)
+                logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, readErr.Error())
+                sleepFor(back)
                 continue
             }
             return zero, fmt.Errorf("read response body: %w", readErr)
@@ -112,17 +123,25 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
             if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
                 // Respect Retry-After when present; otherwise use exponential backoff
                 if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
+                    // Log with Retry-After derived backoff
+                    logHTTPAttempt(attempt+1, attempts, resp.StatusCode, ra.Milliseconds(), endpoint, "")
                     sleepFor(ra)
                 } else {
-                    sleepBackoff(c.retry.Backoff, attempt)
+                    back := backoffDuration(c.retry.Backoff, attempt)
+                    logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, "")
+                    sleepFor(back)
                 }
                 continue
             }
+            // Final non-retryable failure: log attempt (no backoff) and return
+            logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, truncate(string(respBody), 2000))
             return zero, fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(respBody), 2000))
         }
         if err := json.Unmarshal(respBody, &zero); err != nil {
             return ChatCompletionsResponse{}, fmt.Errorf("decode response: %w; body: %s", err, truncate(string(respBody), 1000))
         }
+        // Success: log attempt with status and no backoff
+        logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, "")
         return zero, nil
     }
     if lastErr != nil {
@@ -173,6 +192,18 @@ func sleepBackoff(base time.Duration, attempt int) {
     time.Sleep(d)
 }
 
+// backoffDuration returns the duration that sleepBackoff would sleep for a given attempt.
+func backoffDuration(base time.Duration, attempt int) time.Duration {
+    if base <= 0 {
+        base = 200 * time.Millisecond
+    }
+    d := base << attempt
+    if d > 2*time.Second {
+        d = 2 * time.Second
+    }
+    return d
+}
+
 // retryAfterDuration parses the Retry-After header which may be seconds or HTTP-date.
 // Returns (duration, true) when valid; otherwise (0, false).
 func retryAfterDuration(h string, now time.Time) (time.Duration, bool) {
@@ -211,4 +242,52 @@ func generateIdempotencyKey() string {
         return fmt.Sprintf("goagent-%d", time.Now().UnixNano())
     }
     return "goagent-" + hex.EncodeToString(b[:])
+}
+
+// logHTTPAttempt appends an NDJSON line describing an HTTP attempt and planned backoff.
+func logHTTPAttempt(attempt, maxAttempts, status int, backoffMs int64, endpoint, errStr string) {
+    type audit struct {
+        TS        string `json:"ts"`
+        Event     string `json:"event"`
+        Attempt   int    `json:"attempt"`
+        Max       int    `json:"max"`
+        Status    int    `json:"status"`
+        BackoffMs int64  `json:"backoffMs"`
+        Endpoint  string `json:"endpoint"`
+        Error     string `json:"error,omitempty"`
+    }
+    entry := audit{
+        TS:        time.Now().UTC().Format(time.RFC3339Nano),
+        Event:     "http_attempt",
+        Attempt:   attempt,
+        Max:       maxAttempts,
+        Status:    status,
+        BackoffMs: backoffMs,
+        Endpoint:  endpoint,
+        Error:     truncate(errStr, 500),
+    }
+    _ = appendAuditLog(entry)
+}
+
+// appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log (same location used by tool runner).
+func appendAuditLog(entry any) error {
+    b, err := json.Marshal(entry)
+    if err != nil {
+        return err
+    }
+    dir := filepath.Join(".goagent", "audit")
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return err
+    }
+    fname := time.Now().UTC().Format("20060102") + ".log"
+    path := filepath.Join(dir, fname)
+    f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+    if err != nil {
+        return err
+    }
+    defer func() { _ = f.Close() }()
+    if _, err := f.Write(append(b, '\n')); err != nil {
+        return err
+    }
+    return nil
 }
