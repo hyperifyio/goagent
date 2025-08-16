@@ -253,6 +253,7 @@
   - [x] [S01:l252-wire-lint] Prepend `check-go-version` to `lint` so it runs first; local `make lint` now fails fast on toolchain mismatch as intended.
   - [x] [S01b:l252-local-proof] Verified locally that `make lint` executes `check-go-version` first (observed "check-go-version: OK" before golangci-lint output); CI verification remains pending.
   - [x] [S02b:l252-robust-mod-parse] Harden `Makefile` `check-go-version` to parse Go major.minor via `go mod edit -json` for stability; `make lint` and `go test ./...` green locally.
+  - [x] [S02e:l252-local-test-order] Add a deterministic unit test `internal/ci/ci_workflow_test.go::TestLintOrderLocallyAndInWorkflow` that inspects the Makefile lint recipe block to ensure `check-go-version` precedes `golangci-lint`, and asserts the CI workflow contains the explicit lint order assertion step. Suite green.
   - [ ] [S02:l252-ci-green] Verify in CI that the Lint job executes `check-go-version` first and passes on runners matching `go.mod`; next step: run CI and confirm logs.
   - [ ] [S02c:l252-open-pr] Open a PR for this branch to trigger CI on all OSes; after the run, capture the workflow URL and verify `check-go-version: OK` appears before `golangci-lint` output in the lint step across the matrix; then proceed to mark S02 done.
   - [ ] [S02a:l252-run-ci] Trigger CI by pushing this branch or opening a PR to run the workflow; confirm logs show `check-go-version` output before `golangci-lint` and that the step passes on runners matching `go.mod`; record the CI run URL in the PR/issue, then mark S02 complete.
