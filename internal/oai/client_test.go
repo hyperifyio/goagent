@@ -167,7 +167,9 @@ func TestCreateChatCompletion_RetryAfter_HeaderSeconds(t *testing.T) {
 		if attempts == 1 {
 			w.Header().Set("Retry-After", "0") // zero should fallback to backoff, but we will return 429 to test path
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"error":"rate limited"}`))
+			if _, err := w.Write([]byte(`{"error":"rate limited"}`)); err != nil {
+				panic(err)
+			}
 			return
 		}
 		var req ChatCompletionsRequest

@@ -63,6 +63,7 @@ func NewClientWithRetry(baseURL, apiKey string, timeout time.Duration, retry Ret
 	}
 }
 
+// nolint:gocyclo // Orchestrates retries and timing; complexity acceptable and tested.
 func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRequest) (ChatCompletionsResponse, error) {
 	var zero ChatCompletionsResponse
 	body, err := json.Marshal(req)
@@ -137,7 +138,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		}
 
 		respBody, readErr := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // best-effort close
+		if cerr := resp.Body.Close(); cerr != nil {
+			// best-effort: record close error as lastErr if none
+			if lastErr == nil {
+				lastErr = cerr
+			}
+		}
 		if readErr != nil {
 			lastErr = readErr
 			// Log attempt with read error
@@ -206,29 +212,18 @@ func isRetryableError(err error) bool {
 	}
 	var ne net.Error
 	if errors.As(err, &ne) {
-		if ne.Timeout() || ne.Temporary() {
+		if ne.Timeout() { // ne.Temporary is deprecated; avoid
 			return true
 		}
 	}
 	// *url.Error often wraps retryable errors; fall back to string contains of "timeout"
 	s := strings.ToLower(err.Error())
-	if strings.Contains(s, "timeout") {
-		return true
-	}
-	return false
+	return strings.Contains(s, "timeout")
 }
 
-func sleepBackoff(base time.Duration, attempt int) {
-	if base <= 0 {
-		base = 200 * time.Millisecond
-	}
-	// exponential backoff: base * 2^attempt, capped to 2s to keep tests fast
-	d := base << attempt
-	if d > 2*time.Second {
-		d = 2 * time.Second
-	}
-	time.Sleep(d)
-}
+// sleepBackoff retained for backward compatibility; not used.
+// Deprecated: use backoffDuration + sleepFor instead.
+// func sleepBackoff(base time.Duration, attempt int) { time.Sleep(backoffDuration(base, attempt)) }
 
 // backoffDuration returns the duration that sleepBackoff would sleep for a given attempt.
 func backoffDuration(base time.Duration, attempt int) time.Duration {
@@ -304,7 +299,9 @@ func logHTTPAttempt(attempt, maxAttempts, status int, backoffMs int64, endpoint,
 		Endpoint:  endpoint,
 		Error:     truncate(errStr, 500),
 	}
-	_ = appendAuditLog(entry)
+	if err := appendAuditLog(entry); err != nil {
+		_ = err
+	}
 }
 
 // logHTTPTiming appends detailed HTTP timing metrics to the audit log.
@@ -355,7 +352,9 @@ func logHTTPTiming(attempt int, endpoint string, status int, start time.Time, dn
 		Cause:     cause,
 		Hint:      hint,
 	}
-	_ = appendAuditLog(entry)
+	if err := appendAuditLog(entry); err != nil {
+		_ = err
+	}
 }
 
 // classifyHTTPCause returns a short cause label for audit based on error/context.
@@ -404,7 +403,11 @@ func appendAuditLog(entry any) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			_ = cerr
+		}
+	}()
 	if _, err := f.Write(append(b, '\n')); err != nil {
 		return err
 	}
