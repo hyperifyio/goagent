@@ -393,6 +393,46 @@ func TestRunAgent_HTTPTimeout_RaiseResolves(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/243
+// Ensure chat POST uses -http-timeout exclusively even if legacy -timeout is shorter
+func TestRunAgent_HTTPTimeout_IgnoresShortGlobal(t *testing.T) {
+    // Server sleeps longer than global timeout but shorter than http-timeout
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        time.Sleep(150 * time.Millisecond)
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode resp: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       "test",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "test",
+        maxSteps:     1,
+        timeout:      50 * time.Millisecond,  // legacy global shorter than server latency
+        httpTimeout:  500 * time.Millisecond, // HTTP timeout longer than server latency
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+        debug:        false,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/1
 func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
 	dir := t.TempDir()
@@ -524,4 +564,39 @@ func TestTimeoutPrecedence_Table(t *testing.T) {
             }
         })
     }
+}
+
+// https://github.com/hyperifyio/goagent/issues/243
+// Ensure -http-timeout is not clamped by legacy -timeout (shorter or longer)
+func TestHTTPTimeout_NotClampedByGlobal(t *testing.T) {
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+
+    t.Run("GlobalShorter", func(t *testing.T) {
+        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "1s"}
+        cfg, code := parseFlags()
+        if code != 0 {
+            t.Fatalf("parse exit: %d", code)
+        }
+        if cfg.httpTimeout != 300*time.Second {
+            t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+        }
+        if cfg.timeout != 1*time.Second {
+            t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 1*time.Second)
+        }
+    })
+
+    t.Run("GlobalLonger", func(t *testing.T) {
+        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "600s"}
+        cfg, code := parseFlags()
+        if code != 0 {
+            t.Fatalf("parse exit: %d", code)
+        }
+        if cfg.httpTimeout != 300*time.Second {
+            t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+        }
+        if cfg.timeout != 600*time.Second {
+            t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 600*time.Second)
+        }
+    })
 }
