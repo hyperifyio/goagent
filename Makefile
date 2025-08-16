@@ -64,8 +64,8 @@ fmtcheck:
 
 # Guard against legacy tool path usage outside canonical layout
 # - Fails if any "./tools/(get_time|fs_*|exec)" invocation remains outside allowed paths
-# - Also fails on single-file references like "./tools/name.go" or direct builds/runs like
-#   "go build ... ./tools/name" outside `tools/cmd/**` and `tools/bin/**` (excluding FEATURE_CHECKLIST.md).
+# - Also fails on single-file references like "./tools/<name>.go".
+#   Allowed: "go build -o tools/bin/<name> ./tools/cmd/<name>". Forbidden: building directly from "./tools/<name>" outside `tools/cmd/**` and `tools/bin/**` (excluding FEATURE_CHECKLIST.md).
 # Requires ripgrep (`rg`).
 check-tools-paths:
 	@set -euo pipefail; \
@@ -80,10 +80,11 @@ check-tools-paths:
 		echo "Forbidden legacy tool path references found. Use ./tools/bin/NAME or sources under tools/cmd/NAME."; \
 		exit 1; \
 	fi; \
-	# Single-file or direct tool builds outside canonical layout
-	if rg -n --no-heading --hidden \
+	# Single-file source builds or direct `go build/run` against ./tools/<name> are forbidden
+	# Use PCRE2 to exclude allowed ./tools/cmd/* and ./tools/bin/* via negative lookahead
+	if rg -n -P --no-heading --hidden \
 		-g '!tools/cmd/**' -g '!tools/bin/**' -g '!FEATURE_CHECKLIST.md' -g '!.git/**' \
-		-e '(\./tools/[a-z_]+\.go|go\s+(build|run)\s+.*\./tools/[a-z_]+)\b' .; then \
+		-e '(\./tools/[a-z_]+\.go|go\s+(build|run)\s+.*\s\./tools/(?!cmd/|bin/)[a-z_]+)\b' .; then \
 		echo "Direct tool source builds or single-file references found. Build from tools/cmd/NAME -> tools/bin/NAME."; \
 		exit 1; \
 	fi; \
