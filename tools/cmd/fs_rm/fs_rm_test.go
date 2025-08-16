@@ -9,24 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsRmOutput struct {
 	Removed bool `json:"removed"`
-}
-
-// buildFsRmTool builds ./tools/cmd/fs_rm into a temporary binary.
-func buildFsRmTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-rm")
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_rm")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_rm tool: %v\n%s", err, string(out))
-	}
-	return binPath
 }
 
 // runFsRm runs the built fs_rm tool with the given JSON input and decodes stdout.
@@ -56,11 +44,23 @@ func runFsRm(t *testing.T, bin string, input any) (fsRmOutput, string, int) {
 	return out, stderr.String(), code
 }
 
+// makeRepoRelTempDir creates a temporary directory under the repository root
+// (current working directory in tests) and returns the relative path.
+func makeRepoRelTempDir(t *testing.T, prefix string) string {
+	t.Helper()
+	tmpAbs, err := os.MkdirTemp(".", prefix)
+	if err != nil {
+		t.Fatalf("mkdir temp under repo: %v", err)
+	}
+	base := filepath.Base(tmpAbs)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	return base
+}
+
 // TestFsRm_DeleteFile expresses the contract: deleting a regular file succeeds,
 // tool exits 0, outputs {"removed":true}, and the file no longer exists.
 func TestFsRm_DeleteFile(t *testing.T) {
-	// Build (will fail until fs_rm is implemented)
-	bin := buildFsRmTool(t)
+	bin := testutil.BuildTool(t, "fs_rm")
 
 	dir := makeRepoRelTempDir(t, "fsrm-")
 	path := filepath.Join(dir, "target.txt")
@@ -86,7 +86,7 @@ func TestFsRm_DeleteFile(t *testing.T) {
 // tree with recursive=true succeeds, tool exits 0, outputs {"removed":true},
 // and the directory no longer exists.
 func TestFsRm_DeleteDirRecursive(t *testing.T) {
-	bin := buildFsRmTool(t)
+	bin := testutil.BuildTool(t, "fs_rm")
 
 	dir := makeRepoRelTempDir(t, "fsrm-dir-")
 	deep := filepath.Join(dir, "a", "b")
@@ -115,7 +115,7 @@ func TestFsRm_DeleteDirRecursive(t *testing.T) {
 // TestFsRm_ErrorJSON_PathRequired verifies that errors are reported as single-line
 // JSON to stderr with an "error" field when required input is missing.
 func TestFsRm_ErrorJSON_PathRequired(t *testing.T) {
-	bin := buildFsRmTool(t)
+	bin := testutil.BuildTool(t, "fs_rm")
 
 	cmd := exec.Command(bin)
 	var stdout, stderr bytes.Buffer
@@ -138,7 +138,7 @@ func TestFsRm_ErrorJSON_PathRequired(t *testing.T) {
 // TestFsRm_ForceOnMissing verifies force=true on a missing path exits 0,
 // returns {"removed":false}, and the path remains absent.
 func TestFsRm_ForceOnMissing(t *testing.T) {
-	bin := buildFsRmTool(t)
+	bin := testutil.BuildTool(t, "fs_rm")
 
 	dir := makeRepoRelTempDir(t, "fsrm-missing-")
 	path := filepath.Join(dir, "absent.txt")
