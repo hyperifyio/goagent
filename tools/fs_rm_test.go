@@ -15,12 +15,12 @@ type fsRmOutput struct {
 	Removed bool `json:"removed"`
 }
 
-// buildFsRmTool builds ./tools/fs_rm into a temporary binary.
+// buildFsRmTool builds ./tools/cmd/fs_rm into a temporary binary.
 func buildFsRmTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-rm")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_rm")
+    cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_rm")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
