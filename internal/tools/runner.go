@@ -64,30 +64,19 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	if _, err := stdin.Write(jsonInput); err != nil {
 		return nil, fmt.Errorf("write stdin: %w", err)
 	}
-	_ = stdin.Close()
+	if err := stdin.Close(); err != nil {
+		// Best-effort close; continue but include context in error later via audit
+	}
 
 	// Read stdout and stderr fully
 	outCh := make(chan []byte, 1)
 	errCh := make(chan []byte, 1)
-	go func() { b, _ := io.ReadAll(stdout); outCh <- b }()
-	go func() { b, _ := io.ReadAll(stderr); errCh <- b }()
+	go func() { outCh <- safeReadAll(stdout) }()
+	go func() { errCh <- safeReadAll(stderr) }()
 
 	err = cmd.Wait()
 	out := <-outCh
 	serr := <-errCh
-
-	// Prepare audit entry
-	type auditEntry struct {
-		TS          string   `json:"ts"`
-		Tool        string   `json:"tool"`
-		Argv        []string `json:"argv"`
-		CWD         string   `json:"cwd"`
-		Exit        int      `json:"exit"`
-		MS          int64    `json:"ms"`
-		StdoutBytes int      `json:"stdoutBytes"`
-		StderrBytes int      `json:"stderrBytes"`
-		Truncated   bool     `json:"truncated"`
-	}
 
 	exitCode := 0
 	if err != nil {
@@ -99,23 +88,8 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 			exitCode = -1
 		}
 	}
-	cwd, _ := os.Getwd()
-	// Redact sensitive values from argv and cwd before auditing
-	redactedArgv := redactSensitiveStrings(append([]string(nil), spec.Command...))
-	redactedCWD := redactSensitiveString(cwd)
-	entry := auditEntry{
-		TS:          timeNow().UTC().Format(time.RFC3339Nano),
-		Tool:        spec.Name,
-		Argv:        redactedArgv,
-		CWD:         redactedCWD,
-		Exit:        exitCode,
-		MS:          time.Since(start).Milliseconds(),
-		StdoutBytes: len(out),
-		StderrBytes: len(serr),
-		Truncated:   false,
-	}
-	// Best-effort append (failures do not affect tool result)
-	_ = appendAuditLog(entry)
+	// Best-effort audit (failures do not affect tool result)
+	writeAudit(spec, start, exitCode, len(out), len(serr))
 
 	if ctx.Err() == context.DeadlineExceeded {
 		// Normalize timeout error to a deterministic string per product rules
@@ -130,6 +104,47 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 		return nil, errors.New(msg)
 	}
 	return out, nil
+}
+
+// safeReadAll reads all bytes from r; on error it returns any bytes read so far (or nil).
+func safeReadAll(r io.Reader) []byte {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return b
+	}
+	return b
+}
+
+// writeAudit emits an NDJSON line capturing tool execution metadata.
+func writeAudit(spec ToolSpec, start time.Time, exitCode, stdoutBytes, stderrBytes int) {
+	type auditEntry struct {
+		TS          string   `json:"ts"`
+		Tool        string   `json:"tool"`
+		Argv        []string `json:"argv"`
+		CWD         string   `json:"cwd"`
+		Exit        int      `json:"exit"`
+		MS          int64    `json:"ms"`
+		StdoutBytes int      `json:"stdoutBytes"`
+		StderrBytes int      `json:"stderrBytes"`
+		Truncated   bool     `json:"truncated"`
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
+	}
+	entry := auditEntry{
+		TS:          timeNow().UTC().Format(time.RFC3339Nano),
+		Tool:        spec.Name,
+		Argv:        redactSensitiveStrings(append([]string(nil), spec.Command...)),
+		CWD:         redactSensitiveString(cwd),
+		Exit:        exitCode,
+		MS:          time.Since(start).Milliseconds(),
+		StdoutBytes: stdoutBytes,
+		StderrBytes: stderrBytes,
+		Truncated:   false,
+	}
+	_ = appendAuditLog(entry)
 }
 
 // appendAuditLog writes an NDJSON audit line to .goagent/audit/YYYYMMDD.log
@@ -148,7 +163,7 @@ func appendAuditLog(entry any) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Write(append(b, '\n')); err != nil {
 		return err
 	}

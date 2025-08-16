@@ -48,8 +48,11 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 	if err != nil {
 		return zero, fmt.Errorf("http do: %w", err)
 	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // best-effort close
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return zero, fmt.Errorf("read response body: %w", readErr)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return zero, fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(respBody), 2000))
 	}
