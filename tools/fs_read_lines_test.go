@@ -10,6 +10,8 @@ import (
     "path/filepath"
     "strings"
     "testing"
+
+    "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // Contract output for fs_read_lines
@@ -20,18 +22,10 @@ type fsReadLinesOutput struct {
     EOF       bool   `json:"eof"`
 }
 
-// buildFsReadLinesTool builds ./tools/fs_read_lines into a temporary binary.
+// buildFsReadLinesTool builds the fs_read_lines tool binary using canonical paths.
 func buildFsReadLinesTool(t *testing.T) string {
     t.Helper()
-    tmpDir := t.TempDir()
-    binPath := filepath.Join(tmpDir, "fs-read-lines")
-    cmd := exec.Command("go", "build", "-o", binPath, "./fs_read_lines")
-    cmd.Dir = "."
-    out, err := cmd.CombinedOutput()
-    if err != nil {
-        t.Fatalf("failed to build fs_read_lines tool: %v\n%s", err, string(out))
-    }
-    return binPath
+    return testutil.BuildTool(t, "fs_read_lines")
 }
 
 // runFsReadLines executes the fs_read_lines tool with given JSON input.

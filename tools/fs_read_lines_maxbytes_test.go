@@ -6,12 +6,14 @@ import (
     "os"
     "path/filepath"
     "testing"
+
+    "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // TestFsReadLines_MaxBytes_Truncates verifies output is truncated at maxBytes boundary
 // without claiming EOF when the file likely continues.
 func TestFsReadLines_MaxBytes_Truncates(t *testing.T) {
-    bin := buildFsReadLinesTool(t)
+    bin := testutil.BuildTool(t, "fs_read_lines")
 
     // Arrange: create a repo-relative temp file with simple ASCII lines
     tmpDirAbs, err := os.MkdirTemp(".", "fsread-maxbytes-")
