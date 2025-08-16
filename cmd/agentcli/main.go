@@ -117,6 +117,11 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
+    // Handle help flags prior to any parsing/validation or side effects
+    if helpRequested(os.Args[1:]) {
+        printUsage(os.Stdout)
+        os.Exit(0)
+    }
 	cfg, exitOn := parseFlags()
 	if exitOn != 0 {
 		safeFprintln(os.Stderr, "error: -prompt is required")
@@ -316,6 +321,45 @@ func oneLine(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	// Collapse repeated spaces
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// helpRequested returns true if any canonical help token is present.
+func helpRequested(args []string) bool {
+    for _, a := range args {
+        if a == "--help" || a == "-h" || a == "help" {
+            return true
+        }
+    }
+    return false
+}
+
+// printUsage writes a comprehensive usage guide to w.
+func printUsage(w io.Writer) {
+    var b strings.Builder
+    b.WriteString("agentcli — non-interactive CLI agent for OpenAI-compatible APIs\n\n")
+    b.WriteString("Usage:\n  agentcli [flags]\n\n")
+    b.WriteString("Flags (precedence: flag > env > default):\n")
+    b.WriteString("  -prompt string\n    User prompt (required)\n")
+    b.WriteString("  -tools string\n    Path to tools.json (optional)\n")
+    b.WriteString("  -system string\n    System prompt (default \"You are a helpful, precise assistant. Use tools when strictly helpful.\")\n")
+    b.WriteString("  -base-url string\n    OpenAI-compatible base URL (env OAI_BASE_URL or default https://api.openai.com/v1)\n")
+    b.WriteString("  -api-key string\n    API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)\n")
+    b.WriteString("  -model string\n    Model ID (env OAI_MODEL or default oss-gpt-20b)\n")
+    b.WriteString("  -max-steps int\n    Maximum reasoning/tool steps (default 8)\n")
+    b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
+    b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
+    b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
+    b.WriteString("  -temp float\n    Sampling temperature (default 0.2)\n")
+    b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
+    b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
+    b.WriteString("\nExamples:\n")
+    b.WriteString("  # Quick start (after make build build-tools)\n")
+    b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
+    b.WriteString("  # Print capabilities (enabled tools)\n")
+    b.WriteString("  ./bin/agentcli -capabilities -tools ./tools.json\n\n")
+    b.WriteString("  # Show help\n")
+    b.WriteString("  agentcli --help\n")
+    safeFprintln(w, strings.TrimRight(b.String(), "\n"))
 }
 
 // printCapabilities loads the tools manifest (if provided) and prints a concise list
