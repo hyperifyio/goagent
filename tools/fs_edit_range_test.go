@@ -3,16 +3,18 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "crypto/sha256"
+    "encoding/base64"
+    "encoding/hex"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsEditRangeOutput struct {
@@ -21,19 +23,7 @@ type fsEditRangeOutput struct {
 }
 
 // buildFsEditRangeTool builds ./tools/fs_edit_range into a temporary binary.
-func buildFsEditRangeTool(t *testing.T) string {
-	// Intentionally build the yet-to-be-implemented tool to encode the contract.
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-edit-range")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_edit_range")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_edit_range tool: %v\n%s", err, string(out))
-	}
-	return binPath
-}
+func buildFsEditRangeTool(t *testing.T) string { return testutil.BuildTool(t, "fs_edit_range") }
 
 // runFsEditRange executes the fs_edit_range tool with given JSON input.
 func runFsEditRange(t *testing.T, bin string, input any) (fsEditRangeOutput, string, int) {

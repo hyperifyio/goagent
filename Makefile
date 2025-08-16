@@ -32,7 +32,7 @@ build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_mkdirp$(EXE) ./tools/cmd/fs_mkdirp
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_apply_patch$(EXE) ./tools/cmd/fs_apply_patch
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_lines$(EXE) ./tools/cmd/fs_read_lines
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_edit_range$(EXE) ./tools/fs_edit_range
+    GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_edit_range$(EXE) ./tools/cmd/fs_edit_range
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_listdir$(EXE) ./tools/fs_listdir
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_stat$(EXE) ./tools/fs_stat
 
@@ -58,6 +58,7 @@ clean:
 	      tools/fs_mkdirp/fs_mkdirp$(EXE) \
 	      tools/fs_apply_patch/fs_apply_patch$(EXE) \
           tools/cmd/fs_read_lines/fs_read_lines$(EXE) \
+          tools/cmd/fs_edit_range/fs_edit_range$(EXE) \
 	      tools/fs_edit_range/fs_edit_range$(EXE) \
 	      tools/fs_listdir/fs_listdir$(EXE) \
 	      tools/fs_stat/fs_stat$(EXE) || true

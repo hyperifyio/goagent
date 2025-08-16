@@ -9,13 +9,15 @@ import (
     "path/filepath"
     "sync"
     "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // TestFsEditRange_Concurrent_Serializes asserts two concurrent edits are serialized
 // resulting in a state equivalent to some sequential execution.
 // We choose equal-length replacements so byte indices remain stable.
 func TestFsEditRange_Concurrent_Serializes(t *testing.T) {
-    bin := buildFsEditRangeTool(t)
+    bin := testutil.BuildTool(t, "fs_edit_range")
 
     // Arrange: seed repo-relative temp file
     tmpDirAbs, err := os.MkdirTemp(".", "fsedit-conc-")

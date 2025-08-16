@@ -8,11 +8,13 @@ import (
     "os"
     "path/filepath"
     "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // TestFsEditRange_BinaryContent verifies splicing works for arbitrary binary bytes.
 func TestFsEditRange_BinaryContent(t *testing.T) {
-    bin := buildFsEditRangeTool(t)
+    bin := testutil.BuildTool(t, "fs_edit_range")
 
     // Arrange: repo-relative temporary directory and binary file
     tmpDirAbs, err := os.MkdirTemp(".", "fsedit-bin-")
