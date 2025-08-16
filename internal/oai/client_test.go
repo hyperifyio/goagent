@@ -127,7 +127,7 @@ func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
         t.Fatalf("expected at least 2 attempts, got %d", attempts)
     }
 
-    // Verify audit log contains http_attempt entries
+    // Verify audit log contains http_attempt and http_timing entries
     auditDir := filepath.Join(".goagent", "audit")
     // Allow a brief moment for file flush on slow FS
     time.Sleep(10 * time.Millisecond)
@@ -141,8 +141,12 @@ func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
     if rerr != nil {
         t.Fatalf("read audit: %v", rerr)
     }
-    if !strings.Contains(string(b), "\"event\":\"http_attempt\"") {
-        t.Fatalf("expected http_attempt audit entries, got: %s", string(b))
+    content := string(b)
+    if !strings.Contains(content, "\"event\":\"http_attempt\"") {
+        t.Fatalf("expected http_attempt audit entries, got: %s", content)
+    }
+    if !strings.Contains(content, "\"event\":\"http_timing\"") {
+        t.Fatalf("expected http_timing audit entries, got: %s", content)
     }
 }
 
