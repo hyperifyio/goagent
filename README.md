@@ -369,6 +369,26 @@ make lint
 ### Contributing
 Contributions are welcome! Please open an issue and a pull request. For larger changes, discuss first in an issue. See architecture notes in `docs/adr/0001-minimal-agent-cli.md`.
 
+Local workflow during the ongoing tools layout migration:
+
+- make check-tools-paths: enforce canonical `tools/cmd/NAME` sources and `tools/bin/NAME` invocations (requires `rg`).
+- make verify-manifest-paths: ensure relative `tools.json` commands use `./tools/bin/NAME` (absolute allowed in tests).
+- make build-tool NAME=<name>: build a single tool binary into `tools/bin/NAME`.
+
+Examples:
+
+```bash
+# Hygiene checks
+make check-tools-paths
+make verify-manifest-paths
+
+# Build just one tool and try it
+make build-tool NAME=fs_read_file
+echo '{"path":"README.md"}' | ./tools/bin/fs_read_file | jq .
+```
+
+Note: On Windows, binaries are emitted with a `.exe` suffix automatically when `GOOS=windows`.
+
 ### Project status
 Experimental, but actively maintained. Interfaces may change before a stable 1.0.
 
