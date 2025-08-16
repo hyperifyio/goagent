@@ -43,7 +43,11 @@ echo '{"path":"README.md"}' | ./tools/bin/fs_read_file.exe | jq .
 
 ## Tool timeouts
 - Symptom: `{"error":"tool timed out"}` mapped by the runner or non-zero exit due to timeout.
-- Fix: increase per-tool `timeoutSec` in `tools.json` or use a larger global `-timeout` flag.
+- Fix: increase per-tool `timeoutSec` in `tools.json`, raise CLI `-tool-timeout` (preferred), or use a larger global `-timeout` (deprecated).
+
+### HTTP request times out (`context deadline exceeded`)
+- Cause: slow model/endpoint, proxy timeouts, or too-small `-http-timeout`.
+- Fix: increase `-http-timeout` (or set env `OAI_HTTP_TIMEOUT`), reduce prompt size/model latency, or tune proxy timeouts.
 ```bash
 # Example (Unix/macOS): command that sleeps too long
 echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/bin/exec || true

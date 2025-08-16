@@ -25,7 +25,9 @@ type cliConfig struct {
 	apiKey       string
 	model        string
 	maxSteps     int
-	timeout      time.Duration
+    timeout      time.Duration // deprecated global timeout; kept for backward compatibility
+    httpTimeout  time.Duration // resolved HTTP timeout (final value after env/flags/global)
+    toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
 	temperature  float64
 	debug        bool
 	capabilities bool
@@ -65,18 +67,48 @@ func parseFlags() (cliConfig, int) {
 	// API key resolves from env with fallback for compatibility
 	defaultKey := resolveAPIKeyFromEnv()
 
-	flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
-	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
-	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
-	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
-	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
-	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
-	flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
-	flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "HTTP and per-tool timeout")
-	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
-	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
-	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
+    flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
+    flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
+    flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
+    flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
+    flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
+    flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
+    flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
+    // Deprecated global timeout retained as a fallback if the split timeouts are not provided
+    flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
+    // New split timeouts
+    flag.DurationVar(&cfg.httpTimeout, "http-timeout", 0, "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+    flag.DurationVar(&cfg.toolTimeout, "tool-timeout", 0, "Per-tool timeout (falls back to -timeout if unset)")
+    flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
+    flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+    flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.Parse()
+
+    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+    // HTTP timeout: env OAI_HTTP_TIMEOUT supported
+    if cfg.httpTimeout <= 0 {
+        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_TIMEOUT")); v != "" {
+            if d, err := time.ParseDuration(v); err == nil && d > 0 {
+                cfg.httpTimeout = d
+            }
+        }
+    }
+    if cfg.httpTimeout <= 0 {
+        if cfg.timeout > 0 {
+            cfg.httpTimeout = cfg.timeout
+        } else {
+            cfg.httpTimeout = 90 * time.Second // sane default between 60–120s
+        }
+    }
+
+    // Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
+    if cfg.toolTimeout <= 0 {
+        if cfg.timeout > 0 {
+            cfg.toolTimeout = cfg.timeout
+        } else {
+            cfg.toolTimeout = 30 * time.Second
+        }
+    }
 
 	if !cfg.capabilities && strings.TrimSpace(cfg.prompt) == "" {
 		return cfg, 2 // CLI misuse
@@ -100,6 +132,21 @@ func main() {
 
 // runAgent executes the non-interactive agent loop and returns a process exit code.
 func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
+    // Normalize timeouts for backward compatibility when cfg constructed directly in tests
+    if cfg.httpTimeout <= 0 {
+        if cfg.timeout > 0 {
+            cfg.httpTimeout = cfg.timeout
+        } else {
+            cfg.httpTimeout = 90 * time.Second
+        }
+    }
+    if cfg.toolTimeout <= 0 {
+        if cfg.timeout > 0 {
+            cfg.toolTimeout = cfg.timeout
+        } else {
+            cfg.toolTimeout = 30 * time.Second
+        }
+    }
 	// Load tools manifest if provided
 	var (
 		toolRegistry map[string]tools.ToolSpec
@@ -125,7 +172,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
 
-	httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.timeout)
+    httpClient := oai.NewClient(cfg.baseURL, cfg.apiKey, cfg.httpTimeout)
 
 	messages := []oai.Message{
 		{Role: oai.RoleSystem, Content: cfg.systemPrompt},
@@ -147,7 +194,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
 
 		// Per-call context
-		callCtx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
+        callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
 		resp, err := httpClient.CreateChatCompletion(callCtx, req)
 		cancel()
 		if err != nil {
@@ -209,7 +256,7 @@ func appendToolCallOutputs(messages []oai.Message, assistantMsg oai.Message, too
 		if argsJSON == "" {
 			argsJSON = "{}"
 		}
-		out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.timeout)
+        out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.toolTimeout)
 		content := sanitizeToolContent(out, runErr)
 		messages = append(messages, oai.Message{
 			Role:       oai.RoleTool,

@@ -35,6 +35,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive “too
 - [Diagrams](#diagrams)
 - [Tests](#tests)
 - [Contributing](#contributing)
+- [CI quality gates](docs/operations/ci-quality-gates.md)
 - [Support](#support)
 - [Roadmap](#roadmap)
 - [Project status](#project-status)
@@ -82,6 +83,7 @@ Optional environment (flags take precedence):
 - `OAI_BASE_URL` default `https://api.openai.com/v1` (scripts fall back from `LLM_BASE_URL` if unset)
 - `OAI_MODEL` default `oss-gpt-20b` (scripts fall back from `LLM_MODEL` if unset)
 - `OAI_API_KEY` only if your endpoint requires it (canonical; CLI also accepts `OPENAI_API_KEY` as a compatibility fallback)
+- `OAI_HTTP_TIMEOUT` HTTP timeout for chat requests (duration string, e.g. `90s`); can also be set via `-http-timeout`
 
 ## Quick start
 Build or install the CLI and point it to a reachable OpenAI‑compatible API (local or hosted):
@@ -148,7 +150,9 @@ Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/
 -api-key string        API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)
 -model string          Model ID (env OAI_MODEL; scripts accept LLM_MODEL fallback)
 -max-steps int         Maximum reasoning/tool steps (default 8)
--timeout duration      HTTP and per‑tool timeout (default 30s)
+-http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
+-tool-timeout duration Per-tool timeout (default falls back to -timeout)
+-timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
 -temp float            Sampling temperature (default 0.2)
 -debug                 Dump request/response JSON to stderr
 -capabilities          Print enabled tools and exit
