@@ -59,6 +59,14 @@ jobs:
         shell: bash
         run: make lint
 
+      - name: Tools path hygiene
+        shell: bash
+        run: make check-tools-paths
+
+      - name: Verify tools manifest commands
+        shell: bash
+        run: make verify-manifest-paths
+
       - name: Test
         shell: bash
         run: make test
