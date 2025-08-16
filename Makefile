@@ -28,7 +28,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean lint fmtcheck verify-manifest-paths
+.PHONY: tidy build build-tools build-tool test clean lint fmt fmtcheck verify-manifest-paths
 
 tidy:
 	$(GO) mod tidy
@@ -82,6 +82,10 @@ lint:
 	$(MAKE) fmtcheck; \
 	$(MAKE) check-tools-paths; \
 	$(MAKE) verify-manifest-paths
+
+# Auto-format Go sources in-place using gofmt -s
+fmt:
+	@gofmt -s -w .
 
 # Verify tools.json commands use canonical ./tools/bin prefix for relative paths
 # Fails if any command[0] is relative and does not start with ./tools/bin/

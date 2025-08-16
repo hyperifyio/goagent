@@ -309,6 +309,7 @@ go test ./...
 Lint, vet, and formatting checks:
 ```bash
 make lint
+make fmt   # apply gofmt -s -w to the repo
 ```
 
 ## Contributing
