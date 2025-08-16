@@ -11,24 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsWriteOutput struct {
 	BytesWritten int `json:"bytesWritten"`
-}
-
-// buildFsWriteTool builds ./tools/cmd/fs_write_file into a temporary binary.
-func buildFsWriteTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-write-file")
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_write_file")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_write_file tool: %v\n%s", err, string(out))
-	}
-	return binPath
 }
 
 // runFsWrite runs the built fs_write_file tool with the given JSON input.
@@ -70,7 +58,7 @@ func makeRepoRelTempDir(t *testing.T, prefix string) string {
 }
 
 func TestFsWrite_CreateText(t *testing.T) {
-	bin := buildFsWriteTool(t)
+    bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-text-")
 	path := filepath.Join(dir, "hello.txt")
 	content := []byte("hello world\n")
@@ -94,7 +82,7 @@ func TestFsWrite_CreateText(t *testing.T) {
 }
 
 func TestFsWrite_Overwrite(t *testing.T) {
-	bin := buildFsWriteTool(t)
+    bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-over-")
 	path := filepath.Join(dir, "data.bin")
 	// Seed with initial content
@@ -119,7 +107,7 @@ func TestFsWrite_Overwrite(t *testing.T) {
 }
 
 func TestFsWrite_Binary(t *testing.T) {
-	bin := buildFsWriteTool(t)
+    bin := testutil.BuildTool(t, "fs_write_file")
 	dir := makeRepoRelTempDir(t, "fswrite-bin-")
 	path := filepath.Join(dir, "bytes.bin")
 	data := []byte{0x00, 0x10, 0xFF, 0x42, 0x00}
@@ -140,7 +128,7 @@ func TestFsWrite_Binary(t *testing.T) {
 }
 
 func TestFsWrite_MissingParent(t *testing.T) {
-	bin := buildFsWriteTool(t)
+    bin := testutil.BuildTool(t, "fs_write_file")
 	path := filepath.Join("no_such_parent_dir", "x", "file.txt")
 	_, stderr, code := runFsWrite(t, bin, map[string]any{
 		"path":          path,
