@@ -1,21 +1,21 @@
 package main
 
 import (
-    "bytes"
-    "encoding/json"
-    "io"
-    "net/http"
-    "net/http/httptest"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "runtime"
-    "strings"
-    "testing"
-    "time"
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
 
-    "github.com/hyperifyio/goagent/internal/oai"
-    "github.com/hyperifyio/goagent/internal/tools"
+	"github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/tools"
 )
 
 // https://github.com/hyperifyio/goagent/issues/97
@@ -748,10 +748,10 @@ func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
 // Verify that multiple tool_calls are executed in parallel rather than sequentially.
 // We call appendToolCallOutputs directly to isolate the execution time from HTTP.
 func TestAppendToolCallOutputs_ExecutesInParallel(t *testing.T) {
-    // Build a helper tool that sleeps per JSON input then emits JSON
-    dir := t.TempDir()
-    helper := filepath.Join(dir, "sleeper.go")
-    if err := os.WriteFile(helper, []byte(`package main
+	// Build a helper tool that sleeps per JSON input then emits JSON
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "sleeper.go")
+	if err := os.WriteFile(helper, []byte(`package main
 import (
   "encoding/json"; "io"; "os"; "time"; "fmt"
 )
@@ -767,50 +767,52 @@ func main(){
   fmt.Print("")
 }
 `), 0o644); err != nil {
-        t.Fatalf("write tool: %v", err)
-    }
-    bin := filepath.Join(dir, "sleeper")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
-        t.Fatalf("build tool: %v: %s", err, string(out))
-    }
+		t.Fatalf("write tool: %v", err)
+	}
+	bin := filepath.Join(dir, "sleeper")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+		t.Fatalf("build tool: %v: %s", err, string(out))
+	}
 
-    // Build the registry expected by appendToolCallOutputs
-    realTools := map[string]tools.ToolSpec{
-        "slow": { Name: "slow", Command: []string{bin}, TimeoutSec: 5 },
-        "fast": { Name: "fast", Command: []string{bin}, TimeoutSec: 5 },
-    }
+	// Build the registry expected by appendToolCallOutputs
+	realTools := map[string]tools.ToolSpec{
+		"slow": {Name: "slow", Command: []string{bin}, TimeoutSec: 5},
+		"fast": {Name: "fast", Command: []string{bin}, TimeoutSec: 5},
+	}
 
-    // Craft assistant message containing two tool calls with different sleeps
-    msg := oai.Message{ Role: oai.RoleAssistant }
-    msg.ToolCalls = []oai.ToolCall{
-        { ID: "1", Type: "function", Function: oai.ToolCallFunction{ Name: "slow", Arguments: `{"sleepMs":600,"name":"slow"}` } },
-        { ID: "2", Type: "function", Function: oai.ToolCallFunction{ Name: "fast", Arguments: `{"sleepMs":600,"name":"fast"}` } },
-    }
+	// Craft assistant message containing two tool calls with different sleeps
+	msg := oai.Message{Role: oai.RoleAssistant}
+	msg.ToolCalls = []oai.ToolCall{
+		{ID: "1", Type: "function", Function: oai.ToolCallFunction{Name: "slow", Arguments: `{"sleepMs":600,"name":"slow"}`}},
+		{ID: "2", Type: "function", Function: oai.ToolCallFunction{Name: "fast", Arguments: `{"sleepMs":600,"name":"fast"}`}},
+	}
 
-    // Minimal cfg with a generous per-tool timeout
-    cfg := cliConfig{ toolTimeout: 3 * time.Second }
+	// Minimal cfg with a generous per-tool timeout
+	cfg := cliConfig{toolTimeout: 3 * time.Second}
 
-    // Measure elapsed around appendToolCallOutputs
-    start := time.Now()
-    out := appendToolCallOutputs(nil, msg, realTools, cfg)
-    elapsed := time.Since(start)
+	// Measure elapsed around appendToolCallOutputs
+	start := time.Now()
+	out := appendToolCallOutputs(nil, msg, realTools, cfg)
+	elapsed := time.Since(start)
 
-    // Expect two tool messages appended
-    gotIDs := map[string]bool{}
-    for _, m := range out {
-        if m.Role == oai.RoleTool {
-            gotIDs[m.ToolCallID] = true
-        }
-    }
-    if !gotIDs["1"] || !gotIDs["2"] {
-        t.Fatalf("expected tool messages for ids 1 and 2; got %+v", gotIDs)
-    }
+	// Expect two tool messages appended
+	gotIDs := map[string]bool{}
+	for _, m := range out {
+		if m.Role == oai.RoleTool {
+			gotIDs[m.ToolCallID] = true
+		}
+	}
+	if !gotIDs["1"] || !gotIDs["2"] {
+		t.Fatalf("expected tool messages for ids 1 and 2; got %+v", gotIDs)
+	}
 
-    // Sequential would be ~1200ms (+overhead). Parallel should be well under 1200ms.
-    if elapsed >= 1100*time.Millisecond {
-        t.Fatalf("tool calls did not run in parallel; elapsed=%v (want < 1.1s)", elapsed)
-    }
+	// Sequential would be ~1200ms (+overhead). Parallel should be well under 1200ms.
+	if elapsed >= 1100*time.Millisecond {
+		t.Fatalf("tool calls did not run in parallel; elapsed=%v (want < 1.1s)", elapsed)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/242
