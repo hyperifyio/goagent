@@ -264,3 +264,24 @@ func TestFsSearch_Truncation(t *testing.T) {
 		}
 	}
 }
+
+// TestFsSearch_ErrorJSON_QueryRequired verifies standardized stderr JSON error
+// contract: when required input is missing (empty query), the tool must write
+// a single-line JSON object with an "error" key to stderr and exit non-zero.
+func TestFsSearch_ErrorJSON_QueryRequired(t *testing.T) {
+    bin := buildFsSearch(t)
+
+    // Omit required field to trigger validation error in readInput
+    _, stderr, code := runFsSearch(t, bin, map[string]any{})
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for missing query")
+    }
+    line := strings.TrimSpace(stderr)
+    var obj map[string]any
+    if err := json.Unmarshal([]byte(line), &obj); err != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
+}
