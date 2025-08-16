@@ -25,14 +25,18 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
     }
     repoRoot := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
 
-    // Build required tool binaries into a temp dir
+    // Build required tool binaries into a temp dir under canonical layout tools/bin
     tmp := t.TempDir()
-    fsWrite := filepath.Join(tmp, "fs_write_file")
-    fsRead := filepath.Join(tmp, "fs_read_file")
-    if out, err := exec.Command("go", "build", "-o", fsWrite, filepath.Join(repoRoot, "tools", "cmd", "fs_write_file")).CombinedOutput(); err != nil {
+    binDir := filepath.Join(tmp, "tools", "bin")
+    if err := os.MkdirAll(binDir, 0o755); err != nil {
+        t.Fatalf("mkdir tools/bin: %v", err)
+    }
+    fsWriteBin := filepath.Join(binDir, "fs_write_file")
+    fsReadBin := filepath.Join(binDir, "fs_read_file")
+    if out, err := exec.Command("go", "build", "-o", fsWriteBin, filepath.Join(repoRoot, "tools", "cmd", "fs_write_file")).CombinedOutput(); err != nil {
         t.Fatalf("build fs_write_file: %v: %s", err, string(out))
     }
-    if out, err := exec.Command("go", "build", "-o", fsRead, filepath.Join(repoRoot, "tools", "cmd", "fs_read_file")).CombinedOutput(); err != nil {
+    if out, err := exec.Command("go", "build", "-o", fsReadBin, filepath.Join(repoRoot, "tools", "cmd", "fs_read_file")).CombinedOutput(); err != nil {
         t.Fatalf("build fs_read_file: %v: %s", err, string(out))
     }
 
@@ -53,7 +57,8 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
                         "createModeOctal": map[string]any{"type": "string"},
                     },
                 },
-                "command":    []string{fsWrite},
+                // Use relative canonical path so manifest validation enforces ./tools/bin prefix
+                "command":    []string{"./tools/bin/fs_write_file"},
                 "timeoutSec": 5,
             },
             {
@@ -69,7 +74,8 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
                         "maxBytes":    map[string]any{"type": "integer"},
                     },
                 },
-                "command":    []string{fsRead},
+                // Use relative canonical path so manifest validation enforces ./tools/bin prefix
+                "command":    []string{"./tools/bin/fs_read_file"},
                 "timeoutSec": 5,
             },
         },
@@ -78,6 +84,13 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
     if err := os.WriteFile(toolsPath, b, 0o644); err != nil {
         t.Fatalf("write manifest: %v", err)
     }
+
+    // Change working directory to the temp dir so relative ./tools/bin/* resolve
+    oldWD, _ := os.Getwd()
+    if err := os.Chdir(tmp); err != nil {
+        t.Fatalf("chdir tmp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.Chdir(oldWD) })
 
     // Prepare the file path and content for the tool calls (relative to current working directory)
     targetRelPath := "tmp_tools_it_demo.txt"
