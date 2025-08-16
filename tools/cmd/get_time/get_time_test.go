@@ -8,23 +8,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type timeOutput struct {
 	Timezone string `json:"timezone"`
 	ISO8601  string `json:"iso8601"`
-}
-
-func buildTimeTool(t *testing.T) string {
-	t.Helper()
-	tmp := t.TempDir()
-	bin := tmp + "/timecli"
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/get_time")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build timecli: %v\n%s", err, string(out))
-	}
-	return bin
 }
 
 func runTimeTool(t *testing.T, bin string, input any) (timeOutput, string, int) {
@@ -50,7 +40,7 @@ func runTimeTool(t *testing.T, bin string, input any) (timeOutput, string, int) 
 }
 
 func TestTimeCLI_AcceptsTimezoneAndOutputsISO8601(t *testing.T) {
-	bin := buildTimeTool(t)
+	bin := testutil.BuildTool(t, "get_time")
 	out, stderr, code := runTimeTool(t, bin, map[string]any{"timezone": "UTC"})
 	if code != 0 {
 		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
@@ -64,7 +54,7 @@ func TestTimeCLI_AcceptsTimezoneAndOutputsISO8601(t *testing.T) {
 }
 
 func TestTimeCLI_AcceptsAliasTZ(t *testing.T) {
-	bin := buildTimeTool(t)
+	bin := testutil.BuildTool(t, "get_time")
 	out, stderr, code := runTimeTool(t, bin, map[string]any{"tz": "Europe/Helsinki"})
 	if code != 0 {
 		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
@@ -78,7 +68,7 @@ func TestTimeCLI_AcceptsAliasTZ(t *testing.T) {
 }
 
 func TestTimeCLI_MissingTimezone_ErrorContract(t *testing.T) {
-	bin := buildTimeTool(t)
+	bin := testutil.BuildTool(t, "get_time")
 	out, stderr, code := runTimeTool(t, bin, map[string]any{})
 	if code == 0 {
 		t.Fatalf("expected non-zero exit for missing timezone, got 0; stderr=%q", stderr)
@@ -93,7 +83,7 @@ func TestTimeCLI_MissingTimezone_ErrorContract(t *testing.T) {
 }
 
 func TestTimeCLI_InvalidTimezone_ErrorContract(t *testing.T) {
-	bin := buildTimeTool(t)
+	bin := testutil.BuildTool(t, "get_time")
 	out, stderr, code := runTimeTool(t, bin, map[string]any{"timezone": "Not/AZone"})
 	if code == 0 {
 		t.Fatalf("expected non-zero exit for invalid timezone, got 0; stderr=%q", stderr)
@@ -108,7 +98,7 @@ func TestTimeCLI_InvalidTimezone_ErrorContract(t *testing.T) {
 }
 
 func TestToolbeltDiagramExists(t *testing.T) {
-	if _, err := os.Stat("../docs/diagrams/toolbelt-seq.md"); err != nil {
+	if _, err := os.Stat("../../../docs/diagrams/toolbelt-seq.md"); err != nil {
 		t.Fatalf("missing docs/diagrams/toolbelt-seq.md: %v", err)
 	}
 }
