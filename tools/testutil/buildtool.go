@@ -61,8 +61,8 @@ func BuildTool(t *testing.T, name string) string {
 
 func findRepoRoot() (string, error) {
 	// Start from CWD and walk up until go.mod is found
-	start, _ := os.Getwd()
-	if start == "" {
+	start, err := os.Getwd()
+	if err != nil || start == "" {
 		return "", errors.New("cannot determine working directory")
 	}
 	dir := start
