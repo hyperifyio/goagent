@@ -23,9 +23,13 @@ func TestParseFlags_ApiKeyEnvPrecedence(t *testing.T) {
 	save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
 	restore := func(k, v string, ok bool) {
 		if ok {
-			_ = os.Setenv(k, v)
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("restore %s: %v", k, err)
+			}
 		} else {
-			_ = os.Unsetenv(k)
+			if err := os.Unsetenv(k); err != nil {
+				t.Fatalf("unset %s: %v", k, err)
+			}
 		}
 	}
 	oaiVal, oaiOK := save("OAI_API_KEY")
@@ -33,8 +37,12 @@ func TestParseFlags_ApiKeyEnvPrecedence(t *testing.T) {
 	defer func() { restore("OAI_API_KEY", oaiVal, oaiOK); restore("OPENAI_API_KEY", openaiVal, openaiOK) }()
 
 	// Case 1: only OPENAI_API_KEY set -> used
-	_ = os.Unsetenv("OAI_API_KEY")
-	_ = os.Setenv("OPENAI_API_KEY", "legacy-token")
+	if err := os.Unsetenv("OAI_API_KEY"); err != nil {
+		t.Fatalf("unset OAI_API_KEY: %v", err)
+	}
+	if err := os.Setenv("OPENAI_API_KEY", "legacy-token"); err != nil {
+		t.Fatalf("set OPENAI_API_KEY: %v", err)
+	}
 	// parseFlags reads os.Args; simulate minimal args
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -48,7 +56,9 @@ func TestParseFlags_ApiKeyEnvPrecedence(t *testing.T) {
 	}
 
 	// Case 2: both set -> OAI_API_KEY wins
-	_ = os.Setenv("OAI_API_KEY", "canonical-token")
+	if err := os.Setenv("OAI_API_KEY", "canonical-token"); err != nil {
+		t.Fatalf("set OAI_API_KEY: %v", err)
+	}
 	os.Args = []string{"agentcli.test", "-prompt", "x"}
 	cfg, code = parseFlags()
 	if code != 0 {
@@ -102,7 +112,10 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 			"timeoutSec":  5,
 		}},
 	}
-	b, _ := json.Marshal(manifest)
+	b, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
 	if err := os.WriteFile(toolsPath, b, 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
@@ -145,7 +158,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 					},
 				}},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode step1: %v", err)
+			}
 		case 2:
 			resp := oai.ChatCompletionsResponse{
 				ID:      "cmpl-2",
@@ -158,7 +173,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 					Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
 				}},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode step2: %v", err)
+			}
 		default:
 			t.Fatalf("unexpected extra request step=%d", step)
 		}
@@ -203,7 +220,10 @@ func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
 			"timeoutSec":  2,
 		}},
 	}
-	b, _ := json.Marshal(manifest)
+	b, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
 	if err := os.WriteFile(toolsPath, b, 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
