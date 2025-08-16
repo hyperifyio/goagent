@@ -80,7 +80,8 @@ lint:
 	golangci-lint run --timeout=5m; \
 	$(GO) vet ./...; \
 	$(MAKE) fmtcheck; \
-	$(MAKE) check-tools-paths
+	$(MAKE) check-tools-paths; \
+	$(MAKE) verify-manifest-paths
 
 # Verify tools.json commands use canonical ./tools/bin prefix for relative paths
 # Fails if any command[0] is relative and does not start with ./tools/bin/
