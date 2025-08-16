@@ -247,3 +247,27 @@ func TestFsAppend_ConcurrentWriters(t *testing.T) {
 		t.Fatalf("content composition mismatch: countA=%d want %d, countB=%d want %d", countA, len(partA), countB, len(partB))
 	}
 }
+
+// TestFsAppend_ErrorJSON_PathRequired verifies standardized stderr JSON error
+// contract: when required input is missing (path/content), the tool writes a
+// single-line JSON object with an "error" key to stderr and exits non-zero.
+func TestFsAppend_ErrorJSON_PathRequired(t *testing.T) {
+    bin := testutil.BuildTool(t, "fs_append_file")
+    var stdout, stderr bytes.Buffer
+    cmd := exec.Command(bin)
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    cmd.Stdin = bytes.NewBufferString("{}")
+    err := cmd.Run()
+    if err == nil {
+        t.Fatalf("expected non-zero exit for missing fields; stderr=%q", stderr.String())
+    }
+    line := strings.TrimSpace(stderr.String())
+    var obj map[string]any
+    if jerr := json.Unmarshal([]byte(line), &obj); jerr != nil {
+        t.Fatalf("stderr is not JSON: %q err=%v", line, jerr)
+    }
+    if _, ok := obj["error"]; !ok {
+        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+    }
+}
