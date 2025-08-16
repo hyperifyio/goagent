@@ -21,7 +21,7 @@ build:
 
 build-tools:
 	mkdir -p tools/bin
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/get_time$(EXE) ./tools/timecli
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/get_time$(EXE) ./tools/cmd/get_time
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/exec$(EXE) ./tools/cmd/exec
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_file$(EXE) ./tools/cmd/fs_read_file
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_write_file$(EXE) ./tools/fs_write_file
@@ -45,7 +45,7 @@ clean:
 	# Remove legacy single-file tool binaries at tools/<NAME> (files only)
 	rm -f tools/get_time$(EXE) tools/exec$(EXE) tools/fs_read_file$(EXE) tools/fs_write_file$(EXE) tools/fs_append_file$(EXE) tools/fs_rm$(EXE) tools/fs_move$(EXE) tools/fs_search$(EXE) tools/fs_mkdirp$(EXE) tools/fs_apply_patch$(EXE) tools/fs_read_lines$(EXE) tools/fs_edit_range$(EXE) tools/fs_listdir$(EXE) tools/fs_stat$(EXE) || true
 	# Remove legacy subdir-built binaries at tools/*/<NAME>
-	rm -f tools/timecli/get_time$(EXE) \
+	rm -f tools/cmd/get_time/get_time$(EXE) \
 	      tools/exec/exec$(EXE) \
 	      tools/fs_read_file/fs_read_file$(EXE) \
 	      tools/fs_write_file/fs_write_file$(EXE) \

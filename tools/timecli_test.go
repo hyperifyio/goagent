@@ -19,7 +19,7 @@ func buildTimeTool(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
 	bin := tmp + "/timecli"
-	cmd := exec.Command("go", "build", "-o", bin, "./timecli")
+    cmd := exec.Command("go", "build", "-o", bin, "./cmd/get_time")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build timecli: %v\n%s", err, string(out))
