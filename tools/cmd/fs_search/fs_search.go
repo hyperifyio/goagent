@@ -32,6 +32,10 @@ type searchOutput struct {
 	Truncated bool    `json:"truncated"`
 }
 
+// maxFileBytes bounds the size of any single file that will be scanned to
+// prevent excessive memory and CPU usage on large repositories.
+const maxFileBytes = 1 << 20 // 1 MiB
+
 func main() {
 	in, err := readInput(os.Stdin)
 	if err != nil {
@@ -117,6 +121,15 @@ func search(in searchInput) ([]match, bool, error) {
 	}
 	var matches []match
 	for _, f := range files {
+		// Enforce per-file size limit with a clear error
+		fi, err := os.Stat(f)
+		if err != nil {
+			// best-effort: skip unreadable files silently
+			continue
+		}
+		if fi.Size() > maxFileBytes {
+			return nil, false, fmt.Errorf("FILE_TOO_LARGE: %s (%d bytes) exceeds limit %d bytes", f, fi.Size(), maxFileBytes)
+		}
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue

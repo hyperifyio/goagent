@@ -340,6 +340,40 @@ func TestFsSearch_Truncation(t *testing.T) {
 	}
 }
 
+// TestFsSearch_FileSizeLimit ensures files larger than the configured cap are rejected
+// with a clear error and non-zero exit to bound scanning cost.
+func TestFsSearch_FileSizeLimit(t *testing.T) {
+    tmpDirAbs, err := os.MkdirTemp(".", "fssearch-big-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+
+    // Create a file just over 1MiB
+    big := filepath.Join(base, "big.bin")
+    const oneMiB = 1 << 20
+    buf := bytes.Repeat([]byte{'A'}, oneMiB+1)
+    if err := os.WriteFile(big, buf, 0o644); err != nil {
+        t.Fatalf("write big: %v", err)
+    }
+
+    bin := buildFsSearch(t)
+    // Limit globs to exactly the oversized file to ensure deterministic behavior
+    _, stderr, code := runFsSearch(t, bin, map[string]any{
+        "query":      "A",
+        "regex":      false,
+        "globs":      []string{big},
+        "maxResults": 1,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for oversized file")
+    }
+    if !strings.Contains(stderr, "FILE_TOO_LARGE") {
+        t.Fatalf("expected FILE_TOO_LARGE in stderr, got %q", stderr)
+    }
+}
+
 // TestFsSearch_ErrorJSON_QueryRequired verifies standardized stderr JSON error
 // contract: when required input is missing (empty query), the tool must write
 // a single-line JSON object with an "error" key to stderr and exit non-zero.
