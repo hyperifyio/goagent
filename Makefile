@@ -72,12 +72,13 @@ clean:
 
 lint:
 	@set -euo pipefail; \
-	if ! command -v golangci-lint >/dev/null 2>&1; then \
-		 echo "Installing golangci-lint..."; \
-		 GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1; \
+	LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint"; \
+	if [ ! -x "$$LINTBIN" ]; then \
+		echo "Installing golangci-lint..."; \
+		GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1; \
 	fi; \
-	golangci-lint version; \
-	golangci-lint run --timeout=5m; \
+	"$$LINTBIN" version; \
+	"$$LINTBIN" run --timeout=5m; \
 	$(GO) vet ./...; \
 	$(MAKE) fmtcheck; \
 	$(MAKE) check-tools-paths; \
