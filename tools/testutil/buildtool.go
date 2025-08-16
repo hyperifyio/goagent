@@ -15,10 +15,9 @@ import (
 //
 // Priority order for source discovery (absolute paths used to satisfy
 // repository path hygiene rules in linters/tests):
-//   1) ./tools/cmd/<name>
-//   2) ./tools/timecli (for name == "get_time")
-//   3) legacy directory: tools/<name>
-//   4) legacy single-file: tools/<name>.go
+//   1) tools/cmd/<name> (canonical layout)
+//   2) legacy directory: tools/<name>
+//   3) legacy single-file: tools/<name>.go
 func BuildTool(t *testing.T, name string) string {
     t.Helper()
 
