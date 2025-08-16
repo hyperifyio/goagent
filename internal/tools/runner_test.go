@@ -1,16 +1,16 @@
 package tools
 
 import (
-    "context"
-    "encoding/json"
-    "io/fs"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "runtime"
-    "strings"
-    "testing"
-    "time"
+	"context"
+	"encoding/json"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
 )
 
 // https://github.com/hyperifyio/goagent/issues/1
@@ -118,9 +118,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("build helper: %v: %s", err, string(out))
 	}
 
-    // Ensure audit dir at repo root is empty before run
-    root := findRepoRoot(t)
-    if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+	// Ensure audit dir at repo root is empty before run
+	root := findRepoRoot(t)
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
 		t.Logf("cleanup: %v", err)
 	}
 
@@ -133,8 +133,8 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("expected output")
 	}
 
-    // Find today's audit log under repo root
-    auditDir := filepath.Join(root, ".goagent", "audit")
+	// Find today's audit log under repo root
+	auditDir := filepath.Join(root, ".goagent", "audit")
 	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
 	data, err := os.ReadFile(logFile)
 	if err != nil {
@@ -171,9 +171,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("build helper: %v: %s", err, string(out))
 	}
 
-    // Clean audit dir at repo root
-    root := findRepoRoot(t)
-    if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+	// Clean audit dir at repo root
+	root := findRepoRoot(t)
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
 		t.Logf("cleanup: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("unexpected error second run: %v", err)
 	}
 
-    auditDir := filepath.Join(root, ".goagent", "audit")
+	auditDir := filepath.Join(root, ".goagent", "audit")
 	want1 := filepath.Join(auditDir, "20250102.log")
 	want2 := filepath.Join(auditDir, "20250103.log")
 
@@ -256,9 +256,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("build helper: %v: %s", err, string(out))
 	}
 
-    // Clean audit dir at repo root
-    root := findRepoRoot(t)
-    if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+	// Clean audit dir at repo root
+	root := findRepoRoot(t)
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
 		t.Logf("cleanup: %v", err)
 	}
 
@@ -268,8 +268,8 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-    // Locate today's audit file under repo root
-    auditDir := filepath.Join(root, ".goagent", "audit")
+	// Locate today's audit file under repo root
+	auditDir := filepath.Join(root, ".goagent", "audit")
 	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
 	data, err := os.ReadFile(logFile)
 	if err != nil {
@@ -291,56 +291,60 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 // New test encoding the centralized root behavior: logs must be written under
 // the repository root's .goagent/audit, not the package working directory.
 func TestRunToolWithJSON_AuditLog_CentralizedToRepoRoot(t *testing.T) {
-    dir := t.TempDir()
-    helper := filepath.Join(dir, "echo.go")
-    if err := os.WriteFile(helper, []byte(`package main
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "echo.go")
+	if err := os.WriteFile(helper, []byte(`package main
 import ("io"; "os"; "fmt")
 func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 `), 0o644); err != nil {
-        t.Fatalf("write: %v", err)
-    }
-    bin := filepath.Join(dir, "echo")
-    if runtime.GOOS == "windows" {
-        bin += ".exe"
-    }
-    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
-        t.Fatalf("build helper: %v: %s", err, string(out))
-    }
+		t.Fatalf("write: %v", err)
+	}
+	bin := filepath.Join(dir, "echo")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+		t.Fatalf("build helper: %v: %s", err, string(out))
+	}
 
-    root := findRepoRoot(t)
-    // Clean both potential locations to start from a known state
-    _ = os.RemoveAll(filepath.Join(root, ".goagent"))
-    _ = os.RemoveAll(filepath.Join(".goagent"))
+	root := findRepoRoot(t)
+	// Clean both potential locations to start from a known state
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+		t.Logf("cleanup root .goagent: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(".goagent")); err != nil {
+		t.Logf("cleanup cwd .goagent: %v", err)
+	}
 
-    spec := ToolSpec{Name: "echo", Command: []string{bin}, TimeoutSec: 2}
-    if _, err := RunToolWithJSON(context.Background(), spec, []byte(`{"ok":true}`), 5*time.Second); err != nil {
-        t.Fatalf("unexpected error: %v", err)
-    }
+	spec := ToolSpec{Name: "echo", Command: []string{bin}, TimeoutSec: 2}
+	if _, err := RunToolWithJSON(context.Background(), spec, []byte(`{"ok":true}`), 5*time.Second); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-    // Expect audit under repo root
-    auditDirRoot := filepath.Join(root, ".goagent", "audit")
-    // This helper will fail if no file appears in the expected root directory
-    _ = waitForAuditFile(t, auditDirRoot, 2*time.Second)
+	// Expect audit under repo root
+	auditDirRoot := filepath.Join(root, ".goagent", "audit")
+	// This helper will fail if no file appears in the expected root directory
+	_ = waitForAuditFile(t, auditDirRoot, 2*time.Second)
 }
 
 // findRepoRoot walks upward from CWD to locate the directory containing go.mod.
 func findRepoRoot(t *testing.T) string {
-    t.Helper()
-    start, err := os.Getwd()
-    if err != nil {
-        t.Fatalf("getwd: %v", err)
-    }
-    dir := start
-    for {
-        if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-            return dir
-        }
-        parent := filepath.Dir(dir)
-        if parent == dir {
-            t.Fatalf("go.mod not found from %s upward", start)
-        }
-        dir = parent
-    }
+	t.Helper()
+	start, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := start
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("go.mod not found from %s upward", start)
+		}
+		dir = parent
+	}
 }
 
 // waitForAuditFile polls the audit directory until a file appears or timeout elapses.

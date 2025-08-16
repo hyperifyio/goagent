@@ -311,82 +311,86 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 
 // https://github.com/hyperifyio/goagent/issues/233
 func TestRunAgent_HTTPTimeoutError_MessageIncludesDetails(t *testing.T) {
-    // Fake slow server: sleeps beyond client timeout then returns a valid response
-    slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(300 * time.Millisecond)
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer slow.Close()
+	// Fake slow server: sleeps beyond client timeout then returns a valid response
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode slow resp: %v", err)
+		}
+	}))
+	defer slow.Close()
 
-    cfg := cliConfig{
-        prompt:      "test",
-        systemPrompt: "sys",
-        baseURL:     slow.URL,
-        model:       "test",
-        maxSteps:    1,
-        httpTimeout: 100 * time.Millisecond,
-        toolTimeout: 1 * time.Second,
-        temperature: 0,
-        debug:       false,
-    }
+	cfg := cliConfig{
+		prompt:       "test",
+		systemPrompt: "sys",
+		baseURL:      slow.URL,
+		model:        "test",
+		maxSteps:     1,
+		httpTimeout:  100 * time.Millisecond,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+		debug:        false,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code == 0 {
-        t.Fatalf("expected non-zero exit due to HTTP timeout; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
-    }
-    got := errBuf.String()
-    // Error should mention base URL, configured timeout, and a user hint
-    if !strings.Contains(got, slow.URL) {
-        t.Fatalf("expected error to include base URL %q; got: %q", slow.URL, got)
-    }
-    if !strings.Contains(got, "http-timeout=100ms") {
-        t.Fatalf("expected error to include configured timeout; got: %q", got)
-    }
-    if !strings.Contains(strings.ToLower(got), "increase -http-timeout") {
-        t.Fatalf("expected hint to increase -http-timeout; got: %q", got)
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit due to HTTP timeout; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+	got := errBuf.String()
+	// Error should mention base URL, configured timeout, and a user hint
+	if !strings.Contains(got, slow.URL) {
+		t.Fatalf("expected error to include base URL %q; got: %q", slow.URL, got)
+	}
+	if !strings.Contains(got, "http-timeout=100ms") {
+		t.Fatalf("expected error to include configured timeout; got: %q", got)
+	}
+	if !strings.Contains(strings.ToLower(got), "increase -http-timeout") {
+		t.Fatalf("expected hint to increase -http-timeout; got: %q", got)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/233
 func TestRunAgent_HTTPTimeout_RaiseResolves(t *testing.T) {
-    // Server is slow but within a larger timeout
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(120 * time.Millisecond)
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer srv.Close()
+	// Server is slow but within a larger timeout
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(120 * time.Millisecond)
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode slow resp: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:      "test",
-        systemPrompt: "sys",
-        baseURL:     srv.URL,
-        model:       "test",
-        maxSteps:    1,
-        httpTimeout: 500 * time.Millisecond,
-        toolTimeout: 1 * time.Second,
-        temperature: 0,
-        debug:       false,
-    }
+	cfg := cliConfig{
+		prompt:       "test",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "test",
+		maxSteps:     1,
+		httpTimeout:  500 * time.Millisecond,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+		debug:        false,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("expected exit code 0 with higher timeout; stderr=%s", errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 with higher timeout; stderr=%s", errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/1

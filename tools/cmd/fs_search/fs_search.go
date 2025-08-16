@@ -85,19 +85,19 @@ func search(in searchInput) ([]match, bool, error) {
 	// Walk repo and include only files matching any provided glob suffix pattern.
 	// We implement a simplified matcher: support patterns like "**/*.txt" and "*.md".
 	var files []string
-    walkErr := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if d.IsDir() {
-            // Skip VCS metadata and known binary/output directories to bound scanning cost
-            if path == ".git" || strings.HasPrefix(path, ".git/") {
-                return filepath.SkipDir
-            }
-            if path == "bin" || path == "logs" || path == filepath.ToSlash(filepath.Join("tools", "bin")) {
-                return filepath.SkipDir
-            }
-            return nil
+			// Skip VCS metadata and known binary/output directories to bound scanning cost
+			if path == ".git" || strings.HasPrefix(path, ".git/") {
+				return filepath.SkipDir
+			}
+			if path == "bin" || path == "logs" || path == filepath.ToSlash(filepath.Join("tools", "bin")) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		// crude hidden filter: skip .git files
 		if strings.Contains(path, string(os.PathSeparator)+".git"+string(os.PathSeparator)) {
