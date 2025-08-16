@@ -20,8 +20,6 @@ type fsAppendOutput struct {
 	BytesAppended int `json:"bytesAppended"`
 }
 
-// Build via shared helper in tools/testutil.
-
 // runFsAppend runs the built fs_append_file tool with the given JSON input.
 func runFsAppend(t *testing.T, bin string, input any) (fsAppendOutput, string, int) {
 	t.Helper()
@@ -47,6 +45,19 @@ func runFsAppend(t *testing.T, bin string, input any) (fsAppendOutput, string, i
 	var out fsAppendOutput
 	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
 	return out, stderr.String(), code
+}
+
+// makeRepoRelTempDir creates a temporary directory under the repository root
+// (current working directory in tests) and returns the relative path.
+func makeRepoRelTempDir(t *testing.T, prefix string) string {
+	t.Helper()
+	tmpAbs, err := os.MkdirTemp(".", prefix)
+	if err != nil {
+		t.Fatalf("mkdir temp under repo: %v", err)
+	}
+	base := filepath.Base(tmpAbs)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	return base
 }
 
 func TestFsAppend_DoubleAppend(t *testing.T) {
