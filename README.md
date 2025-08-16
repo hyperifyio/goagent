@@ -19,6 +19,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive “too
   - [Capabilities](#capabilities)
 - [Examples](#examples)
   - [Exec tool](#exec-tool)
+  - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
   - [fs_read_file](#fs_read_file)
   - [fs_append_file](#fs_append_file)
   - [fs_write_file](#fs_write_file)
@@ -171,6 +172,17 @@ List the enabled tools from a manifest without running the agent:
 
 ## Examples
 ### Exec tool
+### Worked example: tool calls and transcript
+See `examples/tool_calls.md` for a self-contained, test-driven worked example that:
+- Exercises default temperature 1.0
+- Demonstrates a two-tool-call interaction with matching `tool_call_id`
+- Captures a transcript via `-debug` showing request/response JSON dumps
+
+Run the example test:
+```bash
+go test ./examples -run TestWorkedExample_ToolCalls_TemperatureOne_Sequencing -v
+```
+
 Build the exec tool and run a simple command (Unix):
 ```bash
 make build-tools
