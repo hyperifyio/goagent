@@ -36,10 +36,10 @@ func main() {
 			// Ensure NOT_FOUND appears in the message for existing tests
 			msg = "NOT_FOUND: " + msg
 		}
-    	if encErr := json.NewEncoder(os.Stderr).Encode(map[string]string{"error": msg}); encErr != nil {
-    		// Fallback to raw stderr write if JSON encoding fails
-    		fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", msg)
-    	}
+		if encErr := json.NewEncoder(os.Stderr).Encode(map[string]string{"error": msg}); encErr != nil {
+			// Fallback to raw stderr write if JSON encoding fails
+			fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", msg)
+		}
 		os.Exit(1)
 	}
 }
@@ -71,14 +71,14 @@ func run() error {
 		return fmt.Errorf("offsetBytes must be >= 0")
 	}
 	// Open and stat to determine file size.
-    f, err := os.Open(clean)
+	f, err := os.Open(clean)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("NOT_FOUND: %s", clean)
 		}
 		return fmt.Errorf("open file: %w", err)
 	}
-    // Do not ignore close errors; close explicitly before emitting output
+	// Do not ignore close errors; close explicitly before emitting output
 
 	info, err := f.Stat()
 	if err != nil {
@@ -120,11 +120,11 @@ func run() error {
 			return fmt.Errorf("read: %w", rerr)
 		}
 	}
-    // Close the file and surface errors before writing JSON to stdout
-    if cerr := f.Close(); cerr != nil {
-    	return fmt.Errorf("close: %w", cerr)
-    }
-    eof := in.OffsetBytes+readTotal >= size
+	// Close the file and surface errors before writing JSON to stdout
+	if cerr := f.Close(); cerr != nil {
+		return fmt.Errorf("close: %w", cerr)
+	}
+	eof := in.OffsetBytes+readTotal >= size
 	out := outputSpec{ContentBase64: base64.StdEncoding.EncodeToString(buf[:readTotal]), SizeBytes: size, EOF: eof}
 	return writeJSON(out)
 }
