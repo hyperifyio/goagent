@@ -11,6 +11,23 @@ ifeq ($(GOOS),windows)
 EXE := .exe
 endif
 
+# Canonical list of tool binaries built under tools/bin in stable order
+TOOLS := \
+  get_time \
+  exec \
+  fs_read_file \
+  fs_write_file \
+  fs_append_file \
+  fs_rm \
+  fs_move \
+  fs_search \
+  fs_mkdirp \
+  fs_apply_patch \
+  fs_read_lines \
+  fs_edit_range \
+  fs_listdir \
+  fs_stat
+
 .PHONY: tidy build build-tools test clean lint fmtcheck
 
 tidy:
@@ -21,27 +38,20 @@ build:
 
 build-tools:
 	mkdir -p tools/bin
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/get_time$(EXE) ./tools/cmd/get_time
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/exec$(EXE) ./tools/cmd/exec
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_file$(EXE) ./tools/cmd/fs_read_file
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_write_file$(EXE) ./tools/cmd/fs_write_file
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_append_file$(EXE) ./tools/cmd/fs_append_file
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_rm$(EXE) ./tools/cmd/fs_rm
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_move$(EXE) ./tools/cmd/fs_move
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_search$(EXE) ./tools/cmd/fs_search
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_mkdirp$(EXE) ./tools/cmd/fs_mkdirp
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_apply_patch$(EXE) ./tools/cmd/fs_apply_patch
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_lines$(EXE) ./tools/cmd/fs_read_lines
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_edit_range$(EXE) ./tools/cmd/fs_edit_range
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_listdir$(EXE) ./tools/cmd/fs_listdir
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_stat$(EXE) ./tools/cmd/fs_stat
+	@set -e; \
+	for t in $(TOOLS); do \
+	  echo "Building $$t"; \
+	  GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/$$t$(EXE) ./tools/cmd/$$t; \
+	done
 
 test:
 	$(GO) test ./...
 
 clean:
-	# Remove standard binary directories (agent and tool binaries only)
-	rm -rf bin tools/bin
+	# Remove agent binary and each tool binary deterministically
+	rm -f $(addprefix tools/bin/,$(addsuffix $(EXE),$(TOOLS)))
+	rm -rf tools/bin
+	rm -rf bin
 
 lint:
 	@set -euo pipefail; \
