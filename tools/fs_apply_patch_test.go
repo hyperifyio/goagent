@@ -1,30 +1,25 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsApplyPatchOutput struct {
 	FilesChanged int `json:"filesChanged"`
 }
 
-// buildFsApplyPatch builds ./tools/fs_apply_patch into a temp binary
+// buildFsApplyPatch builds fs_apply_patch using testutil.BuildTool
 func buildFsApplyPatch(t *testing.T) string {
 	t.Helper()
-	tmp := t.TempDir()
-	bin := filepath.Join(tmp, "fs-apply-patch")
-	cmd := exec.Command("go", "build", "-o", bin, "./fs_apply_patch")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("build fs_apply_patch: %v\n%s", err, string(out))
-	}
-	return bin
+    return testutil.BuildTool(t, "fs_apply_patch")
 }
 
 func runFsApplyPatch(t *testing.T, bin string, input any) (fsApplyPatchOutput, string, int) {
