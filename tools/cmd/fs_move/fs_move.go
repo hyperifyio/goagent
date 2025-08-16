@@ -39,7 +39,10 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(moveOutput{Moved: moved})
+	if err := json.NewEncoder(os.Stdout).Encode(moveOutput{Moved: moved}); err != nil {
+		stderrJSON(fmt.Errorf("encode output: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (moveInput, error) {
@@ -94,7 +97,11 @@ func move(from, to string, overwrite bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer src.Close()
+	defer func() {
+		if cerr := src.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "close src: %v\n", cerr)
+		}
+	}()
 	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 		return false, err
 	}
@@ -102,7 +109,11 @@ func move(from, to string, overwrite bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer func() { _ = dst.Close() }()
+	defer func() {
+		if cerr := dst.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "close dst: %v\n", cerr)
+		}
+	}()
 	if _, err := io.Copy(dst, src); err != nil {
 		return false, err
 	}

@@ -46,7 +46,9 @@ func runFsMove(t *testing.T, bin string, input any) (fsMoveOutput, string, int) 
 		}
 	}
 	var out fsMoveOutput
-	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
+	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out); err != nil && code == 0 {
+		t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+	}
 	return out, stderr.String(), code
 }
 
