@@ -36,8 +36,8 @@ func runFsSearch(t *testing.T, bin string, input any) (fsSearchOutput, string, i
 	if err != nil {
 		t.Fatalf("marshal input: %v", err)
 	}
-	cmd := exec.Command(bin)
-	cmd.Dir = "."
+    cmd := exec.Command(bin)
+    cmd.Dir = "."
 	cmd.Stdin = bytes.NewReader(data)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -58,6 +58,61 @@ func runFsSearch(t *testing.T, bin string, input any) (fsSearchOutput, string, i
 		}
 	}
 	return out, stderr.String(), code
+}
+
+// TestFsSearch_Skips_BinaryDirs ensures the walker skips known binary/output directories.
+func TestFsSearch_Skips_BinaryDirs(t *testing.T) {
+    tmpDirAbs, err := os.MkdirTemp(".", "fssearch-skip-")
+    if err != nil {
+        t.Fatalf("mkdir temp: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+    base := filepath.Base(tmpDirAbs)
+
+    // Create directories that should be skipped
+    for _, dir := range []string{"bin", "logs", filepath.Join("tools", "bin")} {
+        if err := os.MkdirAll(filepath.Join(base, dir), 0o755); err != nil {
+            t.Fatalf("mkdir %s: %v", dir, err)
+        }
+        // Put a file inside that would match the query if not skipped
+        file := filepath.Join(base, dir, "skipme.txt")
+        if err := os.WriteFile(file, []byte("SHOULD_NOT_BE_SCANNED"), 0o644); err != nil {
+            t.Fatalf("write file: %v", err)
+        }
+    }
+
+    // Create a normal file that should be scanned
+    goodFile := filepath.Join(base, "ok.txt")
+    if err := os.WriteFile(goodFile, []byte("needle here"), 0o644); err != nil {
+        t.Fatalf("write ok.txt: %v", err)
+    }
+
+    bin := buildFsSearch(t)
+    out, stderr, code := runFsSearch(t, bin, map[string]any{
+        "query":      "needle",
+        "regex":      false,
+        "globs":      []string{"**/*.txt"},
+        "maxResults": 10,
+    })
+    if code != 0 {
+        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+    }
+    for _, m := range out.Matches {
+        if strings.Contains(m.Path, "/bin/") || strings.Contains(m.Path, "/logs/") || strings.Contains(m.Path, "/tools/bin/") {
+            t.Fatalf("unexpected match in skipped dir: %q", m.Path)
+        }
+    }
+    // Ensure we did find the good file
+    sawGood := false
+    for _, m := range out.Matches {
+        if m.Path == goodFile {
+            sawGood = true
+            break
+        }
+    }
+    if !sawGood {
+        t.Fatalf("expected a match in %s, got %+v", goodFile, out.Matches)
+    }
 }
 
 // TestFsSearch_Literal_SingleFile creates a small file and searches for a literal string.
