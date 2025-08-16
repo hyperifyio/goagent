@@ -1,0 +1,240 @@
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "description": "Get current time for an IANA timezone",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone, e.g. Europe/Helsinki"
+          },
+          "tz": {
+            "type": "string",
+            "description": "Alias for timezone (deprecated)"
+          }
+        },
+        "required": ["timezone"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/get_time"],
+      "timeoutSec": 5
+    }
+    ,
+    {
+      "name": "fs_read_file",
+      "description": "Read a repository-relative file as base64 with optional offset and max bytes",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Repo-relative path to file"},
+          "offsetBytes": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_read_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_write_file",
+      "description": "Atomically write a repository-relative file from base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"},
+          "createModeOctal": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_write_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_append_file",
+      "description": "Append base64 content to a repository-relative file (create if missing)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_append_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_mkdirp",
+      "description": "Recursively create a directory path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "modeOctal": {"type": "string"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_mkdirp"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_rm",
+      "description": "Remove a repository-relative file or directory",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "force": {"type": "boolean"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_rm"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_move",
+      "description": "Move or rename a repository-relative path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "overwrite": {"type": "boolean"}
+        },
+        "required": ["from", "to"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_move"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_search",
+      "description": "Search repository files for a query with optional regex/globs",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "regex": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_search"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_listdir",
+      "description": "List directory entries with optional recursion and glob filtering",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "includeHidden": {"type": "boolean"},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_listdir"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_read_lines",
+      "description": "Read a line range from a repository-relative file with optional byte cap",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startLine": {"type": "integer", "minimum": 0},
+          "endLine": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path", "startLine", "endLine"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_read_lines"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_apply_patch",
+      "description": "Apply a strict unified diff (optional dry-run)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "unifiedDiff": {"type": "string"},
+          "dryRun": {"type": "boolean"}
+        },
+        "required": ["unifiedDiff"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_apply_patch"],
+      "timeoutSec": 10
+    },
+    {
+      "name": "fs_edit_range",
+      "description": "Atomically replace a byte range in a file with base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startByte": {"type": "integer", "minimum": 0},
+          "endByte": {"type": "integer", "minimum": 0},
+          "replacementBase64": {"type": "string"},
+          "expectedSha256": {"type": "string"}
+        },
+        "required": ["path", "startByte", "endByte", "replacementBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_edit_range"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "exec",
+      "description": "Run an arbitrary program with args, cwd, env, and stdin",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "cmd": {"type": "string"},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "cwd": {"type": "string"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}},
+          "stdin": {"type": "string"},
+          "timeoutSec": {"type": "integer", "minimum": 1}
+        },
+        "required": ["cmd"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/exec"],
+      "timeoutSec": 30
+    },
+    {
+      "name": "fs_stat",
+      "description": "Stat a path (optionally follow symlinks and compute hash)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "followSymlinks": {"type": "boolean"},
+          "hash": {"type": "string", "enum": ["none", "sha256"]}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_stat"],
+      "timeoutSec": 5
+    }
+  ]
+}
