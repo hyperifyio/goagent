@@ -20,7 +20,11 @@ func TestFsReadLines_MaxBytes_Truncates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
 	base := filepath.Base(tmpDirAbs)
 	fileRel := filepath.Join(base, "data.txt")
 	content := "aa\nbb\ncc\n" // total 9 bytes

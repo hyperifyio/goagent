@@ -1,14 +1,14 @@
 package main
 
 import (
-    "bufio"
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "strings"
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type readLinesInput struct {
@@ -40,15 +40,15 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-    if err := json.NewEncoder(os.Stdout).Encode(readLinesOutput{
-        Content:   content,
-        StartLine: in.StartLine,
-        EndLine:   in.EndLine,
-        EOF:       eof,
-    }); err != nil {
-        stderrJSON(fmt.Errorf("encode json: %w", err))
-        os.Exit(1)
-    }
+	if err := json.NewEncoder(os.Stdout).Encode(readLinesOutput{
+		Content:   content,
+		StartLine: in.StartLine,
+		EndLine:   in.EndLine,
+		EOF:       eof,
+	}); err != nil {
+		stderrJSON(fmt.Errorf("encode json: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (readLinesInput, error) {
