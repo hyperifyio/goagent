@@ -80,6 +80,9 @@ clean:
 	# Remove common test/build artifacts
 	rm -f bin/coverage.out coverage.out
 	rm -rf reports
+	# Remove local audit/log artifacts created during tests
+	rm -rf .goagent
+	rm -rf logs
 
 lint:
 	@set -euo pipefail; \
