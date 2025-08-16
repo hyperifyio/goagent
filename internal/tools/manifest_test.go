@@ -10,7 +10,7 @@ import (
 // https://github.com/hyperifyio/goagent/issues/1
 func TestLoadManifest_OK(t *testing.T) {
 	dir := t.TempDir()
-    file := filepath.Join(dir, "tools.json")
+	file := filepath.Join(dir, "tools.json")
 	data := map[string]any{
 		"tools": []map[string]any{
 			{
@@ -127,72 +127,74 @@ func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
 // Relative command paths must resolve against the manifest directory, not process CWD.
 // The loader should rewrite command[0] to an absolute path rooted at the manifest's folder.
 func TestLoadManifest_ResolvesRelativeAgainstManifestDir(t *testing.T) {
-    // Create nested manifest directory
-    base := t.TempDir()
-    nested := filepath.Join(base, "configs", "sub")
-    if err := os.MkdirAll(nested, 0o755); err != nil {
-        t.Fatalf("mkdir nested: %v", err)
-    }
-    // Create a fake tools/bin tree relative to the manifest
-    binDir := filepath.Join(nested, "tools", "bin")
-    if err := os.MkdirAll(binDir, 0o755); err != nil {
-        t.Fatalf("mkdir bin: %v", err)
-    }
-    // Create a small executable file to represent the tool binary
-    toolPath := filepath.Join(binDir, "hello_tool")
-    if err := os.WriteFile(toolPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-        t.Fatalf("write tool bin: %v", err)
-    }
-    // Write manifest that references ./tools/bin/hello_tool relative to the manifest dir
-    manPath := filepath.Join(nested, "tools.json")
-    data := map[string]any{
-        "tools": []map[string]any{
-            {
-                "name":    "hello",
-                "command": []string{"./tools/bin/hello_tool"},
-            },
-        },
-    }
-    b, err := json.Marshal(data)
-    if err != nil {
-        t.Fatalf("marshal: %v", err)
-    }
-    if err := os.WriteFile(manPath, b, 0o644); err != nil {
-        t.Fatalf("write manifest: %v", err)
-    }
-    // Change working directory to a different location to ensure CWD is not used for resolution
-    oldWD, err := os.Getwd()
-    if err != nil {
-        t.Fatalf("getwd: %v", err)
-    }
-    other := filepath.Join(base, "other")
-    if err := os.MkdirAll(other, 0o755); err != nil {
-        t.Fatalf("mkdir other: %v", err)
-    }
-    if err := os.Chdir(other); err != nil {
-        t.Fatalf("chdir other: %v", err)
-    }
-    t.Cleanup(func() {
-        _ = os.Chdir(oldWD)
-    })
+	// Create nested manifest directory
+	base := t.TempDir()
+	nested := filepath.Join(base, "configs", "sub")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	// Create a fake tools/bin tree relative to the manifest
+	binDir := filepath.Join(nested, "tools", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	// Create a small executable file to represent the tool binary
+	toolPath := filepath.Join(binDir, "hello_tool")
+	if err := os.WriteFile(toolPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write tool bin: %v", err)
+	}
+	// Write manifest that references ./tools/bin/hello_tool relative to the manifest dir
+	manPath := filepath.Join(nested, "tools.json")
+	data := map[string]any{
+		"tools": []map[string]any{
+			{
+				"name":    "hello",
+				"command": []string{"./tools/bin/hello_tool"},
+			},
+		},
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(manPath, b, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	// Change working directory to a different location to ensure CWD is not used for resolution
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	other := filepath.Join(base, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatalf("mkdir other: %v", err)
+	}
+	if err := os.Chdir(other); err != nil {
+		t.Fatalf("chdir other: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Logf("chdir restore: %v", err)
+		}
+	})
 
-    reg, _, err := LoadManifest(manPath)
-    if err != nil {
-        t.Fatalf("LoadManifest: %v", err)
-    }
-    spec, ok := reg["hello"]
-    if !ok {
-        t.Fatalf("missing tool in registry")
-    }
-    if len(spec.Command) == 0 {
-        t.Fatalf("empty command")
-    }
-    got := spec.Command[0]
-    if !filepath.IsAbs(got) {
-        t.Fatalf("command[0] not absolute: %q", got)
-    }
-    // It should point to the tool under the manifest's directory, not under CWD
-    if got != toolPath {
-        t.Fatalf("resolved path mismatch:\n got: %s\nwant: %s", got, toolPath)
-    }
+	reg, _, err := LoadManifest(manPath)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
+	spec, ok := reg["hello"]
+	if !ok {
+		t.Fatalf("missing tool in registry")
+	}
+	if len(spec.Command) == 0 {
+		t.Fatalf("empty command")
+	}
+	got := spec.Command[0]
+	if !filepath.IsAbs(got) {
+		t.Fatalf("command[0] not absolute: %q", got)
+	}
+	// It should point to the tool under the manifest's directory, not under CWD
+	if got != toolPath {
+		t.Fatalf("resolved path mismatch:\n got: %s\nwant: %s", got, toolPath)
+	}
 }
