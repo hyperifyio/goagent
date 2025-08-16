@@ -6,7 +6,7 @@ GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 
 # Pin golangci-lint to a version compatible with current Go
-GOLANGCI_LINT_VERSION ?= v1.60.3
+GOLANGCI_LINT_VERSION ?= v1.62.0
 
 # Executable suffix for Windows builds
 EXE :=
