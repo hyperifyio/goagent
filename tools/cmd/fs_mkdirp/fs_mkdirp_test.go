@@ -18,8 +18,6 @@ type fsMkdirpOutput struct {
 	Created bool `json:"created"`
 }
 
-// Build via shared helper in tools/testutil.
-
 // runFsMkdirp runs the built fs_mkdirp tool with the given JSON input.
 func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, int) {
 	t.Helper()
@@ -45,6 +43,19 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 	var out fsMkdirpOutput
 	_ = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &out)
 	return out, stderr.String(), code
+}
+
+// makeRepoRelTempDir creates a temporary directory under the repository root
+// (current working directory in tests) and returns the relative path.
+func makeRepoRelTempDir(t *testing.T, prefix string) string {
+	t.Helper()
+	tmpAbs, err := os.MkdirTemp(".", prefix)
+	if err != nil {
+		t.Fatalf("mkdir temp under repo: %v", err)
+	}
+	base := filepath.Base(tmpAbs)
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	return base
 }
 
 func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
