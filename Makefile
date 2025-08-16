@@ -151,7 +151,7 @@ lint:
 	fi; \
 	if [ "$$NEED_INSTALL" = "1" ]; then \
 	  echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
-	  GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+		  GOBIN="$$($(GO) env GOPATH)/bin" GO111MODULE=on $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
 	fi; \
 	"$$LINTBIN" version; \
 	"$$LINTBIN" run --timeout=5m; \
