@@ -34,7 +34,7 @@ type cliConfig struct {
 	temperature  float64
 	debug        bool
 	capabilities bool
-  printConfig  bool
+	printConfig  bool
 	// Sources for effective timeouts: "flag" | "env" | "default"
 	httpTimeoutSource   string
 	toolTimeoutSource   string
@@ -121,10 +121,10 @@ func parseFlags() (cliConfig, int) {
 	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
-    flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
-    flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
-    flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
-	_ = flag.CommandLine.Parse(os.Args[1:])
+	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
+	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
+	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 
 	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
@@ -173,7 +173,7 @@ func parseFlags() (cliConfig, int) {
 		cfg.globalTimeoutSource = "default"
 	}
 
-    if !cfg.capabilities && !cfg.printConfig && strings.TrimSpace(cfg.prompt) == "" {
+	if !cfg.capabilities && !cfg.printConfig && strings.TrimSpace(cfg.prompt) == "" {
 		return cfg, 2 // CLI misuse
 	}
 	return cfg, 0
@@ -190,10 +190,10 @@ func main() {
 		safeFprintln(os.Stderr, "error: -prompt is required")
 		os.Exit(exitOn)
 	}
-    if cfg.printConfig {
-        code := printResolvedConfig(cfg, os.Stdout)
-        os.Exit(code)
-    }
+	if cfg.printConfig {
+		code := printResolvedConfig(cfg, os.Stdout)
+		os.Exit(code)
+	}
 	if cfg.capabilities {
 		code := printCapabilities(cfg, os.Stdout, os.Stderr)
 		os.Exit(code)
@@ -433,7 +433,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -temp float\n    Sampling temperature (default 0.2)\n")
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
-    b.WriteString("  -print-config\n    Print resolved config and exit\n")
+	b.WriteString("  -print-config\n    Print resolved config and exit\n")
 	b.WriteString("\nExamples:\n")
 	b.WriteString("  # Quick start (after make build build-tools)\n")
 	b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
@@ -447,51 +447,51 @@ func printUsage(w io.Writer) {
 // printResolvedConfig writes a JSON object describing resolved configuration
 // (model, base URL, and timeouts with their sources) to stdout. Returns exit code 0.
 func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
-    // Ensure timeouts are normalized as in runAgent
-    if cfg.httpTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.httpTimeout = cfg.timeout
-        } else {
-            cfg.httpTimeout = 90 * time.Second
-        }
-    }
-    if cfg.toolTimeout <= 0 {
-        if cfg.timeout > 0 {
-            cfg.toolTimeout = cfg.timeout
-        } else {
-            cfg.toolTimeout = 30 * time.Second
-        }
-    }
-    // Default sources when unset
-    if strings.TrimSpace(cfg.httpTimeoutSource) == "" {
-        cfg.httpTimeoutSource = "default"
-    }
-    if strings.TrimSpace(cfg.toolTimeoutSource) == "" {
-        cfg.toolTimeoutSource = "default"
-    }
-    if strings.TrimSpace(cfg.globalTimeoutSource) == "" {
-        cfg.globalTimeoutSource = "default"
-    }
+	// Ensure timeouts are normalized as in runAgent
+	if cfg.httpTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.httpTimeout = cfg.timeout
+		} else {
+			cfg.httpTimeout = 90 * time.Second
+		}
+	}
+	if cfg.toolTimeout <= 0 {
+		if cfg.timeout > 0 {
+			cfg.toolTimeout = cfg.timeout
+		} else {
+			cfg.toolTimeout = 30 * time.Second
+		}
+	}
+	// Default sources when unset
+	if strings.TrimSpace(cfg.httpTimeoutSource) == "" {
+		cfg.httpTimeoutSource = "default"
+	}
+	if strings.TrimSpace(cfg.toolTimeoutSource) == "" {
+		cfg.toolTimeoutSource = "default"
+	}
+	if strings.TrimSpace(cfg.globalTimeoutSource) == "" {
+		cfg.globalTimeoutSource = "default"
+	}
 
-    // Build a minimal, stable JSON payload
-    payload := map[string]string{
-        "model":              cfg.model,
-        "baseURL":            cfg.baseURL,
-        "httpTimeout":        cfg.httpTimeout.String(),
-        "httpTimeoutSource":  cfg.httpTimeoutSource,
-        "toolTimeout":        cfg.toolTimeout.String(),
-        "toolTimeoutSource":  cfg.toolTimeoutSource,
-        "timeout":            cfg.timeout.String(),
-        "timeoutSource":      cfg.globalTimeoutSource,
-    }
-    data, err := json.MarshalIndent(payload, "", "  ")
-    if err != nil {
-        // Fallback to a simple line to avoid surprising exits
-        safeFprintln(stdout, "{}")
-        return 0
-    }
-    safeFprintln(stdout, string(data))
-    return 0
+	// Build a minimal, stable JSON payload
+	payload := map[string]string{
+		"model":             cfg.model,
+		"baseURL":           cfg.baseURL,
+		"httpTimeout":       cfg.httpTimeout.String(),
+		"httpTimeoutSource": cfg.httpTimeoutSource,
+		"toolTimeout":       cfg.toolTimeout.String(),
+		"toolTimeoutSource": cfg.toolTimeoutSource,
+		"timeout":           cfg.timeout.String(),
+		"timeoutSource":     cfg.globalTimeoutSource,
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		// Fallback to a simple line to avoid surprising exits
+		safeFprintln(stdout, "{}")
+		return 0
+	}
+	safeFprintln(stdout, string(data))
+	return 0
 }
 
 // printCapabilities loads the tools manifest (if provided) and prints a concise list
@@ -539,21 +539,9 @@ func printCapabilities(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
-// durationFlexValue implements flag.Value to parse durations that accept either
-// standard Go duration strings (e.g., "300s", "5m") or plain integer seconds
-// (e.g., "300").
-type durationFlexValue time.Duration
-
-func (d *durationFlexValue) String() string { return time.Duration(*d).String() }
-
-func (d *durationFlexValue) Set(s string) error {
-	dur, err := parseDurationFlexible(s)
-	if err != nil {
-		return err
-	}
-	*d = durationFlexValue(dur)
-	return nil
-}
+// (Deprecated) durationFlexValue was used for an earlier flag implementation.
+// It is intentionally removed to avoid unused-code lints; parsing is handled
+// by durationFlexFlag and parseDurationFlexible.
 
 // parseDurationFlexible parses a duration allowing either Go duration syntax
 // or a plain integer representing seconds.
@@ -585,6 +573,13 @@ func parseDurationFlexible(raw string) (time.Duration, error) {
 	}
 	return 0, fmt.Errorf("invalid duration: %q", raw)
 }
+
+// ignoreError is used to explicitly acknowledge and ignore expected errors
+// in places where failure is handled via alternative control flow (e.g.,
+// we parse flags with ContinueOnError and then return exit codes). This
+// satisfies linters that require checking error returns while keeping the
+// intended behavior unchanged.
+func ignoreError(_ error) {}
 
 // safeFprintln writes a line to w and intentionally ignores write errors.
 // This encapsulation makes the intent explicit and satisfies errcheck.

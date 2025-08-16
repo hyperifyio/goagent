@@ -188,47 +188,55 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 
 // https://github.com/hyperifyio/goagent/issues/246
 func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
-    // Save/restore env for OAI_HTTP_TIMEOUT
-    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
-    if ok {
-        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
-    } else {
-        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
-    }
-    if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
-        t.Fatalf("set env: %v", err)
-    }
+	// Save/restore env for OAI_HTTP_TIMEOUT
+	val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+	if ok {
+		defer func() {
+			if err := os.Setenv("OAI_HTTP_TIMEOUT", val); err != nil {
+				t.Fatalf("restore env: %v", err)
+			}
+		}()
+	} else {
+		defer func() {
+			if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+				t.Fatalf("unset env: %v", err)
+			}
+		}()
+	}
+	if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
 
-    // Prepare args: no -prompt required when -print-config is set
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://example"}
+	// Prepare args: no -prompt required when -print-config is set
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://example"}
 
-    cfg, code := parseFlags()
-    if code != 0 {
-        t.Fatalf("parse exit: %d", code)
-    }
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
 
-    var outBuf bytes.Buffer
-    exit := printResolvedConfig(cfg, &outBuf)
-    if exit != 0 {
-        t.Fatalf("expected exit 0")
-    }
-    // Validate JSON contains fields and sources
-    got := outBuf.String()
-    for _, substr := range []string{
-        "\"model\": \"m\"",
-        "\"baseURL\": \"http://example\"",
-        "\"httpTimeout\": \"100ms\"",
-        "\"httpTimeoutSource\": \"env\"",
-        "\"toolTimeout\": ",
-        "\"timeout\": ",
-        "\"timeoutSource\": ",
-    } {
-        if !strings.Contains(got, substr) {
-            t.Fatalf("print-config missing %q; got:\n%s", substr, got)
-        }
-    }
+	var outBuf bytes.Buffer
+	exit := printResolvedConfig(cfg, &outBuf)
+	if exit != 0 {
+		t.Fatalf("expected exit 0")
+	}
+	// Validate JSON contains fields and sources
+	got := outBuf.String()
+	for _, substr := range []string{
+		"\"model\": \"m\"",
+		"\"baseURL\": \"http://example\"",
+		"\"httpTimeout\": \"100ms\"",
+		"\"httpTimeoutSource\": \"env\"",
+		"\"toolTimeout\": ",
+		"\"timeout\": ",
+		"\"timeoutSource\": ",
+	} {
+		if !strings.Contains(got, substr) {
+			t.Fatalf("print-config missing %q; got:\n%s", substr, got)
+		}
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/1
@@ -441,183 +449,203 @@ func TestRunAgent_HTTPTimeout_RaiseResolves(t *testing.T) {
 // https://github.com/hyperifyio/goagent/issues/247
 // Scaled integration: default-like 90ms times out, raised 300ms succeeds against a ~120ms server.
 func TestHTTPTimeout_SlowServer_DefaultTimesOut_RaisedSucceeds(t *testing.T) {
-    // Slow-ish server (~120ms)
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(120 * time.Millisecond)
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer srv.Close()
+	// Slow-ish server (~120ms)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(120 * time.Millisecond)
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    // Phase 1: env-driven ~90ms timeout -> expect timeout
-    // Save/restore env
-    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
-    if ok {
-        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
-    } else {
-        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
-    }
-    if err := os.Setenv("OAI_HTTP_TIMEOUT", "90ms"); err != nil {
-        t.Fatalf("set env: %v", err)
-    }
-    // Use parseFlags path to simulate CLI invocation
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", srv.URL, "-model", "m"}
-    cfg, code := parseFlags()
-    if code != 0 {
-        t.Fatalf("parse exit: %d", code)
-    }
-    var out1, err1 bytes.Buffer
-    exit1 := runAgent(cfg, &out1, &err1)
-    if exit1 == 0 {
-        t.Fatalf("expected timeout exit; stdout=%q stderr=%q", out1.String(), err1.String())
-    }
-    if got := err1.String(); !strings.Contains(got, "http-timeout=90ms") {
-        t.Fatalf("expected error to mention http-timeout=90ms; got: %q", got)
-    }
+	// Phase 1: env-driven ~90ms timeout -> expect timeout
+	// Save/restore env
+	val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+	if ok {
+		defer func() {
+			if err := os.Setenv("OAI_HTTP_TIMEOUT", val); err != nil {
+				t.Fatalf("restore env: %v", err)
+			}
+		}()
+	} else {
+		defer func() {
+			if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+				t.Fatalf("unset env: %v", err)
+			}
+		}()
+	}
+	if err := os.Setenv("OAI_HTTP_TIMEOUT", "90ms"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	// Use parseFlags path to simulate CLI invocation
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", srv.URL, "-model", "m"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	var out1, err1 bytes.Buffer
+	exit1 := runAgent(cfg, &out1, &err1)
+	if exit1 == 0 {
+		t.Fatalf("expected timeout exit; stdout=%q stderr=%q", out1.String(), err1.String())
+	}
+	if got := err1.String(); !strings.Contains(got, "http-timeout=90ms") {
+		t.Fatalf("expected error to mention http-timeout=90ms; got: %q", got)
+	}
 
-    // Phase 2: raise -http-timeout to 300ms -> expect success
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300ms", "-base-url", srv.URL, "-model", "m"}
-    cfg2, code2 := parseFlags()
-    if code2 != 0 {
-        t.Fatalf("parse exit: %d", code2)
-    }
-    var out2, err2 bytes.Buffer
-    exit2 := runAgent(cfg2, &out2, &err2)
-    if exit2 != 0 {
-        t.Fatalf("expected success with raised timeout; stderr=%s", err2.String())
-    }
-    if strings.TrimSpace(out2.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", out2.String())
-    }
+	// Phase 2: raise -http-timeout to 300ms -> expect success
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300ms", "-base-url", srv.URL, "-model", "m"}
+	cfg2, code2 := parseFlags()
+	if code2 != 0 {
+		t.Fatalf("parse exit: %d", code2)
+	}
+	var out2, err2 bytes.Buffer
+	exit2 := runAgent(cfg2, &out2, &err2)
+	if exit2 != 0 {
+		t.Fatalf("expected success with raised timeout; stderr=%s", err2.String())
+	}
+	if strings.TrimSpace(out2.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", out2.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/245
 func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
-    // Fast server returning a minimal valid response
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        if err := json.NewEncoder(w).Encode(resp); err != nil {
-            t.Fatalf("encode resp: %v", err)
-        }
-    }))
-    defer srv.Close()
+	// Fast server returning a minimal valid response
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    // Use flags so sources are "flag"
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
-    cfg, code := parseFlags()
-    if code != 0 {
-        t.Fatalf("parse exit: %d", code)
-    }
-    cfg.debug = true
+	// Use flags so sources are "flag"
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	cfg.debug = true
 
-    var outBuf, errBuf bytes.Buffer
-    code = runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
-    }
-    got := errBuf.String()
-    if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
-        t.Fatalf("missing effective timeouts line; got:\n%s", got)
-    }
+	var outBuf, errBuf bytes.Buffer
+	code = runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
+	}
+	got := errBuf.String()
+	if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
+		t.Fatalf("missing effective timeouts line; got:\n%s", got)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/245
 func TestHTTPTimeoutError_IncludesSourceAndValue(t *testing.T) {
-    // Slow server to trigger client timeout
-    slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(200 * time.Millisecond)
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer slow.Close()
+	// Slow server to trigger client timeout
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp: %v", err)
+		}
+	}))
+	defer slow.Close()
 
-    // Set http-timeout via env so source is "env"
-    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
-    if ok {
-        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
-    } else {
-        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
-    }
-    if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
-        t.Fatalf("set env: %v", err)
-    }
+	// Set http-timeout via env so source is "env"
+	val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+	if ok {
+		defer func() {
+			if err := os.Setenv("OAI_HTTP_TIMEOUT", val); err != nil {
+				t.Fatalf("restore env: %v", err)
+			}
+		}()
+	} else {
+		defer func() {
+			if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+				t.Fatalf("unset env: %v", err)
+			}
+		}()
+	}
+	if err := os.Setenv("OAI_HTTP_TIMEOUT", "100ms"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
 
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", slow.URL, "-model", "m"}
-    cfg, code := parseFlags()
-    if code != 0 {
-        t.Fatalf("parse exit: %d", code)
-    }
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", slow.URL, "-model", "m"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code = runAgent(cfg, &outBuf, &errBuf)
-    if code == 0 {
-        t.Fatalf("expected non-zero exit; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
-    }
-    got := errBuf.String()
-    if !strings.Contains(got, "http-timeout=100ms") {
-        t.Fatalf("expected error to include http-timeout value; got: %q", got)
-    }
-    if !strings.Contains(got, "(http-timeout source=env)") {
-        t.Fatalf("expected error to include timeout source env; got: %q", got)
-    }
+	var outBuf, errBuf bytes.Buffer
+	code = runAgent(cfg, &outBuf, &errBuf)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+	got := errBuf.String()
+	if !strings.Contains(got, "http-timeout=100ms") {
+		t.Fatalf("expected error to include http-timeout value; got: %q", got)
+	}
+	if !strings.Contains(got, "(http-timeout source=env)") {
+		t.Fatalf("expected error to include timeout source env; got: %q", got)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/243
 // Ensure chat POST uses -http-timeout exclusively even if legacy -timeout is shorter
 func TestRunAgent_HTTPTimeout_IgnoresShortGlobal(t *testing.T) {
-    // Server sleeps longer than global timeout but shorter than http-timeout
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(150 * time.Millisecond)
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        if err := json.NewEncoder(w).Encode(resp); err != nil {
-            t.Fatalf("encode resp: %v", err)
-        }
-    }))
-    defer srv.Close()
+	// Server sleeps longer than global timeout but shorter than http-timeout
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       "test",
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "test",
-        maxSteps:     1,
-        timeout:      50 * time.Millisecond,  // legacy global shorter than server latency
-        httpTimeout:  500 * time.Millisecond, // HTTP timeout longer than server latency
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-        debug:        false,
-    }
+	cfg := cliConfig{
+		prompt:       "test",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "test",
+		maxSteps:     1,
+		timeout:      50 * time.Millisecond,  // legacy global shorter than server latency
+		httpTimeout:  500 * time.Millisecond, // HTTP timeout longer than server latency
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+		debug:        false,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/1
@@ -668,198 +696,202 @@ func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
 
 // https://github.com/hyperifyio/goagent/issues/242
 func TestTimeoutPrecedence_Table(t *testing.T) {
-    // Helpers to save/restore env
-    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
-    restore := func(k, v string, ok bool) {
-        if ok {
-            if err := os.Setenv(k, v); err != nil {
-                t.Fatalf("restore %s: %v", k, err)
-            }
-        } else {
-            if err := os.Unsetenv(k); err != nil {
-                t.Fatalf("unset %s: %v", k, err)
-            }
-        }
-    }
-    httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
-    defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
+	// Helpers to save/restore env
+	save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+	restore := func(k, v string, ok bool) {
+		if ok {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("restore %s: %v", k, err)
+			}
+		} else {
+			if err := os.Unsetenv(k); err != nil {
+				t.Fatalf("unset %s: %v", k, err)
+			}
+		}
+	}
+	httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
+	defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
 
-    type testCase struct {
-        name           string
-        envHTTP        string
-        args           []string
-        wantHTTP       time.Duration
-        wantTool       time.Duration
-        wantGlobal     time.Duration
-    }
+	type testCase struct {
+		name       string
+		envHTTP    string
+		args       []string
+		wantHTTP   time.Duration
+		wantTool   time.Duration
+		wantGlobal time.Duration
+	}
 
-    cases := []testCase{
-        {
-            name:       "FlagsOverrideEnv",
-            envHTTP:    "90s",
-            args:       []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-tool-timeout", "300s"},
-            wantHTTP:   5 * time.Minute,
-            wantTool:   5 * time.Minute,
-            wantGlobal: 30 * time.Second,
-        },
-        {
-            name:       "EnvOnly_HTTP",
-            envHTTP:    "90s",
-            args:       []string{"agentcli.test", "-prompt", "x"},
-            wantHTTP:   90 * time.Second,
-            wantTool:   30 * time.Second,
-            wantGlobal: 30 * time.Second,
-        },
-        {
-            name:       "LegacyGlobalOnly",
-            envHTTP:    "",
-            args:       []string{"agentcli.test", "-prompt", "x", "-timeout", "300s"},
-            wantHTTP:   5 * time.Minute,
-            wantTool:   5 * time.Minute,
-            wantGlobal: 5 * time.Minute,
-        },
-    }
+	cases := []testCase{
+		{
+			name:       "FlagsOverrideEnv",
+			envHTTP:    "90s",
+			args:       []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-tool-timeout", "300s"},
+			wantHTTP:   5 * time.Minute,
+			wantTool:   5 * time.Minute,
+			wantGlobal: 30 * time.Second,
+		},
+		{
+			name:       "EnvOnly_HTTP",
+			envHTTP:    "90s",
+			args:       []string{"agentcli.test", "-prompt", "x"},
+			wantHTTP:   90 * time.Second,
+			wantTool:   30 * time.Second,
+			wantGlobal: 30 * time.Second,
+		},
+		{
+			name:       "LegacyGlobalOnly",
+			envHTTP:    "",
+			args:       []string{"agentcli.test", "-prompt", "x", "-timeout", "300s"},
+			wantHTTP:   5 * time.Minute,
+			wantTool:   5 * time.Minute,
+			wantGlobal: 5 * time.Minute,
+		},
+	}
 
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
 
-    for _, tc := range cases {
-        t.Run(tc.name, func(t *testing.T) {
-            if tc.envHTTP == "" {
-                if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
-                    t.Fatalf("unset env: %v", err)
-                }
-            } else {
-                if err := os.Setenv("OAI_HTTP_TIMEOUT", tc.envHTTP); err != nil {
-                    t.Fatalf("set env: %v", err)
-                }
-            }
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.envHTTP == "" {
+				if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+					t.Fatalf("unset env: %v", err)
+				}
+			} else {
+				if err := os.Setenv("OAI_HTTP_TIMEOUT", tc.envHTTP); err != nil {
+					t.Fatalf("set env: %v", err)
+				}
+			}
 
-            os.Args = tc.args
-            cfg, code := parseFlags()
-            if code != 0 {
-                t.Fatalf("parse exit: %d", code)
-            }
-            if cfg.httpTimeout != tc.wantHTTP {
-                t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, tc.wantHTTP)
-            }
-            if cfg.toolTimeout != tc.wantTool {
-                t.Fatalf("toolTimeout got %v want %v", cfg.toolTimeout, tc.wantTool)
-            }
-            if cfg.timeout != tc.wantGlobal {
-                t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, tc.wantGlobal)
-            }
-        })
-    }
+			os.Args = tc.args
+			cfg, code := parseFlags()
+			if code != 0 {
+				t.Fatalf("parse exit: %d", code)
+			}
+			if cfg.httpTimeout != tc.wantHTTP {
+				t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, tc.wantHTTP)
+			}
+			if cfg.toolTimeout != tc.wantTool {
+				t.Fatalf("toolTimeout got %v want %v", cfg.toolTimeout, tc.wantTool)
+			}
+			if cfg.timeout != tc.wantGlobal {
+				t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, tc.wantGlobal)
+			}
+		})
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/243
 // Ensure -http-timeout is not clamped by legacy -timeout (shorter or longer)
 func TestHTTPTimeout_NotClampedByGlobal(t *testing.T) {
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
 
-    t.Run("GlobalShorter", func(t *testing.T) {
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "1s"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.httpTimeout != 300*time.Second {
-            t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
-        }
-        if cfg.timeout != 1*time.Second {
-            t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 1*time.Second)
-        }
-    })
+	t.Run("GlobalShorter", func(t *testing.T) {
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "1s"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.httpTimeout != 300*time.Second {
+			t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+		}
+		if cfg.timeout != 1*time.Second {
+			t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 1*time.Second)
+		}
+	})
 
-    t.Run("GlobalLonger", func(t *testing.T) {
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "600s"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.httpTimeout != 300*time.Second {
-            t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
-        }
-        if cfg.timeout != 600*time.Second {
-            t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 600*time.Second)
-        }
-    })
+	t.Run("GlobalLonger", func(t *testing.T) {
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-timeout", "600s"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.httpTimeout != 300*time.Second {
+			t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+		}
+		if cfg.timeout != 600*time.Second {
+			t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, 600*time.Second)
+		}
+	})
 }
 
 // https://github.com/hyperifyio/goagent/issues/244
 // Duration flags accept plain seconds (e.g., 300) and Go duration strings.
 func TestDurationFlags_FlexibleParsing(t *testing.T) {
-    origArgs := os.Args
-    defer func() { os.Args = origArgs }()
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
 
-    t.Run("NumericHTTPFlag", func(t *testing.T) {
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.httpTimeout != 300*time.Second {
-            t.Fatalf("http-timeout got %v want %v", cfg.httpTimeout, 300*time.Second)
-        }
-    })
+	t.Run("NumericHTTPFlag", func(t *testing.T) {
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.httpTimeout != 300*time.Second {
+			t.Fatalf("http-timeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+		}
+	})
 
-    t.Run("NumericToolFlag", func(t *testing.T) {
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-tool-timeout", "45"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.toolTimeout != 45*time.Second {
-            t.Fatalf("tool-timeout got %v want %v", cfg.toolTimeout, 45*time.Second)
-        }
-    })
+	t.Run("NumericToolFlag", func(t *testing.T) {
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-tool-timeout", "45"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.toolTimeout != 45*time.Second {
+			t.Fatalf("tool-timeout got %v want %v", cfg.toolTimeout, 45*time.Second)
+		}
+	})
 
-    t.Run("NumericGlobalFlag", func(t *testing.T) {
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-timeout", "10"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        // http falls back to legacy when not set explicitly
-        if cfg.timeout != 10*time.Second || cfg.httpTimeout != 10*time.Second || cfg.toolTimeout != 10*time.Second {
-            t.Fatalf("timeouts got http=%v tool=%v global=%v; want 10s", cfg.httpTimeout, cfg.toolTimeout, cfg.timeout)
-        }
-    })
+	t.Run("NumericGlobalFlag", func(t *testing.T) {
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-timeout", "10"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		// http falls back to legacy when not set explicitly
+		if cfg.timeout != 10*time.Second || cfg.httpTimeout != 10*time.Second || cfg.toolTimeout != 10*time.Second {
+			t.Fatalf("timeouts got http=%v tool=%v global=%v; want 10s", cfg.httpTimeout, cfg.toolTimeout, cfg.timeout)
+		}
+	})
 
-    t.Run("EnvHTTPNumeric", func(t *testing.T) {
-        // Save/restore env
-        val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
-        defer func() {
-            if ok {
-                if err := os.Setenv("OAI_HTTP_TIMEOUT", val); err != nil { t.Fatalf("restore env: %v", err) }
-            } else {
-                if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil { t.Fatalf("unset env: %v", err) }
-            }
-        }()
-        if err := os.Setenv("OAI_HTTP_TIMEOUT", "300"); err != nil {
-            t.Fatalf("set env: %v", err)
-        }
-        os.Args = []string{"agentcli.test", "-prompt", "x"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.httpTimeout != 300*time.Second {
-            t.Fatalf("env http-timeout got %v want %v", cfg.httpTimeout, 300*time.Second)
-        }
-    })
+	t.Run("EnvHTTPNumeric", func(t *testing.T) {
+		// Save/restore env
+		val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+		defer func() {
+			if ok {
+				if err := os.Setenv("OAI_HTTP_TIMEOUT", val); err != nil {
+					t.Fatalf("restore env: %v", err)
+				}
+			} else {
+				if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+					t.Fatalf("unset env: %v", err)
+				}
+			}
+		}()
+		if err := os.Setenv("OAI_HTTP_TIMEOUT", "300"); err != nil {
+			t.Fatalf("set env: %v", err)
+		}
+		os.Args = []string{"agentcli.test", "-prompt", "x"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.httpTimeout != 300*time.Second {
+			t.Fatalf("env http-timeout got %v want %v", cfg.httpTimeout, 300*time.Second)
+		}
+	})
 
-    t.Run("InvalidFlagValueFallsBack", func(t *testing.T) {
-        // invalid value for http-timeout -> should fall back to legacy -timeout (default 30s)
-        os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "not-a-duration"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parse exit: %d", code)
-        }
-        if cfg.httpTimeout != 30*time.Second { // falls back to legacy default 30s
-            t.Fatalf("invalid http-timeout should fall back; got %v want %v", cfg.httpTimeout, 30*time.Second)
-        }
-    })
+	t.Run("InvalidFlagValueFallsBack", func(t *testing.T) {
+		// invalid value for http-timeout -> should fall back to legacy -timeout (default 30s)
+		os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "not-a-duration"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parse exit: %d", code)
+		}
+		if cfg.httpTimeout != 30*time.Second { // falls back to legacy default 30s
+			t.Fatalf("invalid http-timeout should fall back; got %v want %v", cfg.httpTimeout, 30*time.Second)
+		}
+	})
 }

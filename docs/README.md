@@ -6,6 +6,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0001-minimal-agent-cli.md](adr/0001-minimal-agent-cli.md)
 - ADR-0002: Unrestricted toolbelt (files + network) — risks, contracts, and guidance.
   - Link: [docs/adr/0002-unrestricted-toolbelt.md](adr/0002-unrestricted-toolbelt.md)
+- ADR-0003: Toolchain & Lint Policy (Go + golangci-lint) — pin Go via go.mod and a known-good golangci-lint; CI and local workflows align.
+  - Link: [docs/adr/0003-toolchain-and-lint-policy.md](adr/0003-toolchain-and-lint-policy.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)

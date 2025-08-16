@@ -36,6 +36,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive “too
 - [Tests](#tests)
 - [Contributing](#contributing)
 - [CI quality gates](docs/operations/ci-quality-gates.md)
+- [Tooling](#tooling)
 - [Support](#support)
 - [Roadmap](#roadmap)
 - [Project status](#project-status)
@@ -337,6 +338,14 @@ Useful local helpers during development:
 - `make check-tools-paths` — enforce canonical `tools/cmd/NAME` sources and `tools/bin/NAME` invocations (requires `rg`)
 - `make verify-manifest-paths` — ensure relative `tools.json` commands use `./tools/bin/NAME` (absolute allowed in tests)
 - `make build-tool NAME=<name>` — build a single tool binary into `tools/bin/NAME`
+
+## Tooling
+
+This repository pins the toolchain for deterministic results:
+- CI uses the Go version declared in `go.mod` across all OS jobs.
+- Linting is performed with a pinned `golangci-lint` version managed by the `Makefile`.
+
+See ADR‑0003 for the full policy and rationale: [docs/adr/0003-toolchain-and-lint-policy.md](docs/adr/0003-toolchain-and-lint-policy.md).
 
 ## Support
 - Open an issue on the tracker: [Issues](https://github.com/hyperifyio/goagent/issues)
