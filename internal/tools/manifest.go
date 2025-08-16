@@ -1,13 +1,14 @@
 package tools
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
+    "encoding/json"
+    "fmt"
+    "os"
+    "path"
     "path/filepath"
     "strings"
 
-	"github.com/hyperifyio/goagent/internal/oai"
+    "github.com/hyperifyio/goagent/internal/oai"
 )
 
 type ToolSpec struct {
@@ -50,8 +51,10 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
         // enforce the canonical tools bin prefix and prevent path escapes.
         cmd0 := t.Command[0]
         if !filepath.IsAbs(cmd0) {
-            raw := filepath.ToSlash(cmd0)
-            norm := filepath.ToSlash(filepath.Clean(cmd0))
+            // Normalize separators first (convert backslashes to slashes cross‑platform),
+            // then apply a platform-agnostic clean.
+            raw := strings.ReplaceAll(cmd0, "\\", "/")
+            norm := path.Clean(raw)
             // Normalize to a consistent leading ./ for prefix checks
             if strings.HasPrefix(norm, "tools/") || norm == "tools" {
                 norm = "./" + norm

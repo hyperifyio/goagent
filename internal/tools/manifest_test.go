@@ -87,6 +87,10 @@ func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
         {name: "ok-tools-bin", command0: "./tools/bin/fs_read_file", wantErr: false},
         {name: "reject-dotdot-leading", command0: "../tools/bin/get_time", wantErr: true},
         {name: "reject-escape-from-bin", command0: "./tools/bin/../hack", wantErr: true},
+        // Windows-style backslashes that normalize to an escape must be rejected
+        {name: "reject-windows-backslash-escape", command0: ".\\tools\\bin\\..\\hack", wantErr: true},
+        // Windows-style acceptable path under tools/bin should be accepted after normalization
+        {name: "ok-windows-backslash-tools-bin", command0: ".\\tools\\bin\\fs_read_file", wantErr: false},
     }
 
     for _, tc := range cases {
