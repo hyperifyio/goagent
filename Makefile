@@ -28,7 +28,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean lint fmt fmtcheck verify-manifest-paths
+.PHONY: tidy build build-tools build-tool test clean lint fmt fmtcheck verify-manifest-paths bootstrap
 
 tidy:
 	$(GO) mod tidy
@@ -140,3 +140,7 @@ check-tools-paths:
 		exit 1; \
 	fi; \
 	echo "check-tools-paths: OK"
+
+# Initialize and update git submodules (e.g., scripts and rules)
+bootstrap:
+	@git submodule update --init --recursive

@@ -62,7 +62,7 @@ go install github.com/hyperifyio/goagent/cmd/agentcli@latest
 ```bash
 git clone https://github.com/hyperifyio/goagent
 cd goagent
-make tidy build build-tools
+make bootstrap tidy build build-tools
 ```
 
 Helpful developer prerequisites (examples):
