@@ -3,32 +3,22 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsMkdirpOutput struct {
 	Created bool `json:"created"`
 }
 
-// buildFsMkdirpTool builds ./tools/fs_mkdirp into a temporary binary.
-func buildFsMkdirpTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-    binPath := filepath.Join(tmpDir, "fs-mkdirp")
-    cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_mkdirp")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_mkdirp tool: %v\n%s", err, string(out))
-	}
-	return binPath
-}
+// Build via shared helper in tools/testutil.
 
 // runFsMkdirp runs the built fs_mkdirp tool with the given JSON input.
 func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, int) {
@@ -58,7 +48,7 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 }
 
 func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
-	bin := buildFsMkdirpTool(t)
+    bin := testutil.BuildTool(t, "fs_mkdirp")
 
 	dir := makeRepoRelTempDir(t, "fsmkdirp-")
 	deep := filepath.Join(dir, "a", "b", "c")
@@ -95,7 +85,7 @@ func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
 // the tool must write a single-line JSON object to stderr with an "error" key
 // and exit non-zero. Use an absolute path to trigger validation failure.
 func TestFsMkdirp_ErrorJSON(t *testing.T) {
-    bin := buildFsMkdirpTool(t)
+    bin := testutil.BuildTool(t, "fs_mkdirp")
 
     // Absolute path should be rejected per repo-relative constraint.
     abs := string(os.PathSeparator) + filepath.Join("tmp", "mkabs")
