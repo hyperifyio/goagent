@@ -3,6 +3,7 @@ package oai
 import (
 	"context"
 	"encoding/json"
+    "errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,4 +70,56 @@ func TestCreateChatCompletion_HTTPError(t *testing.T) {
 	if got := err.Error(); !strings.Contains(got, "400") || !strings.Contains(got, "bad request") {
 		t.Fatalf("expected status code and body in error, got: %v", got)
 	}
+}
+
+// https://github.com/hyperifyio/goagent/issues/216
+func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
+    attempts := 0
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        attempts++
+        if attempts == 1 {
+            // Simulate a slow server to trigger client timeout
+            time.Sleep(500 * time.Millisecond)
+        }
+        var req ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("bad json: %v", err)
+        }
+        resp := ChatCompletionsResponse{
+            ID:      "cmpl-1",
+            Object:  "chat.completion",
+            Created: time.Now().Unix(),
+            Model:   req.Model,
+            Choices: []ChatCompletionsResponseChoice{{Index: 0, FinishReason: "stop", Message: Message{Role: RoleAssistant, Content: "ok"}}},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            panic(err)
+        }
+    }))
+    defer ts.Close()
+
+    // Small HTTP timeout to trigger quickly; allow 1 retry
+    c := NewClientWithRetry(ts.URL, "", 200*time.Millisecond, RetryPolicy{MaxRetries: 1, Backoff: 1 * time.Millisecond})
+    // Context slightly larger than two attempts to avoid overall ctx deadline
+    ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+    defer cancel()
+    out, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+    if out.Choices[0].Message.Content != "ok" {
+        t.Fatalf("unexpected content: %+v", out)
+    }
+    if attempts < 2 {
+        t.Fatalf("expected at least 2 attempts, got %d", attempts)
+    }
+}
+
+func TestIsRetryableError_ContextDeadline(t *testing.T) {
+    if !isRetryableError(context.DeadlineExceeded) {
+        t.Fatal("expected context deadline to be retryable")
+    }
+    if isRetryableError(errors.New("permanent failure")) {
+        t.Fatal("unexpected retryable for generic error")
+    }
 }
