@@ -151,6 +151,8 @@ Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/
 -model string          Model ID (env OAI_MODEL; scripts accept LLM_MODEL fallback)
 -max-steps int         Maximum reasoning/tool steps (default 8)
 -http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
+-http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
+-http-retry-backoff duration Base backoff between HTTP retry attempts (exponential) (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
 -timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
 -temp float            Sampling temperature (default 0.2)
