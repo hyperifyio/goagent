@@ -338,6 +338,7 @@ Useful local helpers during development:
 - `make check-tools-paths` — enforce canonical `tools/cmd/NAME` sources and `tools/bin/NAME` invocations (requires `rg`)
 - `make verify-manifest-paths` — ensure relative `tools.json` commands use `./tools/bin/NAME` (absolute allowed in tests)
 - `make build-tool NAME=<name>` — build a single tool binary into `tools/bin/NAME`
+- `make check-go-version` — fail fast if your local Go major.minor differs from `go.mod`
 
 ## Tooling
 

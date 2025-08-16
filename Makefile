@@ -36,7 +36,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg
+.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version
 
 tidy:
 	$(GO) mod tidy
@@ -109,6 +109,21 @@ clean-logs:
 clean-all:
 	@$(MAKE) clean
 	@$(MAKE) clean-logs
+
+# Fail early if the active Go toolchain (major.minor) differs from go.mod
+# Usage: make check-go-version
+check-go-version:
+	@set -euo pipefail; \
+	MOD_GO=$$(awk '/^go [0-9]+\.[0-9]+/ {print $$2; exit}' go.mod); \
+	if [ -z "$$MOD_GO" ]; then echo "check-go-version: unable to parse go.mod"; exit 2; fi; \
+	SYS_GO=$$(go version | sed -E 's/.*go([0-9]+\.[0-9]+).*/\1/'); \
+	if [ -z "$$SYS_GO" ]; then echo "check-go-version: unable to parse 'go version' output"; exit 2; fi; \
+	if [ "$$SYS_GO" != "$$MOD_GO" ]; then \
+	  echo "Go toolchain mismatch: system $$SYS_GO != go.mod $$MOD_GO"; \
+	  echo "Hint: install Go $$MOD_GO (see https://go.dev/dl) or use a version manager, then re-run 'make check-go-version'."; \
+	  exit 2; \
+	fi; \
+	echo "check-go-version: OK (system $$SYS_GO matches go.mod $$MOD_GO)"
 
 # Deterministic tests for clean-logs behavior across cases
 # - DOWN => directory removed
