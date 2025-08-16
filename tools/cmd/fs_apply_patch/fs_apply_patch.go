@@ -77,10 +77,8 @@ func applyNewFileOnly(diff string, dryRun bool) (int, error) {
 				return 0, errors.New("BAD_DIFF: missing old file header")
 			}
 			p := strings.TrimSpace(strings.TrimPrefix(ln, "+++ "))
-			if strings.HasPrefix(p, "b/") {
-				p = strings.TrimPrefix(p, "b/")
-			}
-			path = p
+			// Always normalize away optional leading "b/" without an extra conditional
+			path = strings.TrimPrefix(p, "b/")
 			break
 		}
 	}
@@ -90,41 +88,41 @@ func applyNewFileOnly(diff string, dryRun bool) (int, error) {
 	if err := validateRelPath(path); err != nil {
 		return 0, err
 	}
-    var content strings.Builder
-    // Collect added lines exactly; do not add extra blank lines
-    for _, ln := range lines {
-        if strings.HasPrefix(ln, "+") && !strings.HasPrefix(ln, "+++") {
-            s := strings.TrimPrefix(ln, "+")
-            s = strings.ReplaceAll(s, "\r\n", "\n")
-            s = strings.ReplaceAll(s, "\r", "\n")
-            if strings.HasSuffix(s, "\n") {
-                content.WriteString(s)
-            } else {
-                content.WriteString(s)
-                content.WriteString("\n")
-            }
-        }
-    }
-    // Dry run: report number of files that would change (1 if create, 0 if identical exists)
-    if dryRun {
-        if existing, err := os.ReadFile(path); err == nil {
-            if string(existing) == content.String() {
-                return 0, nil
-            }
-        }
-        return 1, nil
-    }
-    if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	var content strings.Builder
+	// Collect added lines exactly; do not add extra blank lines
+	for _, ln := range lines {
+		if strings.HasPrefix(ln, "+") && !strings.HasPrefix(ln, "+++") {
+			s := strings.TrimPrefix(ln, "+")
+			s = strings.ReplaceAll(s, "\r\n", "\n")
+			s = strings.ReplaceAll(s, "\r", "\n")
+			if strings.HasSuffix(s, "\n") {
+				content.WriteString(s)
+			} else {
+				content.WriteString(s)
+				content.WriteString("\n")
+			}
+		}
+	}
+	// Dry run: report number of files that would change (1 if create, 0 if identical exists)
+	if dryRun {
+		if existing, err := os.ReadFile(path); err == nil {
+			if string(existing) == content.String() {
+				return 0, nil
+			}
+		}
+		return 1, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, err
 	}
-    // Idempotence and conflict
-    if existing, err := os.ReadFile(path); err == nil {
-        if string(existing) == content.String() {
-            return 0, nil
-        }
-        return 0, errors.New("target exists with different content")
-    }
-    if err := os.WriteFile(path, []byte(content.String()), 0o644); err != nil {
+	// Idempotence and conflict
+	if existing, err := os.ReadFile(path); err == nil {
+		if string(existing) == content.String() {
+			return 0, nil
+		}
+		return 0, errors.New("target exists with different content")
+	}
+	if err := os.WriteFile(path, []byte(content.String()), 0o644); err != nil {
 		return 0, err
 	}
 	return 1, nil

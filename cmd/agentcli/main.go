@@ -28,7 +28,7 @@ type cliConfig struct {
 	timeout      time.Duration
 	temperature  float64
 	debug        bool
-    capabilities bool
+	capabilities bool
 }
 
 func getEnv(key, def string) string {
@@ -42,43 +42,43 @@ func getEnv(key, def string) string {
 // resolveAPIKeyFromEnv returns the API key using canonical and legacy env vars.
 // Precedence: OAI_API_KEY > OPENAI_API_KEY > "".
 func resolveAPIKeyFromEnv() string {
-    if v := os.Getenv("OAI_API_KEY"); strings.TrimSpace(v) != "" {
-        return v
-    }
-    if v := os.Getenv("OPENAI_API_KEY"); strings.TrimSpace(v) != "" {
-        return v
-    }
-    return ""
+	if v := os.Getenv("OAI_API_KEY"); strings.TrimSpace(v) != "" {
+		return v
+	}
+	if v := os.Getenv("OPENAI_API_KEY"); strings.TrimSpace(v) != "" {
+		return v
+	}
+	return ""
 }
 
 func parseFlags() (cliConfig, int) {
-    var cfg cliConfig
+	var cfg cliConfig
 
-    // Reset default FlagSet to allow re-entrant parsing in tests.
-    flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-    // Silence automatic usage/errors; we handle messaging ourselves.
-    flag.CommandLine.SetOutput(io.Discard)
+	// Reset default FlagSet to allow re-entrant parsing in tests.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	// Silence automatic usage/errors; we handle messaging ourselves.
+	flag.CommandLine.SetOutput(io.Discard)
 
 	defaultSystem := "You are a helpful, precise assistant. Use tools when strictly helpful."
-    defaultBase := getEnv("OAI_BASE_URL", "https://api.openai.com/v1")
-    defaultModel := getEnv("OAI_MODEL", "oss-gpt-20b")
-    // API key resolves from env with fallback for compatibility
-    defaultKey := resolveAPIKeyFromEnv()
+	defaultBase := getEnv("OAI_BASE_URL", "https://api.openai.com/v1")
+	defaultModel := getEnv("OAI_MODEL", "oss-gpt-20b")
+	// API key resolves from env with fallback for compatibility
+	defaultKey := resolveAPIKeyFromEnv()
 
 	flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
-    flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
+	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
 	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
 	flag.IntVar(&cfg.maxSteps, "max-steps", 8, "Maximum reasoning/tool steps")
 	flag.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "HTTP and per-tool timeout")
 	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
-    flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
-    flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
+	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.Parse()
 
-    if !cfg.capabilities && strings.TrimSpace(cfg.prompt) == "" {
+	if !cfg.capabilities && strings.TrimSpace(cfg.prompt) == "" {
 		return cfg, 2 // CLI misuse
 	}
 	return cfg, 0
@@ -90,10 +90,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error: -prompt is required")
 		os.Exit(exitOn)
 	}
-    if cfg.capabilities {
-        code := printCapabilities(cfg, os.Stdout, os.Stderr)
-        os.Exit(code)
-    }
+	if cfg.capabilities {
+		code := printCapabilities(cfg, os.Stdout, os.Stderr)
+		os.Exit(code)
+	}
 	code := runAgent(cfg, os.Stdout, os.Stderr)
 	os.Exit(code)
 }
@@ -259,44 +259,44 @@ func oneLine(s string) string {
 // printCapabilities loads the tools manifest (if provided) and prints a concise list
 // of enabled tools along with a prominent safety warning. Returns a process exit code.
 func printCapabilities(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
-    // If no tools path provided, report no tools and exit 0
-    if strings.TrimSpace(cfg.toolsPath) == "" {
-        fmt.Fprintln(stdout, "No tools enabled (run with -tools <path to tools.json>).")
-        fmt.Fprintln(stdout, "WARNING: Enabling tools allows local process execution and may permit network access. Review tools.json carefully.")
-        return 0
-    }
+	// If no tools path provided, report no tools and exit 0
+	if strings.TrimSpace(cfg.toolsPath) == "" {
+		fmt.Fprintln(stdout, "No tools enabled (run with -tools <path to tools.json>).")
+		fmt.Fprintln(stdout, "WARNING: Enabling tools allows local process execution and may permit network access. Review tools.json carefully.")
+		return 0
+	}
 
-    registry, _, err := tools.LoadManifest(cfg.toolsPath)
-    if err != nil {
-        fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
-        return 1
-    }
-    fmt.Fprintln(stdout, "WARNING: Enabled tools can execute local binaries and may access the network. Use with caution.")
-    if len(registry) == 0 {
-        fmt.Fprintln(stdout, "No tools enabled in manifest.")
-        return 0
-    }
-    fmt.Fprintln(stdout, "Capabilities (enabled tools):")
-    // Stable ordering: lexicographic by name for deterministic output
-    names := make([]string, 0, len(registry))
-    for name := range registry {
-        names = append(names, name)
-    }
-    // simple insertion sort to avoid importing sort just for one call; keep dependencies minimal
-    for i := 1; i < len(names); i++ {
-        j := i
-        for j > 0 && names[j] < names[j-1] {
-            names[j], names[j-1] = names[j-1], names[j]
-            j--
-        }
-    }
-    for _, name := range names {
-        spec := registry[name]
-        desc := strings.TrimSpace(spec.Description)
-        if desc == "" {
-            desc = "(no description)"
-        }
-        fmt.Fprintf(stdout, "- %s: %s\n", name, desc)
-    }
-    return 0
+	registry, _, err := tools.LoadManifest(cfg.toolsPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: failed to load tools manifest: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "WARNING: Enabled tools can execute local binaries and may access the network. Use with caution.")
+	if len(registry) == 0 {
+		fmt.Fprintln(stdout, "No tools enabled in manifest.")
+		return 0
+	}
+	fmt.Fprintln(stdout, "Capabilities (enabled tools):")
+	// Stable ordering: lexicographic by name for deterministic output
+	names := make([]string, 0, len(registry))
+	for name := range registry {
+		names = append(names, name)
+	}
+	// simple insertion sort to avoid importing sort just for one call; keep dependencies minimal
+	for i := 1; i < len(names); i++ {
+		j := i
+		for j > 0 && names[j] < names[j-1] {
+			names[j], names[j-1] = names[j-1], names[j]
+			j--
+		}
+	}
+	for _, name := range names {
+		spec := registry[name]
+		desc := strings.TrimSpace(spec.Description)
+		if desc == "" {
+			desc = "(no description)"
+		}
+		fmt.Fprintf(stdout, "- %s: %s\n", name, desc)
+	}
+	return 0
 }

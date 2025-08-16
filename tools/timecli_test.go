@@ -1,13 +1,13 @@
 package main
 
 import (
-    "bytes"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "strings"
-    "testing"
-    "time"
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
 )
 
 type timeOutput struct {
@@ -19,7 +19,7 @@ func buildTimeTool(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
 	bin := tmp + "/timecli"
-    cmd := exec.Command("go", "build", "-o", bin, "./cmd/get_time")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/get_time")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build timecli: %v\n%s", err, string(out))
@@ -78,37 +78,37 @@ func TestTimeCLI_AcceptsAliasTZ(t *testing.T) {
 }
 
 func TestTimeCLI_MissingTimezone_ErrorContract(t *testing.T) {
-    bin := buildTimeTool(t)
-    out, stderr, code := runTimeTool(t, bin, map[string]any{})
-    if code == 0 {
-        t.Fatalf("expected non-zero exit for missing timezone, got 0; stderr=%q", stderr)
-    }
-    if out.Timezone != "" || out.ISO8601 != "" {
-        t.Fatalf("stdout should be empty on error, got: %+v", out)
-    }
-    s := strings.TrimSpace(stderr)
-    if s == "" || !strings.Contains(s, "\"error\"") {
-        t.Fatalf("stderr should contain JSON error, got: %q", stderr)
-    }
+	bin := buildTimeTool(t)
+	out, stderr, code := runTimeTool(t, bin, map[string]any{})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit for missing timezone, got 0; stderr=%q", stderr)
+	}
+	if out.Timezone != "" || out.ISO8601 != "" {
+		t.Fatalf("stdout should be empty on error, got: %+v", out)
+	}
+	s := strings.TrimSpace(stderr)
+	if s == "" || !strings.Contains(s, "\"error\"") {
+		t.Fatalf("stderr should contain JSON error, got: %q", stderr)
+	}
 }
 
 func TestTimeCLI_InvalidTimezone_ErrorContract(t *testing.T) {
-    bin := buildTimeTool(t)
-    out, stderr, code := runTimeTool(t, bin, map[string]any{"timezone": "Not/AZone"})
-    if code == 0 {
-        t.Fatalf("expected non-zero exit for invalid timezone, got 0; stderr=%q", stderr)
-    }
-    if out.Timezone != "" || out.ISO8601 != "" {
-        t.Fatalf("stdout should be empty on error, got: %+v", out)
-    }
-    s := strings.TrimSpace(stderr)
-    if s == "" || !strings.Contains(s, "\"error\"") {
-        t.Fatalf("stderr should contain JSON error, got: %q", stderr)
-    }
+	bin := buildTimeTool(t)
+	out, stderr, code := runTimeTool(t, bin, map[string]any{"timezone": "Not/AZone"})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit for invalid timezone, got 0; stderr=%q", stderr)
+	}
+	if out.Timezone != "" || out.ISO8601 != "" {
+		t.Fatalf("stdout should be empty on error, got: %+v", out)
+	}
+	s := strings.TrimSpace(stderr)
+	if s == "" || !strings.Contains(s, "\"error\"") {
+		t.Fatalf("stderr should contain JSON error, got: %q", stderr)
+	}
 }
 
 func TestToolbeltDiagramExists(t *testing.T) {
-    if _, err := os.Stat("../docs/diagrams/toolbelt-seq.md"); err != nil {
-        t.Fatalf("missing docs/diagrams/toolbelt-seq.md: %v", err)
-    }
+	if _, err := os.Stat("../docs/diagrams/toolbelt-seq.md"); err != nil {
+		t.Fatalf("missing docs/diagrams/toolbelt-seq.md: %v", err)
+	}
 }

@@ -16,11 +16,11 @@ import (
 )
 
 type editInput struct {
-	Path             string `json:"path"`
-	StartByte        int    `json:"startByte"`
-	EndByte          int    `json:"endByte"`
+	Path              string `json:"path"`
+	StartByte         int    `json:"startByte"`
+	EndByte           int    `json:"endByte"`
 	ReplacementBase64 string `json:"replacementBase64"`
-	ExpectedSha256   string `json:"expectedSha256,omitempty"`
+	ExpectedSha256    string `json:"expectedSha256,omitempty"`
 }
 
 type editOutput struct {

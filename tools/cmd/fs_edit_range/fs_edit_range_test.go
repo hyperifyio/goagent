@@ -3,18 +3,18 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "crypto/sha256"
-    "encoding/base64"
-    "encoding/hex"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsEditRangeOutput struct {
@@ -73,10 +73,10 @@ func TestFsEditRange_MidFile_Splicing(t *testing.T) {
 	// Act: replace bytes [2:4) ("cd") with "XY"
 	repl := []byte("XY")
 	out, stderr, code := runFsEditRange(t, bin, map[string]any{
-		"path":               fileRel,
-		"startByte":          2,
-		"endByte":            4,
-		"replacementBase64":  base64.StdEncoding.EncodeToString(repl),
+		"path":              fileRel,
+		"startByte":         2,
+		"endByte":           4,
+		"replacementBase64": base64.StdEncoding.EncodeToString(repl),
 	})
 
 	// Assert expected success and correct output contract
@@ -105,96 +105,96 @@ func TestFsEditRange_MidFile_Splicing(t *testing.T) {
 
 // TestFsEditRange_Beginning_Splicing ensures replacement at the beginning [0:n).
 func TestFsEditRange_Beginning_Splicing(t *testing.T) {
-    bin := buildFsEditRangeTool(t)
+	bin := buildFsEditRangeTool(t)
 
-    // Arrange
-    tmpDirAbs, err := os.MkdirTemp(".", "fsedit-beg-")
-    if err != nil {
-        t.Fatalf("mkdir temp: %v", err)
-    }
-    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
-    base := filepath.Base(tmpDirAbs)
-    fileRel := filepath.Join(base, "data.bin")
-    orig := []byte("abcdef")
-    if err := os.WriteFile(fileRel, orig, 0o644); err != nil {
-        t.Fatalf("seed file: %v", err)
-    }
+	// Arrange
+	tmpDirAbs, err := os.MkdirTemp(".", "fsedit-beg-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	base := filepath.Base(tmpDirAbs)
+	fileRel := filepath.Join(base, "data.bin")
+	orig := []byte("abcdef")
+	if err := os.WriteFile(fileRel, orig, 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
 
-    // Act: replace bytes [0:2) ("ab") with "ZZ"
-    repl := []byte("ZZ")
-    out, stderr, code := runFsEditRange(t, bin, map[string]any{
-        "path":              fileRel,
-        "startByte":         0,
-        "endByte":           2,
-        "replacementBase64": base64.StdEncoding.EncodeToString(repl),
-    })
+	// Act: replace bytes [0:2) ("ab") with "ZZ"
+	repl := []byte("ZZ")
+	out, stderr, code := runFsEditRange(t, bin, map[string]any{
+		"path":              fileRel,
+		"startByte":         0,
+		"endByte":           2,
+		"replacementBase64": base64.StdEncoding.EncodeToString(repl),
+	})
 
-    // Assert
-    if code != 0 {
-        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
-    }
-    if out.BytesReplaced != len(repl) {
-        t.Fatalf("bytesReplaced mismatch: got %d want %d", out.BytesReplaced, len(repl))
-    }
-    got, err := os.ReadFile(fileRel)
-    if err != nil {
-        t.Fatalf("read back: %v", err)
-    }
-    want := []byte("ZZcdef")
-    if !bytes.Equal(got, want) {
-        t.Fatalf("content mismatch: got %q want %q", got, want)
-    }
-    sum := sha256.Sum256(got)
-    wantHex := hex.EncodeToString(sum[:])
-    if !strings.EqualFold(out.NewSha256, wantHex) {
-        t.Fatalf("newSha256 mismatch: got %q want %q", out.NewSha256, wantHex)
-    }
+	// Assert
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.BytesReplaced != len(repl) {
+		t.Fatalf("bytesReplaced mismatch: got %d want %d", out.BytesReplaced, len(repl))
+	}
+	got, err := os.ReadFile(fileRel)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	want := []byte("ZZcdef")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("content mismatch: got %q want %q", got, want)
+	}
+	sum := sha256.Sum256(got)
+	wantHex := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(out.NewSha256, wantHex) {
+		t.Fatalf("newSha256 mismatch: got %q want %q", out.NewSha256, wantHex)
+	}
 }
 
 // TestFsEditRange_End_Splicing ensures replacement at the end [size-2:size).
 func TestFsEditRange_End_Splicing(t *testing.T) {
-    bin := buildFsEditRangeTool(t)
+	bin := buildFsEditRangeTool(t)
 
-    // Arrange
-    tmpDirAbs, err := os.MkdirTemp(".", "fsedit-end-")
-    if err != nil {
-        t.Fatalf("mkdir temp: %v", err)
-    }
-    t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
-    base := filepath.Base(tmpDirAbs)
-    fileRel := filepath.Join(base, "data.bin")
-    orig := []byte("abcdef")
-    if err := os.WriteFile(fileRel, orig, 0o644); err != nil {
-        t.Fatalf("seed file: %v", err)
-    }
+	// Arrange
+	tmpDirAbs, err := os.MkdirTemp(".", "fsedit-end-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDirAbs) })
+	base := filepath.Base(tmpDirAbs)
+	fileRel := filepath.Join(base, "data.bin")
+	orig := []byte("abcdef")
+	if err := os.WriteFile(fileRel, orig, 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
 
-    // Act: replace bytes [4:6) ("ef") with "ZZZ"
-    repl := []byte("ZZZ")
-    out, stderr, code := runFsEditRange(t, bin, map[string]any{
-        "path":              fileRel,
-        "startByte":         4,
-        "endByte":           6,
-        "replacementBase64": base64.StdEncoding.EncodeToString(repl),
-    })
+	// Act: replace bytes [4:6) ("ef") with "ZZZ"
+	repl := []byte("ZZZ")
+	out, stderr, code := runFsEditRange(t, bin, map[string]any{
+		"path":              fileRel,
+		"startByte":         4,
+		"endByte":           6,
+		"replacementBase64": base64.StdEncoding.EncodeToString(repl),
+	})
 
-    // Assert
-    if code != 0 {
-        t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
-    }
-    if out.BytesReplaced != len(repl) {
-        t.Fatalf("bytesReplaced mismatch: got %d want %d", out.BytesReplaced, len(repl))
-    }
-    got, err := os.ReadFile(fileRel)
-    if err != nil {
-        t.Fatalf("read back: %v", err)
-    }
-    want := []byte("abcdZZZ")
-    if !bytes.Equal(got, want) {
-        t.Fatalf("content mismatch: got %q want %q", got, want)
-    }
-    sum := sha256.Sum256(got)
-    wantHex := hex.EncodeToString(sum[:])
-    if !strings.EqualFold(out.NewSha256, wantHex) {
-        t.Fatalf("newSha256 mismatch: got %q want %q", out.NewSha256, wantHex)
-    }
+	// Assert
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.BytesReplaced != len(repl) {
+		t.Fatalf("bytesReplaced mismatch: got %d want %d", out.BytesReplaced, len(repl))
+	}
+	got, err := os.ReadFile(fileRel)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	want := []byte("abcdZZZ")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("content mismatch: got %q want %q", got, want)
+	}
+	sum := sha256.Sum256(got)
+	wantHex := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(out.NewSha256, wantHex) {
+		t.Fatalf("newSha256 mismatch: got %q want %q", out.NewSha256, wantHex)
+	}
 }

@@ -3,15 +3,15 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsMoveOutput struct {
@@ -20,7 +20,7 @@ type fsMoveOutput struct {
 
 // buildFsMoveTool builds the fs_move tool using shared helper.
 func buildFsMoveTool(t *testing.T) string {
-    return testutil.BuildTool(t, "fs_move")
+	return testutil.BuildTool(t, "fs_move")
 }
 
 // runFsMove runs the built fs_move tool with the given JSON input and decodes stdout.
@@ -153,25 +153,25 @@ func TestFsMove_DestinationExists_OverwriteTrue(t *testing.T) {
 // the tool writes a single-line JSON object with an "error" key to stderr and
 // exits non-zero. This aligns with L91 standardization.
 func TestFsMove_ErrorJSONContract(t *testing.T) {
-    bin := buildFsMoveTool(t)
-    // Missing required fields triggers an error
-    var stdout, stderr bytes.Buffer
-    cmd := exec.Command(bin)
-    cmd.Dir = "."
-    cmd.Stdin = bytes.NewReader([]byte(`{}`))
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-    err := cmd.Run()
-    if err == nil {
-        t.Fatalf("expected non-zero exit for invalid input; stderr=%q", stderr.String())
-    }
-    // Stderr must be a single-line JSON containing an "error" field
-    line := strings.TrimSpace(stderr.String())
-    var obj map[string]any
-    if jerr := json.Unmarshal([]byte(line), &obj); jerr != nil {
-        t.Fatalf("stderr is not JSON: %q err=%v", line, jerr)
-    }
-    if _, ok := obj["error"]; !ok {
-        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
-    }
+	bin := buildFsMoveTool(t)
+	// Missing required fields triggers an error
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(bin)
+	cmd.Dir = "."
+	cmd.Stdin = bytes.NewReader([]byte(`{}`))
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("expected non-zero exit for invalid input; stderr=%q", stderr.String())
+	}
+	// Stderr must be a single-line JSON containing an "error" field
+	line := strings.TrimSpace(stderr.String())
+	var obj map[string]any
+	if jerr := json.Unmarshal([]byte(line), &obj); jerr != nil {
+		t.Fatalf("stderr is not JSON: %q err=%v", line, jerr)
+	}
+	if _, ok := obj["error"]; !ok {
+		t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+	}
 }

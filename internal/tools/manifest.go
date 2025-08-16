@@ -1,14 +1,14 @@
 package tools
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "path"
-    "path/filepath"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
 
-    "github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/oai"
 )
 
 type ToolSpec struct {
@@ -25,7 +25,7 @@ type Manifest struct {
 
 // LoadManifest reads tools.json and returns a name->spec registry and an OpenAI-compatible tools array.
 func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) {
-    data, err := os.ReadFile(manifestPath)
+	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read manifest: %w", err)
 	}
@@ -47,34 +47,34 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 		if len(t.Command) < 1 {
 			return nil, nil, fmt.Errorf("tool[%d] %q: command must have at least program name", i, t.Name)
 		}
-        // S52/S30: Harden command[0] validation. For any relative program path,
-        // enforce the canonical tools bin prefix and prevent path escapes.
-        cmd0 := t.Command[0]
-        if !filepath.IsAbs(cmd0) {
-            // Normalize separators first (convert backslashes to slashes cross‑platform),
-            // then apply a platform-agnostic clean.
-            raw := strings.ReplaceAll(cmd0, "\\", "/")
-            norm := path.Clean(raw)
-            // Normalize to a consistent leading ./ for prefix checks
-            if strings.HasPrefix(norm, "tools/") || norm == "tools" {
-                norm = "./" + norm
-            }
-            // Reject leading parent traversal
-            if strings.HasPrefix(norm, "../") || norm == ".." {
-                return nil, nil, fmt.Errorf("tool[%d] %q: command[0] must not start with '..' or escape tools/bin (got %q)", i, t.Name, cmd0)
-            }
-            // If original referenced ./tools/bin, ensure cleaned still stays within ./tools/bin
-            if strings.HasPrefix(raw, "./tools/bin/") || raw == "./tools/bin" {
-                if !(strings.HasPrefix(norm, "./tools/bin/")) {
-                    return nil, nil, fmt.Errorf("tool[%d] %q: command[0] escapes ./tools/bin after normalization (got %q -> %q)", i, t.Name, cmd0, norm)
-                }
-            } else {
-                // Enforce canonical prefix for all other relative commands
-                if !strings.HasPrefix(norm, "./tools/bin/") {
-                    return nil, nil, fmt.Errorf("tool[%d] %q: relative command[0] must start with ./tools/bin/", i, t.Name)
-                }
-            }
-        }
+		// S52/S30: Harden command[0] validation. For any relative program path,
+		// enforce the canonical tools bin prefix and prevent path escapes.
+		cmd0 := t.Command[0]
+		if !filepath.IsAbs(cmd0) {
+			// Normalize separators first (convert backslashes to slashes cross‑platform),
+			// then apply a platform-agnostic clean.
+			raw := strings.ReplaceAll(cmd0, "\\", "/")
+			norm := path.Clean(raw)
+			// Normalize to a consistent leading ./ for prefix checks
+			if strings.HasPrefix(norm, "tools/") || norm == "tools" {
+				norm = "./" + norm
+			}
+			// Reject leading parent traversal
+			if strings.HasPrefix(norm, "../") || norm == ".." {
+				return nil, nil, fmt.Errorf("tool[%d] %q: command[0] must not start with '..' or escape tools/bin (got %q)", i, t.Name, cmd0)
+			}
+			// If original referenced ./tools/bin, ensure cleaned still stays within ./tools/bin
+			if strings.HasPrefix(raw, "./tools/bin/") || raw == "./tools/bin" {
+				if !(strings.HasPrefix(norm, "./tools/bin/")) {
+					return nil, nil, fmt.Errorf("tool[%d] %q: command[0] escapes ./tools/bin after normalization (got %q -> %q)", i, t.Name, cmd0, norm)
+				}
+			} else {
+				// Enforce canonical prefix for all other relative commands
+				if !strings.HasPrefix(norm, "./tools/bin/") {
+					return nil, nil, fmt.Errorf("tool[%d] %q: relative command[0] must start with ./tools/bin/", i, t.Name)
+				}
+			}
+		}
 		registry[t.Name] = t
 		// Build OpenAI tools entry
 		entry := oai.Tool{

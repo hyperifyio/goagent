@@ -37,19 +37,19 @@ func main() {
 		stderrJSON(fmt.Errorf("BAD_BASE64: %w", err))
 		os.Exit(1)
 	}
-    // Require parent directory to exist; do not create it implicitly
-    parent := filepath.Dir(in.Path)
-    if st, err := os.Stat(parent); err != nil || !st.IsDir() {
-        if err == nil {
-            // exists but not a directory
-            stderrJSON(fmt.Errorf("MISSING_PARENT: %s is not a directory", parent))
-        } else if os.IsNotExist(err) {
-            stderrJSON(fmt.Errorf("MISSING_PARENT: %s", parent))
-        } else {
-            stderrJSON(fmt.Errorf("MISSING_PARENT: %v", err))
-        }
-        os.Exit(1)
-    }
+	// Require parent directory to exist; do not create it implicitly
+	parent := filepath.Dir(in.Path)
+	if st, err := os.Stat(parent); err != nil || !st.IsDir() {
+		if err == nil {
+			// exists but not a directory
+			stderrJSON(fmt.Errorf("MISSING_PARENT: %s is not a directory", parent))
+		} else if os.IsNotExist(err) {
+			stderrJSON(fmt.Errorf("MISSING_PARENT: %s", parent))
+		} else {
+			stderrJSON(fmt.Errorf("MISSING_PARENT: %v", err))
+		}
+		os.Exit(1)
+	}
 	mode := os.FileMode(0o644)
 	if strings.TrimSpace(in.CreateModeOctal) != "" {
 		if m, perr := parseOctalMode(in.CreateModeOctal); perr == nil {

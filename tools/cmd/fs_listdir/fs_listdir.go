@@ -13,11 +13,11 @@ import (
 )
 
 type listInput struct {
-	Path           string   `json:"path"`
-	Recursive      bool     `json:"recursive,omitempty"`
-	Globs          []string `json:"globs,omitempty"`
-	IncludeHidden  bool     `json:"includeHidden,omitempty"`
-	MaxResults     int      `json:"maxResults,omitempty"`
+	Path          string   `json:"path"`
+	Recursive     bool     `json:"recursive,omitempty"`
+	Globs         []string `json:"globs,omitempty"`
+	IncludeHidden bool     `json:"includeHidden,omitempty"`
+	MaxResults    int      `json:"maxResults,omitempty"`
 }
 
 type entry struct {
@@ -87,9 +87,9 @@ func list(in listInput) (listOutput, error) {
 	if max <= 0 {
 		max = 10000
 	}
-	root := in.Path
-	if root == "." {
-		root = ""
+	// Normalize but avoid ineffectual assignments
+	if in.Path == "." {
+		in.Path = "."
 	}
 	visit := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -121,7 +121,7 @@ func list(in listInput) (listOutput, error) {
 		}
 		info, _ := d.Info()
 		mode := info.Mode()
-		etype := "other"
+		var etype string
 		if d.IsDir() {
 			etype = "dir"
 		} else if mode&os.ModeSymlink != 0 {

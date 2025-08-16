@@ -1,11 +1,11 @@
 package main
 
 import (
-    "os"
-    "path/filepath"
-    "testing"
+	"os"
+	"path/filepath"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // TestFsListdir_Symlink_EntryPresent verifies non-recursive listing includes symlink entries
@@ -29,7 +29,7 @@ func TestFsListdir_Symlink_EntryPresent(t *testing.T) {
 		t.Fatalf("symlink: %v", err)
 	}
 
-    bin := testutil.BuildTool(t, "fs_listdir")
+	bin := testutil.BuildTool(t, "fs_listdir")
 
 	// Act: list with recursive=false
 	out, stderr, code := runFsListdir(t, bin, map[string]any{

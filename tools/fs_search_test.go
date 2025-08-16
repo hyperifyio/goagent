@@ -3,15 +3,15 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsSearchMatch struct {

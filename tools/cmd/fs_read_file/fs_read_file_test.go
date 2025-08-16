@@ -3,16 +3,16 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "encoding/base64"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    "github.com/hyperifyio/goagent/tools/testutil"
+	"github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsReadOutput struct {
@@ -67,7 +67,7 @@ func makeRepoRelTempFile(t *testing.T, dirPrefix string, data []byte) (relPath s
 }
 
 func TestFsRead_TextFile(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_read_file")
+	bin := testutil.BuildTool(t, "fs_read_file")
 	content := []byte("hello world\n")
 	path := makeRepoRelTempFile(t, "fsread-text-", content)
 	out, stderr, code := runFsRead(t, bin, map[string]any{
@@ -92,7 +92,7 @@ func TestFsRead_TextFile(t *testing.T) {
 }
 
 func TestFsRead_BinaryRoundTrip(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_read_file")
+	bin := testutil.BuildTool(t, "fs_read_file")
 	data := []byte{0x00, 0x10, 0xFF, 0x42, 0x00}
 	path := makeRepoRelTempFile(t, "fsread-bin-", data)
 	out, stderr, code := runFsRead(t, bin, map[string]any{"path": path})
@@ -109,7 +109,7 @@ func TestFsRead_BinaryRoundTrip(t *testing.T) {
 }
 
 func TestFsRead_Ranges(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_read_file")
+	bin := testutil.BuildTool(t, "fs_read_file")
 	data := []byte("abcdefg")
 	path := makeRepoRelTempFile(t, "fsread-range-", data)
 	// offset=2, max=3 -> cde, eof=false
@@ -133,37 +133,37 @@ func TestFsRead_Ranges(t *testing.T) {
 }
 
 func TestFsRead_NotFound(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_read_file")
+	bin := testutil.BuildTool(t, "fs_read_file")
 	_, stderr, code := runFsRead(t, bin, map[string]any{"path": "this/does/not/exist.txt"})
 	if code == 0 {
 		t.Fatalf("expected non-zero exit for missing file")
 	}
-    if !strings.Contains(strings.ToUpper(stderr), "NOT_FOUND") {
-        t.Fatalf("stderr should contain NOT_FOUND, got %q", stderr)
-    }
+	if !strings.Contains(strings.ToUpper(stderr), "NOT_FOUND") {
+		t.Fatalf("stderr should contain NOT_FOUND, got %q", stderr)
+	}
 }
 
 // TestFsRead_ErrorJSON verifies standardized error contract: on failure,
 // the tool writes a single-line JSON object to stderr with an "error" key
 // and exits non-zero.
 func TestFsRead_ErrorJSON(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_read_file")
+	bin := testutil.BuildTool(t, "fs_read_file")
 
-    // Use an absolute path to trigger validation failure (repo-relative enforced).
-    abs := string(os.PathSeparator) + filepath.Join("tmp", "fsread-abs.txt")
+	// Use an absolute path to trigger validation failure (repo-relative enforced).
+	abs := string(os.PathSeparator) + filepath.Join("tmp", "fsread-abs.txt")
 
-    _, stderr, code := runFsRead(t, bin, map[string]any{
-        "path": abs,
-    })
-    if code == 0 {
-        t.Fatalf("expected non-zero exit on invalid absolute path")
-    }
-    line := strings.TrimSpace(stderr)
-    var obj map[string]any
-    if err := json.Unmarshal([]byte(line), &obj); err != nil {
-        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
-    }
-    if _, ok := obj["error"]; !ok {
-        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
-    }
+	_, stderr, code := runFsRead(t, bin, map[string]any{
+		"path": abs,
+	})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit on invalid absolute path")
+	}
+	line := strings.TrimSpace(stderr)
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+	}
+	if _, ok := obj["error"]; !ok {
+		t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+	}
 }

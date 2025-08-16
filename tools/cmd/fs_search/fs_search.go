@@ -14,10 +14,10 @@ import (
 )
 
 type searchInput struct {
-	Query     string   `json:"query"`
-	Regex     bool     `json:"regex,omitempty"`
-	Globs     []string `json:"globs,omitempty"`
-	MaxResults int     `json:"maxResults,omitempty"`
+	Query      string   `json:"query"`
+	Regex      bool     `json:"regex,omitempty"`
+	Globs      []string `json:"globs,omitempty"`
+	MaxResults int      `json:"maxResults,omitempty"`
 }
 
 type match struct {
@@ -70,37 +70,40 @@ func search(in searchInput) ([]match, bool, error) {
 			return nil, false, fmt.Errorf("BAD_REGEX: %w", err)
 		}
 	}
-    globs := in.Globs
-    if len(globs) == 0 {
-        globs = []string{"**/*"}
-    }
-    // Walk repo and include only files matching any provided glob suffix pattern.
-    // We implement a simplified matcher: support patterns like "**/*.txt" and "*.md".
-    var files []string
-    filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-        if err != nil {
-            return nil
-        }
-        if d.IsDir() {
-            // Skip VCS metadata
-            if path == ".git" || strings.HasPrefix(path, ".git/") {
-                return filepath.SkipDir
-            }
-            return nil
-        }
-        // crude hidden filter: skip .git files
-        if strings.Contains(path, string(os.PathSeparator)+".git"+string(os.PathSeparator)) {
-            return nil
-        }
-        // Match any glob suffix
-        for _, g := range globs {
-            if matchSimpleGlob(path, g) {
-                files = append(files, path)
-                break
-            }
-        }
-        return nil
-    })
+	globs := in.Globs
+	if len(globs) == 0 {
+		globs = []string{"**/*"}
+	}
+	// Walk repo and include only files matching any provided glob suffix pattern.
+	// We implement a simplified matcher: support patterns like "**/*.txt" and "*.md".
+	var files []string
+	walkErr := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			// Skip VCS metadata
+			if path == ".git" || strings.HasPrefix(path, ".git/") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// crude hidden filter: skip .git files
+		if strings.Contains(path, string(os.PathSeparator)+".git"+string(os.PathSeparator)) {
+			return nil
+		}
+		// Match any glob suffix
+		for _, g := range globs {
+			if matchSimpleGlob(path, g) {
+				files = append(files, path)
+				break
+			}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, false, walkErr
+	}
 	max := in.MaxResults
 	if max <= 0 {
 		max = 1000
@@ -147,27 +150,27 @@ func search(in searchInput) ([]match, bool, error) {
 // matchSimpleGlob performs minimal glob matching sufficient for tests:
 // supports patterns like "**/*.ext", "*.ext", and exact filenames.
 func matchSimpleGlob(path, pattern string) bool {
-    pattern = filepath.ToSlash(pattern)
-    path = filepath.ToSlash(path)
-    if pattern == "**/*" || pattern == "**" || pattern == "*" {
-        return true
-    }
-    // no-op: pattern already normalized by ToSlash
-    if strings.HasPrefix(pattern, "**/") {
-        suffix := strings.TrimPrefix(pattern, "**/")
-        // e.g., suffix "*.txt"
-        if strings.HasPrefix(suffix, "*.") {
-            ext := strings.TrimPrefix(suffix, "*") // -> ".txt"
-            return strings.HasSuffix(path, ext)
-        }
-        return strings.HasSuffix(path, suffix)
-    }
-    if strings.HasPrefix(pattern, "*.") {
-        ext := strings.TrimPrefix(pattern, "*")
-        return strings.HasSuffix(path, ext)
-    }
-    // Fallback exact match
-    return path == pattern
+	pattern = filepath.ToSlash(pattern)
+	path = filepath.ToSlash(path)
+	if pattern == "**/*" || pattern == "**" || pattern == "*" {
+		return true
+	}
+	// no-op: pattern already normalized by ToSlash
+	if strings.HasPrefix(pattern, "**/") {
+		suffix := strings.TrimPrefix(pattern, "**/")
+		// e.g., suffix "*.txt"
+		if strings.HasPrefix(suffix, "*.") {
+			ext := strings.TrimPrefix(suffix, "*") // -> ".txt"
+			return strings.HasSuffix(path, ext)
+		}
+		return strings.HasSuffix(path, suffix)
+	}
+	if strings.HasPrefix(pattern, "*.") {
+		ext := strings.TrimPrefix(pattern, "*")
+		return strings.HasSuffix(path, ext)
+	}
+	// Fallback exact match
+	return path == pattern
 }
 
 func stderrJSON(err error) {

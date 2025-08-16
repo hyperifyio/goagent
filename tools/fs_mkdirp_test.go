@@ -3,15 +3,15 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsMkdirpOutput struct {
@@ -48,7 +48,7 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 }
 
 func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_mkdirp")
+	bin := testutil.BuildTool(t, "fs_mkdirp")
 
 	dir := makeRepoRelTempDir(t, "fsmkdirp-")
 	deep := filepath.Join(dir, "a", "b", "c")
@@ -85,24 +85,24 @@ func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
 // the tool must write a single-line JSON object to stderr with an "error" key
 // and exit non-zero. Use an absolute path to trigger validation failure.
 func TestFsMkdirp_ErrorJSON(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_mkdirp")
+	bin := testutil.BuildTool(t, "fs_mkdirp")
 
-    // Absolute path should be rejected per repo-relative constraint.
-    abs := string(os.PathSeparator) + filepath.Join("tmp", "mkabs")
+	// Absolute path should be rejected per repo-relative constraint.
+	abs := string(os.PathSeparator) + filepath.Join("tmp", "mkabs")
 
-    _, stderr, code := runFsMkdirp(t, bin, map[string]any{
-        "path": abs,
-    })
-    if code == 0 {
-        t.Fatalf("expected non-zero exit on invalid absolute path")
-    }
-    // Must be single-line JSON with {"error":...}
-    line := strings.TrimSpace(stderr)
-    var obj map[string]any
-    if err := json.Unmarshal([]byte(line), &obj); err != nil {
-        t.Fatalf("stderr is not JSON: %q err=%v", line, err)
-    }
-    if _, ok := obj["error"]; !ok {
-        t.Fatalf("stderr JSON missing 'error' key: %v", obj)
-    }
+	_, stderr, code := runFsMkdirp(t, bin, map[string]any{
+		"path": abs,
+	})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit on invalid absolute path")
+	}
+	// Must be single-line JSON with {"error":...}
+	line := strings.TrimSpace(stderr)
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+	}
+	if _, ok := obj["error"]; !ok {
+		t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+	}
 }

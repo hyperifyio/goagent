@@ -1,14 +1,14 @@
 package main
 
 import (
-    "bytes"
-    "encoding/json"
-    "os/exec"
-    "runtime"
-    "strings"
-    "testing"
+	"bytes"
+	"encoding/json"
+	"os/exec"
+	"runtime"
+	"strings"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // execOutput models the expected stdout JSON contract from tools/exec.go
@@ -47,7 +47,7 @@ func runExec(t *testing.T, bin string, input any) execOutput {
 }
 
 func TestExec_SuccessEcho(t *testing.T) {
-    bin := testutil.BuildTool(t, "exec")
+	bin := testutil.BuildTool(t, "exec")
 	// Use /bin/echo on Unix; on Windows, use cmd /c echo via a small program is complex.
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
@@ -65,7 +65,7 @@ func TestExec_SuccessEcho(t *testing.T) {
 }
 
 func TestExec_NonZeroExit(t *testing.T) {
-    bin := testutil.BuildTool(t, "exec")
+	bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -83,7 +83,7 @@ func TestExec_NonZeroExit(t *testing.T) {
 }
 
 func TestExec_Timeout(t *testing.T) {
-    bin := testutil.BuildTool(t, "exec")
+	bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -104,7 +104,7 @@ func TestExec_Timeout(t *testing.T) {
 }
 
 func TestExec_CwdAndEnv(t *testing.T) {
-    bin := testutil.BuildTool(t, "exec")
+	bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -135,7 +135,7 @@ func TestExec_CwdAndEnv(t *testing.T) {
 }
 
 func TestExec_StdinPassthrough(t *testing.T) {
-    bin := testutil.BuildTool(t, "exec")
+	bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}

@@ -3,17 +3,17 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-    "bytes"
-    "encoding/base64"
-    "encoding/json"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "sync"
-    "testing"
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
 
-    testutil "github.com/hyperifyio/goagent/tools/testutil"
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsAppendOutput struct {
@@ -50,7 +50,7 @@ func runFsAppend(t *testing.T, bin string, input any) (fsAppendOutput, string, i
 }
 
 func TestFsAppend_DoubleAppend(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 
 	dir := makeRepoRelTempDir(t, "fsappend-double-")
 	path := filepath.Join(dir, "hello.txt")
@@ -91,7 +91,7 @@ func TestFsAppend_DoubleAppend(t *testing.T) {
 }
 
 func TestFsAppend_Validation_MissingPath(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
 		"path":          "",
 		"contentBase64": base64.StdEncoding.EncodeToString([]byte("data")),
@@ -105,7 +105,7 @@ func TestFsAppend_Validation_MissingPath(t *testing.T) {
 }
 
 func TestFsAppend_Validation_MissingContent(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 	dir := makeRepoRelTempDir(t, "fsappend-validate-")
 	path := filepath.Join(dir, "x.txt")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
@@ -121,7 +121,7 @@ func TestFsAppend_Validation_MissingContent(t *testing.T) {
 }
 
 func TestFsAppend_Validation_AbsolutePath(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 	abs := filepath.Join("/", "tmp", "x.txt")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
 		"path":          abs,
@@ -136,7 +136,7 @@ func TestFsAppend_Validation_AbsolutePath(t *testing.T) {
 }
 
 func TestFsAppend_Validation_PathEscape(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
 		"path":          filepath.Join("..", "escape.txt"),
 		"contentBase64": base64.StdEncoding.EncodeToString([]byte("x")),
@@ -150,7 +150,7 @@ func TestFsAppend_Validation_PathEscape(t *testing.T) {
 }
 
 func TestFsAppend_Validation_BadBase64(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 	dir := makeRepoRelTempDir(t, "fsappend-validate-")
 	path := filepath.Join(dir, "bad.txt")
 	_, stderr, code := runFsAppend(t, bin, map[string]any{
@@ -166,7 +166,7 @@ func TestFsAppend_Validation_BadBase64(t *testing.T) {
 }
 
 func TestFsAppend_ConcurrentWriters(t *testing.T) {
-    bin := testutil.BuildTool(t, "fs_append_file")
+	bin := testutil.BuildTool(t, "fs_append_file")
 
 	dir := makeRepoRelTempDir(t, "fsappend-concurrent-")
 	path := filepath.Join(dir, "concurrent.txt")

@@ -20,7 +20,7 @@ func buildFsRmTool(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "fs-rm")
-    cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_rm")
+	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/fs_rm")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -115,24 +115,24 @@ func TestFsRm_DeleteDirRecursive(t *testing.T) {
 // TestFsRm_ErrorJSON_PathRequired verifies that errors are reported as single-line
 // JSON to stderr with an "error" field when required input is missing.
 func TestFsRm_ErrorJSON_PathRequired(t *testing.T) {
-    bin := buildFsRmTool(t)
+	bin := buildFsRmTool(t)
 
-    cmd := exec.Command(bin)
-    var stdout, stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-    cmd.Stdin = bytes.NewBufferString("{}")
-    err := cmd.Run()
-    if err == nil {
-        t.Fatalf("expected non-zero exit for missing path; stderr=%q", stderr.String())
-    }
-    var payload map[string]any
-    if jerr := json.Unmarshal(bytes.TrimSpace(stderr.Bytes()), &payload); jerr != nil {
-        t.Fatalf("stderr is not valid JSON: %v; got %q", jerr, stderr.String())
-    }
-    if _, ok := payload["error"]; !ok {
-        t.Fatalf("stderr JSON missing 'error' field: %v", payload)
-    }
+	cmd := exec.Command(bin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Stdin = bytes.NewBufferString("{}")
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("expected non-zero exit for missing path; stderr=%q", stderr.String())
+	}
+	var payload map[string]any
+	if jerr := json.Unmarshal(bytes.TrimSpace(stderr.Bytes()), &payload); jerr != nil {
+		t.Fatalf("stderr is not valid JSON: %v; got %q", jerr, stderr.String())
+	}
+	if _, ok := payload["error"]; !ok {
+		t.Fatalf("stderr JSON missing 'error' field: %v", payload)
+	}
 }
 
 // TestFsRm_ForceOnMissing verifies force=true on a missing path exits 0,

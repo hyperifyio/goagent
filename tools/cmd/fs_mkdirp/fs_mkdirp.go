@@ -11,7 +11,7 @@ import (
 )
 
 type mkdirpInput struct {
-	Path     string `json:"path"`
+	Path      string `json:"path"`
 	ModeOctal string `json:"modeOctal,omitempty"`
 }
 
