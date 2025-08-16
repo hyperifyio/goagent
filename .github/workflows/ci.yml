@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: make tidy
 
-      - name: Lint
+      - name: lint (includes check-go-version)
         shell: bash
         run: make lint
 
