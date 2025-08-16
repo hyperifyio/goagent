@@ -325,56 +325,56 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 // appendToolCallOutputs executes assistant-requested tool calls and appends their
 // outputs (or deterministic error JSON) to the conversation messages.
 func appendToolCallOutputs(messages []oai.Message, assistantMsg oai.Message, toolRegistry map[string]tools.ToolSpec, cfg cliConfig) []oai.Message {
-    type result struct {
-        msg oai.Message
-    }
+	type result struct {
+		msg oai.Message
+	}
 
-    results := make(chan result, len(assistantMsg.ToolCalls))
+	results := make(chan result, len(assistantMsg.ToolCalls))
 
-    // Launch each tool call concurrently
-    for _, tc := range assistantMsg.ToolCalls {
-        toolCall := tc // capture loop var
-        spec, exists := toolRegistry[toolCall.Function.Name]
-        if !exists {
-            // Unknown tool: synthesize deterministic error JSON
-            go func() {
-                toolErr := map[string]string{"error": fmt.Sprintf("unknown tool: %s", toolCall.Function.Name)}
-                contentBytes, mErr := json.Marshal(toolErr)
-                if mErr != nil {
-                    contentBytes = []byte(`{"error":"internal error"}`)
-                }
-                results <- result{msg: oai.Message{
-                    Role:       oai.RoleTool,
-                    Name:       toolCall.Function.Name,
-                    ToolCallID: toolCall.ID,
-                    Content:    string(contentBytes),
-                }}
-            }()
-            continue
-        }
+	// Launch each tool call concurrently
+	for _, tc := range assistantMsg.ToolCalls {
+		toolCall := tc // capture loop var
+		spec, exists := toolRegistry[toolCall.Function.Name]
+		if !exists {
+			// Unknown tool: synthesize deterministic error JSON
+			go func() {
+				toolErr := map[string]string{"error": fmt.Sprintf("unknown tool: %s", toolCall.Function.Name)}
+				contentBytes, mErr := json.Marshal(toolErr)
+				if mErr != nil {
+					contentBytes = []byte(`{"error":"internal error"}`)
+				}
+				results <- result{msg: oai.Message{
+					Role:       oai.RoleTool,
+					Name:       toolCall.Function.Name,
+					ToolCallID: toolCall.ID,
+					Content:    string(contentBytes),
+				}}
+			}()
+			continue
+		}
 
-        go func(spec tools.ToolSpec, toolCall oai.ToolCall) {
-            argsJSON := strings.TrimSpace(toolCall.Function.Arguments)
-            if argsJSON == "" {
-                argsJSON = "{}"
-            }
-            out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.toolTimeout)
-            content := sanitizeToolContent(out, runErr)
-            results <- result{msg: oai.Message{
-                Role:       oai.RoleTool,
-                Name:       toolCall.Function.Name,
-                ToolCallID: toolCall.ID,
-                Content:    content,
-            }}
-        }(spec, toolCall)
-    }
+		go func(spec tools.ToolSpec, toolCall oai.ToolCall) {
+			argsJSON := strings.TrimSpace(toolCall.Function.Arguments)
+			if argsJSON == "" {
+				argsJSON = "{}"
+			}
+			out, runErr := tools.RunToolWithJSON(context.Background(), spec, []byte(argsJSON), cfg.toolTimeout)
+			content := sanitizeToolContent(out, runErr)
+			results <- result{msg: oai.Message{
+				Role:       oai.RoleTool,
+				Name:       toolCall.Function.Name,
+				ToolCallID: toolCall.ID,
+				Content:    content,
+			}}
+		}(spec, toolCall)
+	}
 
-    // Collect exactly one result per requested tool call
-    for i := 0; i < len(assistantMsg.ToolCalls); i++ {
-        r := <-results
-        messages = append(messages, r.msg)
-    }
-    return messages
+	// Collect exactly one result per requested tool call
+	for i := 0; i < len(assistantMsg.ToolCalls); i++ {
+		r := <-results
+		messages = append(messages, r.msg)
+	}
+	return messages
 }
 
 // dumpJSONIfDebug marshals v and prints it with a label when debug is enabled.
