@@ -438,6 +438,65 @@ func TestRunAgent_HTTPTimeout_RaiseResolves(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/247
+// Scaled integration: default-like 90ms times out, raised 300ms succeeds against a ~120ms server.
+func TestHTTPTimeout_SlowServer_DefaultTimesOut_RaisedSucceeds(t *testing.T) {
+    // Slow-ish server (~120ms)
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        time.Sleep(120 * time.Millisecond)
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        _ = json.NewEncoder(w).Encode(resp)
+    }))
+    defer srv.Close()
+
+    // Phase 1: env-driven ~90ms timeout -> expect timeout
+    // Save/restore env
+    val, ok := os.LookupEnv("OAI_HTTP_TIMEOUT")
+    if ok {
+        defer func() { _ = os.Setenv("OAI_HTTP_TIMEOUT", val) }()
+    } else {
+        defer func() { _ = os.Unsetenv("OAI_HTTP_TIMEOUT") }()
+    }
+    if err := os.Setenv("OAI_HTTP_TIMEOUT", "90ms"); err != nil {
+        t.Fatalf("set env: %v", err)
+    }
+    // Use parseFlags path to simulate CLI invocation
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", srv.URL, "-model", "m"}
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    var out1, err1 bytes.Buffer
+    exit1 := runAgent(cfg, &out1, &err1)
+    if exit1 == 0 {
+        t.Fatalf("expected timeout exit; stdout=%q stderr=%q", out1.String(), err1.String())
+    }
+    if got := err1.String(); !strings.Contains(got, "http-timeout=90ms") {
+        t.Fatalf("expected error to mention http-timeout=90ms; got: %q", got)
+    }
+
+    // Phase 2: raise -http-timeout to 300ms -> expect success
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300ms", "-base-url", srv.URL, "-model", "m"}
+    cfg2, code2 := parseFlags()
+    if code2 != 0 {
+        t.Fatalf("parse exit: %d", code2)
+    }
+    var out2, err2 bytes.Buffer
+    exit2 := runAgent(cfg2, &out2, &err2)
+    if exit2 != 0 {
+        t.Fatalf("expected success with raised timeout; stderr=%s", err2.String())
+    }
+    if strings.TrimSpace(out2.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", out2.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/245
 func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
     // Fast server returning a minimal valid response
