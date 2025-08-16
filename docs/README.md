@@ -22,4 +22,7 @@ This docs index helps you navigate architecture notes and diagrams.
 - Runbooks: Troubleshooting common errors and fixes.
   - Link: [docs/runbooks/troubleshooting.md](runbooks/troubleshooting.md)
 
+- Migrations: Tools layout (legacy → canonical `tools/cmd/*` + `tools/bin/*`).
+  - Link: [docs/migrations/tools-layout.md](migrations/tools-layout.md)
+
 Additional guides will be added here as they are created.
