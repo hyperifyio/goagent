@@ -438,3 +438,90 @@ func TestRunAgent_FailsWhenConfiguredToolUnavailable(t *testing.T) {
 		t.Fatalf("expected error mentioning unavailable tool, got: %q", got)
 	}
 }
+
+// https://github.com/hyperifyio/goagent/issues/242
+func TestTimeoutPrecedence_Table(t *testing.T) {
+    // Helpers to save/restore env
+    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+    restore := func(k, v string, ok bool) {
+        if ok {
+            if err := os.Setenv(k, v); err != nil {
+                t.Fatalf("restore %s: %v", k, err)
+            }
+        } else {
+            if err := os.Unsetenv(k); err != nil {
+                t.Fatalf("unset %s: %v", k, err)
+            }
+        }
+    }
+    httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
+    defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
+
+    type testCase struct {
+        name           string
+        envHTTP        string
+        args           []string
+        wantHTTP       time.Duration
+        wantTool       time.Duration
+        wantGlobal     time.Duration
+    }
+
+    cases := []testCase{
+        {
+            name:       "FlagsOverrideEnv",
+            envHTTP:    "90s",
+            args:       []string{"agentcli.test", "-prompt", "x", "-http-timeout", "300s", "-tool-timeout", "300s"},
+            wantHTTP:   5 * time.Minute,
+            wantTool:   5 * time.Minute,
+            wantGlobal: 30 * time.Second,
+        },
+        {
+            name:       "EnvOnly_HTTP",
+            envHTTP:    "90s",
+            args:       []string{"agentcli.test", "-prompt", "x"},
+            wantHTTP:   90 * time.Second,
+            wantTool:   30 * time.Second,
+            wantGlobal: 30 * time.Second,
+        },
+        {
+            name:       "LegacyGlobalOnly",
+            envHTTP:    "",
+            args:       []string{"agentcli.test", "-prompt", "x", "-timeout", "300s"},
+            wantHTTP:   5 * time.Minute,
+            wantTool:   5 * time.Minute,
+            wantGlobal: 5 * time.Minute,
+        },
+    }
+
+    origArgs := os.Args
+    defer func() { os.Args = origArgs }()
+
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            if tc.envHTTP == "" {
+                if err := os.Unsetenv("OAI_HTTP_TIMEOUT"); err != nil {
+                    t.Fatalf("unset env: %v", err)
+                }
+            } else {
+                if err := os.Setenv("OAI_HTTP_TIMEOUT", tc.envHTTP); err != nil {
+                    t.Fatalf("set env: %v", err)
+                }
+            }
+
+            os.Args = tc.args
+            cfg, code := parseFlags()
+            if code != 0 {
+                t.Fatalf("parse exit: %d", code)
+            }
+            if cfg.httpTimeout != tc.wantHTTP {
+                t.Fatalf("httpTimeout got %v want %v", cfg.httpTimeout, tc.wantHTTP)
+            }
+            if cfg.toolTimeout != tc.wantTool {
+                t.Fatalf("toolTimeout got %v want %v", cfg.toolTimeout, tc.wantTool)
+            }
+            if cfg.timeout != tc.wantGlobal {
+                t.Fatalf("global timeout (-timeout) got %v want %v", cfg.timeout, tc.wantGlobal)
+            }
+        })
+    }
+}
