@@ -312,6 +312,8 @@ make lint
 make fmt   # apply gofmt -s -w to the repo
 ```
 
+Reproducible builds: the `Makefile` uses `-trimpath` and stripped `-ldflags` with VCS stamping disabled so two clean builds produce identical binaries. Verify locally by running two consecutive `make clean build build-tools` and comparing `sha256sum` outputs.
+
 ## Contributing
 We welcome contributions! See `CONTRIBUTING.md` for workflow, standards, and how to run quality gates locally. Please also read `CODE_OF_CONDUCT.md`.
 

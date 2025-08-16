@@ -5,6 +5,11 @@ CGO_ENABLED ?= 0
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 
+# Reproducible builds: trim local paths, strip symbols, disable VCS stamping,
+# and clear build id for identical binaries across clean builds
+BUILD_FLAGS ?= -trimpath -buildvcs=false
+LD_FLAGS ?= -s -w -buildid=
+
 # Pin golangci-lint to a version compatible with current Go
 GOLANGCI_LINT_VERSION ?= v1.62.0
 
@@ -37,14 +42,14 @@ tidy:
 	$(GO) mod tidy
 
 build:
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o bin/agentcli ./cmd/agentcli
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(BUILD_FLAGS) -ldflags '$(LD_FLAGS)' -o bin/agentcli ./cmd/agentcli
 
 build-tools:
 	mkdir -p tools/bin
 	@set -e; \
 	for t in $(TOOLS); do \
 	  echo "Building $$t"; \
-	  GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/$$t$(EXE) ./tools/cmd/$$t; \
+	  GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(BUILD_FLAGS) -ldflags '$(LD_FLAGS)' -o tools/bin/$$t$(EXE) ./tools/cmd/$$t; \
 	done
 
 # Build a single tool binary into tools/bin/$(NAME)
@@ -62,7 +67,7 @@ build-tool:
 	esac; \
 	mkdir -p tools/bin; \
 	echo "Building $(NAME)"; \
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/$(NAME)$(EXE) ./tools/cmd/$(NAME)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build $(BUILD_FLAGS) -ldflags '$(LD_FLAGS)' -o tools/bin/$(NAME)$(EXE) ./tools/cmd/$(NAME)
 
 test:
 	$(GO) test ./...
