@@ -28,7 +28,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools test clean lint fmtcheck
+.PHONY: tidy build build-tools build-tool test clean lint fmtcheck
 
 tidy:
 	$(GO) mod tidy
@@ -43,6 +43,23 @@ build-tools:
 	  echo "Building $$t"; \
 	  GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/$$t$(EXE) ./tools/cmd/$$t; \
 	done
+
+# Build a single tool binary into tools/bin/$(NAME)
+# Usage: make build-tool NAME=fs_read_file
+build-tool:
+	@set -eo pipefail; \
+	if [ -z "$(NAME)" ]; then \
+	  echo "Usage: make build-tool NAME=<name>"; \
+	  echo "Available tools: $(TOOLS)"; \
+	  exit 2; \
+	fi; \
+	case " $(TOOLS) " in \
+	  *" $(NAME) "*) ;; \
+	  *) echo "Unknown tool: $(NAME). Allowed: $(TOOLS)"; exit 2;; \
+	esac; \
+	mkdir -p tools/bin; \
+	echo "Building $(NAME)"; \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/$(NAME)$(EXE) ./tools/cmd/$(NAME)
 
 test:
 	$(GO) test ./...
