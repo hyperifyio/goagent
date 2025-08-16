@@ -156,7 +156,7 @@ Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/
 -http-retry-backoff duration Base backoff between HTTP retry attempts (exponential) (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
 -timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
--temp float            Sampling temperature (default 0.2)
+-temp float            Sampling temperature (default 1.0)
 -debug                 Dump request/response JSON to stderr
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit

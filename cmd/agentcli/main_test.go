@@ -142,6 +142,55 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/251
+// Default sampling temperature must resolve to 1.0 and propagate in requests when unset.
+func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
+    // Fake server that captures the incoming temperature
+    var seenTemp *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("decode: %v", err)
+        }
+        seenTemp = req.Temperature
+        // Return a minimal valid response to terminate
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    // Simulate CLI args without -temp to rely on default
+    orig := os.Args
+    defer func() { os.Args = orig }()
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-base-url", srv.URL, "-model", "m"}
+
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    if cfg.temperature != 1.0 {
+        t.Fatalf("default temperature got %v want 1.0", cfg.temperature)
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code = runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
+    }
+    if seenTemp == nil || *seenTemp != 1.0 {
+        if seenTemp == nil {
+            t.Fatalf("temperature missing in request; want 1.0")
+        }
+        t.Fatalf("temperature in request got %v want 1.0", *seenTemp)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/214
 func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 	// Capture stdout

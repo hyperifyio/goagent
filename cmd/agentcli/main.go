@@ -118,7 +118,7 @@ func parseFlags() (cliConfig, int) {
 	var httpSet, toolSet bool
 	flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.toolTimeout, set: &toolSet}, "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
-	flag.Float64Var(&cfg.temperature, "temp", 0.2, "Sampling temperature")
+    flag.Float64Var(&cfg.temperature, "temp", 1.0, "Sampling temperature")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
@@ -430,7 +430,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
 	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
-	b.WriteString("  -temp float\n    Sampling temperature (default 0.2)\n")
+    b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
