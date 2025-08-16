@@ -59,6 +59,27 @@ echo '{"cmd":"timeout","args":["/T","2"],"timeoutSec":1}' | ./tools/bin/exec.exe
 echo '{"cmd":"timeout","args":["/T","1"],"timeoutSec":2}' | ./tools/bin/exec.exe
 ```
 
+#### Enable HTTP retries
+- When transient, enable retries to mask brief outages and 429/5xx with backoff.
+```bash
+# Retry up to 2 times with capped backoff (Unix/macOS)
+./bin/agentcli \
+  -prompt "What's the local time in Helsinki? Use get_time." \
+  -tools ./tools.json \
+  -http-retries 2 \
+  -http-retry-backoff 500ms
+
+# Windows (PowerShell)
+./bin/agentcli.exe `
+  -prompt "What's the local time in Helsinki? Use get_time." `
+  -tools ./tools.json `
+  -http-retries 2 `
+  -http-retry-backoff 500ms
+
+# Inspect attempts in the audit log (.goagent/audit/YYYYMMDD.log)
+rg -n "http_attempt" .goagent/audit || true
+```
+
 ## HTTP errors to the API
 ### Inspecting HTTP retry attempts
 - When retries are enabled (`-http-retries > 0`), each attempt is logged to `.goagent/audit/YYYYMMDD.log` as an `http_attempt` entry with fields `{attempt,max,status,backoffMs,endpoint}`.
