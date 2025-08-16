@@ -262,11 +262,14 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
 	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	for step := 0; step < cfg.maxSteps; step++ {
-		req := oai.ChatCompletionsRequest{
-			Model:       cfg.model,
-			Messages:    messages,
-			Temperature: &cfg.temperature,
-		}
+        req := oai.ChatCompletionsRequest{
+            Model:    cfg.model,
+            Messages: messages,
+        }
+        // Include temperature only when supported by the target model.
+        if oai.SupportsTemperature(cfg.model) {
+            req.Temperature = &cfg.temperature
+        }
 		if len(oaiTools) > 0 {
 			req.Tools = oaiTools
 			req.ToolChoice = "auto"

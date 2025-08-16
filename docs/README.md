@@ -28,3 +28,7 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/migrations/tools-layout.md](migrations/tools-layout.md)
 
 Additional guides will be added here as they are created.
+
+Model parameter compatibility
+
+Some reasoning-oriented models may not accept sampling parameters. The agent omits `temperature` automatically for such models while keeping the default of 1.0 for compatible families (e.g., GPT-5 variants). This avoids API errors and preserves expected defaults where applicable.
