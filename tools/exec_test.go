@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"testing"
-	"time"
+    "bytes"
+    "encoding/json"
+    "os/exec"
+    "runtime"
+    "strings"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // execOutput models the expected stdout JSON contract from tools/exec.go
@@ -19,24 +17,6 @@ type execOutput struct {
 	Stdout     string `json:"stdout"`
 	Stderr     string `json:"stderr"`
 	DurationMs int64  `json:"durationMs"`
-}
-
-// buildExecTool builds ./tools/exec.go into a temporary binary path and returns it.
-func buildExecTool(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "exec-tool")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, "./exec")
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build exec tool: %v\n%s", err, string(out))
-	}
-	return binPath
 }
 
 // runExec runs the built exec tool with the given JSON input and decodes stdout.
@@ -67,7 +47,7 @@ func runExec(t *testing.T, bin string, input any) execOutput {
 }
 
 func TestExec_SuccessEcho(t *testing.T) {
-	bin := buildExecTool(t)
+    bin := testutil.BuildTool(t, "exec")
 	// Use /bin/echo on Unix; on Windows, use cmd /c echo via a small program is complex.
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
@@ -85,7 +65,7 @@ func TestExec_SuccessEcho(t *testing.T) {
 }
 
 func TestExec_NonZeroExit(t *testing.T) {
-	bin := buildExecTool(t)
+    bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -103,7 +83,7 @@ func TestExec_NonZeroExit(t *testing.T) {
 }
 
 func TestExec_Timeout(t *testing.T) {
-	bin := buildExecTool(t)
+    bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -124,7 +104,7 @@ func TestExec_Timeout(t *testing.T) {
 }
 
 func TestExec_CwdAndEnv(t *testing.T) {
-	bin := buildExecTool(t)
+    bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
@@ -155,7 +135,7 @@ func TestExec_CwdAndEnv(t *testing.T) {
 }
 
 func TestExec_StdinPassthrough(t *testing.T) {
-	bin := buildExecTool(t)
+    bin := testutil.BuildTool(t, "exec")
 	if runtime.GOOS == "windows" {
 		t.Skip("windows not supported in this test environment")
 	}
