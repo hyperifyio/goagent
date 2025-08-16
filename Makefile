@@ -28,7 +28,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean lint fmtcheck
+.PHONY: tidy build build-tools build-tool test clean lint fmtcheck verify-manifest-paths
 
 tidy:
 	$(GO) mod tidy
@@ -81,6 +81,25 @@ lint:
 	$(GO) vet ./...; \
 	$(MAKE) fmtcheck; \
 	$(MAKE) check-tools-paths
+
+# Verify tools.json commands use canonical ./tools/bin prefix for relative paths
+# Fails if any command[0] is relative and does not start with ./tools/bin/
+# Absolute paths are allowed for test fixtures. Requires ripgrep (rg).
+verify-manifest-paths:
+	@set -euo pipefail; \
+	if ! command -v rg >/dev/null 2>&1; then \
+		echo "ripgrep (rg) is required. Please install ripgrep."; \
+		exit 1; \
+	fi; \
+	if [ ! -f tools.json ]; then \
+		echo "tools.json not found at repo root"; \
+		exit 1; \
+	fi; \
+	if rg -n -P --no-heading '"command"\s*:\s*\[\s*"(?!\./tools/bin/)(\./[^"]+)"' tools.json; then \
+		echo "Invalid relative command[0] in tools.json. Use ./tools/bin/NAME or an absolute path."; \
+		exit 1; \
+	fi; \
+	echo "verify-manifest-paths: OK"
 
 fmtcheck:
 	@echo "Checking gofmt..."; \
