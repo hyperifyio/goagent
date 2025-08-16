@@ -141,7 +141,7 @@ test-clean-logs:
 
 lint:
 	@set -euo pipefail; \
-	LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint"; \
+		LINTBIN="$$($(GO) env GOPATH)/bin/golangci-lint$(EXE)"; \
 	NEED_INSTALL=0; \
 	if [ ! -x "$$LINTBIN" ]; then \
 	  NEED_INSTALL=1; \
