@@ -51,6 +51,23 @@ func runFsStat(t *testing.T, bin string, input any) (fsStatOutput, string, int) 
 					return out, stderr.String(), code
 }
 
+// makeRepoRelTempFile creates a temporary file under the repository root and
+// returns its repo-relative path. The file is cleaned up automatically.
+func makeRepoRelTempFile(t *testing.T, dirPrefix string, data []byte) (relPath string) {
+    t.Helper()
+    tmpAbs, err := os.MkdirTemp(".", dirPrefix)
+    if err != nil {
+        t.Fatalf("mkdir temp under repo: %v", err)
+    }
+    base := filepath.Base(tmpAbs)
+    fileRel := filepath.Join(base, "file.bin")
+    if err := os.WriteFile(fileRel, data, 0o644); err != nil {
+        t.Fatalf("write temp file: %v", err)
+    }
+    t.Cleanup(func() { _ = os.RemoveAll(base) })
+    return fileRel
+}
+
 // TestFsStat_File expresses the minimal contract: for an existing regular file,
 // the tool exits 0 and reports exists=true, type="file", and sizeBytes.
 func TestFsStat_File(t *testing.T) {
