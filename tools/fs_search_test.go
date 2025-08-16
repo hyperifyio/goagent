@@ -3,13 +3,15 @@ package main
 // https://github.com/hyperifyio/goagent/issues/1
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
+    "bytes"
+    "encoding/json"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "strings"
+    "testing"
+
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsSearchMatch struct {
@@ -24,19 +26,8 @@ type fsSearchOutput struct {
 	Truncated bool            `json:"truncated"`
 }
 
-// buildFsSearch builds ./tools/fs_search into a temporary binary.
-func buildFsSearch(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binPath := filepath.Join(tmpDir, "fs-search")
-	cmd := exec.Command("go", "build", "-o", binPath, "./fs_search")
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("failed to build fs_search tool: %v\n%s", err, string(out))
-	}
-	return binPath
-}
+// build via shared helper in tools/testutil
+func buildFsSearch(t *testing.T) string { return testutil.BuildTool(t, "fs_search") }
 
 // runFsSearch executes the fs_search tool with given JSON input.
 func runFsSearch(t *testing.T, bin string, input any) (fsSearchOutput, string, int) {

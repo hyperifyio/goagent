@@ -28,7 +28,7 @@ build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_append_file$(EXE) ./tools/cmd/fs_append_file
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_rm$(EXE) ./tools/cmd/fs_rm
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_move$(EXE) ./tools/cmd/fs_move
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_search$(EXE) ./tools/fs_search
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_search$(EXE) ./tools/cmd/fs_search
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_mkdirp$(EXE) ./tools/cmd/fs_mkdirp
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_apply_patch$(EXE) ./tools/fs_apply_patch
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_lines$(EXE) ./tools/fs_read_lines
@@ -53,6 +53,7 @@ clean:
 	      tools/fs_rm/fs_rm$(EXE) \
 	      tools/fs_move/fs_move$(EXE) \
 	      tools/fs_search/fs_search$(EXE) \
+	      tools/cmd/fs_search/fs_search$(EXE) \
 	      tools/fs_mkdirp/fs_mkdirp$(EXE) \
 	      tools/fs_apply_patch/fs_apply_patch$(EXE) \
 	      tools/fs_read_lines/fs_read_lines$(EXE) \
