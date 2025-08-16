@@ -28,6 +28,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Print Go version
+        run: go version
+
       - name: Install ripgrep (Linux)
         if: runner.os == 'Linux'
         run: |
