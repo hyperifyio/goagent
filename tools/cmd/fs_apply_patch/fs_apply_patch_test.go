@@ -26,14 +26,17 @@ func buildFsApplyPatch(t *testing.T) string {
 
 func runFsApplyPatchInDir(t *testing.T, bin, dir string, input any) (fsApplyPatchOutput, string, int) {
 	t.Helper()
-	data, _ := json.Marshal(input)
+    data, err := json.Marshal(input)
+    if err != nil {
+        t.Fatalf("marshal input: %v", err)
+    }
 	cmd := exec.Command(bin)
 	cmd.Dir = dir
 	cmd.Stdin = bytes.NewReader(data)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+    err = cmd.Run()
 	code := 0
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -42,8 +45,10 @@ func runFsApplyPatchInDir(t *testing.T, bin, dir string, input any) (fsApplyPatc
 			code = 1
 		}
 	}
-	var out fsApplyPatchOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+    var out fsApplyPatchOutput
+    if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil && code == 0 {
+        t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+    }
 	return out, stderr.String(), code
 }
 

@@ -41,7 +41,11 @@ func main() {
 	}
 	// advisory lock per-path
 	muIface, _ := fileLocks.LoadOrStore(in.Path, &sync.Mutex{})
-	mu := muIface.(*sync.Mutex)
+	mu, ok := muIface.(*sync.Mutex)
+	if !ok {
+		stderrJSON(errors.New("internal: invalid lock type"))
+		os.Exit(1)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -50,12 +54,20 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			// best-effort report; do not change exit code after success path
+			fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", "close: "+strings.ReplaceAll(cerr.Error(), "\n", " "))
+		}
+	}()
 	if _, err := f.Write(data); err != nil {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(appendOutput{BytesAppended: len(data)})
+	if err := json.NewEncoder(os.Stdout).Encode(appendOutput{BytesAppended: len(data)}); err != nil {
+		stderrJSON(fmt.Errorf("write stdout: %w", err))
+		os.Exit(1)
+	}
 }
 
 func readInput(r io.Reader) (appendInput, error) {

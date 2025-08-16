@@ -49,8 +49,15 @@ func main() {
 	}
 	now := time.Now().In(loc).Format(time.RFC3339)
 	out := output{Timezone: in.Timezone, ISO8601: now}
-	b, _ := json.Marshal(out)
-	fmt.Println(string(b))
+	b, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "{\"error\":\"marshal: %s\"}\n", escape(err.Error()))
+		os.Exit(1)
+	}
+	if _, err := os.Stdout.Write(append(b, '\n')); err != nil {
+		fmt.Fprintf(os.Stderr, "{\"error\":\"write stdout: %s\"}\n", escape(err.Error()))
+		os.Exit(1)
+	}
 }
 
 func escape(s string) string {

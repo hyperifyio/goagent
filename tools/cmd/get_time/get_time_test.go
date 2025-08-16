@@ -19,13 +19,16 @@ type timeOutput struct {
 
 func runTimeTool(t *testing.T, bin string, input any) (timeOutput, string, int) {
 	t.Helper()
-	b, _ := json.Marshal(input)
+    b, err := json.Marshal(input)
+    if err != nil {
+        t.Fatalf("marshal input: %v", err)
+    }
 	cmd := exec.Command(bin)
 	cmd.Stdin = bytes.NewReader(b)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+    err = cmd.Run()
 	code := 0
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -34,8 +37,10 @@ func runTimeTool(t *testing.T, bin string, input any) (timeOutput, string, int) 
 			code = 1
 		}
 	}
-	var out timeOutput
-	_ = json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out)
+    var out timeOutput
+    if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil && code == 0 {
+        t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+    }
 	return out, stderr.String(), code
 }
 
