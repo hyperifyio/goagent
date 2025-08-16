@@ -45,23 +45,10 @@ func runFsMkdirp(t *testing.T, bin string, input any) (fsMkdirpOutput, string, i
 	return out, stderr.String(), code
 }
 
-// makeRepoRelTempDir creates a temporary directory under the repository root
-// (current working directory in tests) and returns the relative path.
-func makeRepoRelTempDir(t *testing.T, prefix string) string {
-	t.Helper()
-	tmpAbs, err := os.MkdirTemp(".", prefix)
-	if err != nil {
-		t.Fatalf("mkdir temp under repo: %v", err)
-	}
-	base := filepath.Base(tmpAbs)
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
-	return base
-}
-
 func TestFsMkdirp_DeepCreateAndIdempotence(t *testing.T) {
 	bin := testutil.BuildTool(t, "fs_mkdirp")
 
-	dir := makeRepoRelTempDir(t, "fsmkdirp-")
+    dir := testutil.MakeRepoRelTempDir(t, "fsmkdirp-")
 	deep := filepath.Join(dir, "a", "b", "c")
 
 	// First call should create directories
