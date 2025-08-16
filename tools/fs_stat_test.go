@@ -9,6 +9,8 @@ import (
     "path/filepath"
     "testing"
     "os/exec"
+
+    "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 type fsStatOutput struct {
@@ -20,19 +22,7 @@ type fsStatOutput struct {
 	SHA256    string `json:"sha256,omitempty"`
 }
 
-// buildFsStatTool builds ./tools/fs_stat into a temporary binary.
-func buildFsStatTool(t *testing.T) string {
-					t.Helper()
-					tmpDir := t.TempDir()
-					binPath := filepath.Join(tmpDir, "fs-stat")
-					cmd := exec.Command("go", "build", "-o", binPath, "./fs_stat")
-					cmd.Dir = "."
-					out, err := cmd.CombinedOutput()
-					if err != nil {
-						t.Fatalf("failed to build fs_stat tool: %v\n%s", err, string(out))
-					}
-					return binPath
-}
+// build via tools/testutil.BuildTool after migration to tools/cmd/fs_stat
 
 // runFsStat runs the built fs_stat tool with the given JSON input and decodes stdout.
 func runFsStat(t *testing.T, bin string, input any) (fsStatOutput, string, int) {
@@ -64,7 +54,7 @@ func runFsStat(t *testing.T, bin string, input any) (fsStatOutput, string, int) 
 // TestFsStat_File expresses the minimal contract: for an existing regular file,
 // the tool exits 0 and reports exists=true, type="file", and sizeBytes.
 func TestFsStat_File(t *testing.T) {
-	bin := buildFsStatTool(t)
+    bin := testutil.BuildTool(t, "fs_stat")
 
 	content := []byte("hello-fsstat")
 	path := makeRepoRelTempFile(t, "fsstat-file-", content)
@@ -89,7 +79,7 @@ func TestFsStat_File(t *testing.T) {
 // TestFsStat_MissingPath verifies that a non-existent path is handled
 // gracefully: exit code 0 and exists=false in the JSON output.
 func TestFsStat_MissingPath(t *testing.T) {
-    bin := buildFsStatTool(t)
+    bin := testutil.BuildTool(t, "fs_stat")
 
     // Use a path name that is very unlikely to exist under repo root.
     missing := filepath.Join("fsstat-missing-", "no-such-file.bin")
@@ -108,7 +98,7 @@ func TestFsStat_MissingPath(t *testing.T) {
 // TestFsStat_Symlink_NoFollow verifies that when followSymlinks=false, a symlink
 // is reported with type="symlink" (not the target type).
 func TestFsStat_Symlink_NoFollow(t *testing.T) {
-    bin := buildFsStatTool(t)
+    bin := testutil.BuildTool(t, "fs_stat")
 
     content := []byte("hello-symlink")
     target := makeRepoRelTempFile(t, "fsstat-symlink-target-", content)
@@ -139,7 +129,7 @@ func TestFsStat_Symlink_NoFollow(t *testing.T) {
 // TestFsStat_Symlink_Follow verifies that when followSymlinks=true, a symlink to
 // a regular file reports the target type and size.
 func TestFsStat_Symlink_Follow(t *testing.T) {
-    bin := buildFsStatTool(t)
+    bin := testutil.BuildTool(t, "fs_stat")
 
     content := []byte("hello-symlink-follow")
     target := makeRepoRelTempFile(t, "fsstat-symlink-follow-", content)
@@ -170,7 +160,7 @@ func TestFsStat_Symlink_Follow(t *testing.T) {
 // TestFsStat_SHA256 verifies that when hash="sha256" and the path is a regular
 // file, the tool includes the SHA256 hex digest in the output.
 func TestFsStat_SHA256(t *testing.T) {
-    bin := buildFsStatTool(t)
+    bin := testutil.BuildTool(t, "fs_stat")
 
     content := []byte("sha256-content\n")
     path := makeRepoRelTempFile(t, "fsstat-sha256-", content)

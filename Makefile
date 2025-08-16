@@ -34,7 +34,7 @@ build-tools:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_read_lines$(EXE) ./tools/cmd/fs_read_lines
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_edit_range$(EXE) ./tools/cmd/fs_edit_range
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_listdir$(EXE) ./tools/cmd/fs_listdir
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_stat$(EXE) ./tools/fs_stat
+	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -o tools/bin/fs_stat$(EXE) ./tools/cmd/fs_stat
 
 test:
 	$(GO) test ./...
