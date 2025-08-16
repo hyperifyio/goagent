@@ -36,7 +36,23 @@ Small, vendor‑agnostic CLI that calls an OpenAI‑compatible Chat Completions 
   - [Unrestricted examples](#unrestricted-examples)
 
 ### Installation
-- **Prerequisites**: Go 1.24+; Linux/macOS/Windows. Network access to an OpenAI‑compatible API.
+- **Prerequisites**: Go 1.24+; Linux/macOS/Windows; ripgrep (`rg`) and `golangci-lint` for local lint/path checks. Network access to an OpenAI‑compatible API.
+
+Install prerequisites (examples):
+
+```bash
+# ripgrep
+# - Ubuntu/Debian
+sudo apt-get update && sudo apt-get install -y ripgrep
+# - macOS (Homebrew)
+brew install ripgrep
+
+# golangci-lint (installs into $(go env GOPATH)/bin)
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
+# Ensure GOPATH/bin is on your PATH so the binary is discoverable
+export PATH="$(go env GOPATH)/bin:$PATH"
+# Note: make lint will attempt installation if missing, but it also relies on PATH
+```
 
 From a clean clone:
 ```bash
