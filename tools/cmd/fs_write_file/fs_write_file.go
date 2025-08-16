@@ -60,8 +60,12 @@ func main() {
 		stderrJSON(err)
 		os.Exit(1)
 	}
-	enc := json.NewEncoder(os.Stdout)
-	_ = enc.Encode(writeOutput{BytesWritten: len(data)})
+    enc := json.NewEncoder(os.Stdout)
+    if err := enc.Encode(writeOutput{BytesWritten: len(data)}); err != nil {
+        // Ensure a deterministic non-zero exit with stderr JSON on failure
+        stderrJSON(fmt.Errorf("encode stdout: %w", err))
+        os.Exit(1)
+    }
 }
 
 func readInput(r io.Reader) (writeInput, error) {
