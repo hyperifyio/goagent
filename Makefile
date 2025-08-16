@@ -77,6 +77,9 @@ clean:
 	rm -f $(addprefix tools/bin/,$(addsuffix $(EXE),$(TOOLS)))
 	rm -rf tools/bin
 	rm -rf bin
+	# Remove common test/build artifacts
+	rm -f bin/coverage.out coverage.out
+	rm -rf reports
 
 lint:
 	@set -euo pipefail; \
