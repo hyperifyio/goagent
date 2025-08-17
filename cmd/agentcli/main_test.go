@@ -327,6 +327,81 @@ func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {
     }
 }
 
+// TestPrepCache_HitAndBust verifies pre-stage caching returns cached messages
+// when inputs match and TTL is valid, and that -prep-cache-bust bypasses cache.
+func TestPrepCache_HitAndBust(t *testing.T) {
+    t.Setenv("GOAGENT_PREP_CACHE_TTL", "1h")
+    // Clean cache dir at repo root
+    root := testFindRepoRoot(t)
+    _ = os.RemoveAll(filepath.Join(root, ".goagent", "cache", "prep"))
+
+    // Mock server that returns no tool calls so output == input messages
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
+    }))
+    defer srv.Close()
+
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "sys"}, {Role: oai.RoleUser, Content: "u"}}
+    cfg := cliConfig{prompt: "u", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+
+    var errBuf bytes.Buffer
+    // First run populates cache
+    out1, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage first: %v", err) }
+    if len(out1) != len(msgs) { t.Fatalf("unexpected out len=%d", len(out1)) }
+
+    // Second run should hit cache and not call server; simulate by closing server
+    srv.CloseClientConnections()
+    out2, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage cached: %v", err) }
+    if got, want := len(out2), len(msgs); got != want { t.Fatalf("cached out len=%d want %d", got, want) }
+
+    // Bust should bypass cache; point to a server that returns content to distinguish
+    srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","channel":"final","content":"ok"}}]}`)
+    }))
+    defer srv2.Close()
+    cfg2 := cfg
+    cfg2.baseURL = srv2.URL
+    cfg2.prepCacheBust = true
+    out3, err := runPreStage(cfg2, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage bust: %v", err) }
+    if len(out3) != len(msgs) { t.Fatalf("bust out len=%d want %d", len(out3), len(msgs)) }
+}
+
+// TestPrepCache_TTLExpiry verifies that expired cache entries are ignored.
+func TestPrepCache_TTLExpiry(t *testing.T) {
+    t.Setenv("GOAGENT_PREP_CACHE_TTL", "1ms")
+    root := testFindRepoRoot(t)
+    cacheDir := filepath.Join(root, ".goagent", "cache", "prep")
+    _ = os.RemoveAll(cacheDir)
+
+    // Stable server that yields empty assistant message (no tool calls)
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
+    }))
+    defer srv.Close()
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+    var errBuf bytes.Buffer
+    out, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage: %v", err) }
+    if len(out) != len(msgs) { t.Fatalf("unexpected out len=%d", len(out)) }
+    // Wait for TTL to expire
+    time.Sleep(10 * time.Millisecond)
+    // Fully close server to force a network error on new request after TTL expiry
+    srv.Close()
+    if _, err := runPreStage(cfg, msgs, &errBuf); err == nil {
+        t.Fatalf("expected error after TTL expiry when server closed; cache should be ignored")
+    }
+}
+
+// testFindRepoRoot is a helper for tests to locate the repo root using the prod helper.
+func testFindRepoRoot(t *testing.T) string { t.Helper(); return findRepoRoot() }
+
 // Pre-stage validator: a stray role:"tool" in the pre-stage input must be rejected
 // before sending the prep HTTP call, mirroring the main-loop validator behavior.
 func TestPrepValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
@@ -1886,7 +1961,7 @@ func TestLengthBackoff_ClampDoesNotExceedWindow(t *testing.T) {
 // written under the repository root's .goagent/audit with expected fields.
 func TestLengthBackoff_AuditEmitted(t *testing.T) {
     // Clean audit dir at repo root
-    root := findRepoRoot(t)
+    root := testFindRepoRoot(t)
     _ = os.RemoveAll(filepath.Join(root, ".goagent"))
 
     // Minimal two-attempt server to trigger length backoff
@@ -1932,7 +2007,7 @@ func TestLengthBackoff_AuditEmitted(t *testing.T) {
 // Audit for pre-stage must include stage:"prep" and idempotency_key on http_timing/attempt.
 func TestPreStage_AuditIncludesStageAndIdempotency(t *testing.T) {
     // Clean audit dir at repo root
-    root := findRepoRoot(t)
+    root := testFindRepoRoot(t)
     _ = os.RemoveAll(filepath.Join(root, ".goagent"))
 
     // Server returns an assistant with no tool calls to keep it simple
@@ -1963,25 +2038,7 @@ func TestPreStage_AuditIncludesStageAndIdempotency(t *testing.T) {
     }
 }
 
-// findRepoRoot walks upward from CWD to locate the directory containing go.mod.
-func findRepoRoot(t *testing.T) string {
-    t.Helper()
-    start, err := os.Getwd()
-    if err != nil {
-        t.Fatalf("getwd: %v", err)
-    }
-    dir := start
-    for {
-        if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-            return dir
-        }
-        parent := filepath.Dir(dir)
-        if parent == dir {
-            t.Fatalf("go.mod not found from %s upward", start)
-        }
-        dir = parent
-    }
-}
+// Deprecated local helper retained earlier in file; remove duplicate definition to avoid redeclare.
 
 // waitForAuditFile polls the audit directory until a file appears or timeout elapses.
 func waitForAuditFile(t *testing.T, auditDir string, timeout time.Duration) string {

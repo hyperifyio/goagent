@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +40,8 @@ type cliConfig struct {
 	debug        bool
     verbose      bool
     quiet        bool
+    // Pre-stage cache controls
+    prepCacheBust bool // when true, bypass pre-stage cache for this run
 	capabilities bool
 	printConfig  bool
     // Pre-stage tool policy
@@ -183,6 +187,7 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.verbose, "verbose", false, "Also print non-final assistant channels (critic/confidence) to stderr")
     flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
     flag.BoolVar(&cfg.prepToolsAllowExternal, "prep-tools-allow-external", false, "Allow pre-stage to execute external tools from -tools; when false, pre-stage is limited to built-in read-only tools")
+    flag.BoolVar(&cfg.prepCacheBust, "prep-cache-bust", false, "Skip pre-stage cache and force recompute")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -663,6 +668,44 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         return cfg.apiKey
     }()
 
+    // Compute pre-stage sampling effective knobs for cache key
+    var (
+        effectiveTopP *float64
+        effectiveTemp *float64
+    )
+    if cfg.prepTopP > 0 {
+        tp := cfg.prepTopP
+        effectiveTopP = &tp
+        // temperature omitted
+    } else if oai.SupportsTemperature(prepModel) {
+        t := cfg.temperature
+        effectiveTemp = &t
+    }
+
+    // Determine tool spec identifier for cache key
+    toolSpec := func() string {
+        if !cfg.prepToolsAllowExternal {
+            return "builtin:fs.read_file,fs.list_dir,fs.stat,env.get,os.info"
+        }
+        if strings.TrimSpace(cfg.toolsPath) == "" {
+            return "external:none"
+        }
+        b, err := os.ReadFile(cfg.toolsPath)
+        if err != nil {
+            // If manifest cannot be read, include the error string so key changes predictably
+            return "manifest_err:" + oneLine(err.Error())
+        }
+        sum := sha256SumHex(b)
+        return "manifest:" + sum
+    }()
+
+    // Attempt cache read unless bust requested
+    if !cfg.prepCacheBust {
+        if out, ok := tryReadPrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages); ok {
+            return out, nil
+        }
+    }
+
     // Construct request mirroring main loop sampling rules but using -prep-top-p
     req := oai.ChatCompletionsRequest{
         Model:    prepModel,
@@ -673,14 +716,10 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         safeFprintf(stderr, "error: prep invalid message sequence: %v\n", err)
         return nil, err
     }
-    if cfg.prepTopP > 0 {
-        topP := cfg.prepTopP
-        req.TopP = &topP
-        // Do not include temperature per one-knob rule
-    } else {
-        if oai.SupportsTemperature(prepModel) {
-            req.Temperature = &cfg.temperature
-        }
+    if effectiveTopP != nil {
+        req.TopP = effectiveTopP
+    } else if effectiveTemp != nil {
+        req.Temperature = effectiveTemp
     }
     // Create a dedicated client honoring pre-stage timeout and normal retry policy
     httpClient := oai.NewClientWithRetry(prepBaseURL, prepAPIKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
@@ -711,6 +750,8 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 
     // If there are no tool calls, return messages unchanged
     if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
+        // Cache the unchanged transcript as well for consistency
+        _ = writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, messages)
         return messages, nil
     }
 
@@ -722,6 +763,8 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     if !cfg.prepToolsAllowExternal {
         // Ignore -tools and execute only built-in read-only adapters
         out = appendPreStageBuiltinToolOutputs(out, assistantMsg, cfg)
+        // Write cache
+        _ = writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, out)
         return out, nil
     }
 
@@ -746,7 +789,123 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         }
     }
     out = appendToolCallOutputs(out, assistantMsg, registry, cfg)
+    _ = writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, out)
     return out, nil
+}
+
+// sha256SumHex returns the lowercase hex SHA-256 of b.
+func sha256SumHex(b []byte) string {
+    h := sha256.New()
+    _, _ = h.Write(b)
+    return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// tryReadPrepCache attempts to load cached pre-stage output messages.
+func tryReadPrepCache(model, base string, temp *float64, topP *float64, retries int, backoff time.Duration, toolSpec string, inMessages []oai.Message) ([]oai.Message, bool) {
+    key := computePrepCacheKey(model, base, temp, topP, retries, backoff, toolSpec, inMessages)
+    dir := filepath.Join(findRepoRoot(), ".goagent", "cache", "prep")
+    path := filepath.Join(dir, key+".json")
+    // TTL check based on file mtime
+    fi, err := os.Stat(path)
+    if err != nil {
+        return nil, false
+    }
+    ttl := prepCacheTTL()
+    if ttl > 0 {
+        if fi.ModTime().Add(ttl).Before(time.Now()) {
+            return nil, false
+        }
+    }
+    data, rerr := os.ReadFile(path)
+    if rerr != nil {
+        return nil, false
+    }
+    var messages []oai.Message
+    if jerr := json.Unmarshal(data, &messages); jerr != nil {
+        return nil, false
+    }
+    return messages, true
+}
+
+// writePrepCache writes outMessages as JSON under the computed cache key.
+func writePrepCache(model, base string, temp *float64, topP *float64, retries int, backoff time.Duration, toolSpec string, inMessages, outMessages []oai.Message) error {
+    key := computePrepCacheKey(model, base, temp, topP, retries, backoff, toolSpec, inMessages)
+    dir := filepath.Join(findRepoRoot(), ".goagent", "cache", "prep")
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return err
+    }
+    path := filepath.Join(dir, key+".json")
+    data, err := json.Marshal(outMessages)
+    if err != nil {
+        return err
+    }
+    // Atomic write: write to temp then rename
+    tmp := path + ".tmp"
+    if werr := os.WriteFile(tmp, data, 0o644); werr != nil {
+        return werr
+    }
+    return os.Rename(tmp, path)
+}
+
+// computePrepCacheKey builds a deterministic key covering inputs and config.
+func computePrepCacheKey(model, base string, temp *float64, topP *float64, retries int, backoff time.Duration, toolSpec string, inMessages []oai.Message) string {
+    // Build a stable map for hashing
+    type hashPayload struct {
+        Model    string         `json:"model"`
+        BaseURL  string         `json:"base_url"`
+        Temp     *float64       `json:"temperature,omitempty"`
+        TopP     *float64       `json:"top_p,omitempty"`
+        Retries  int            `json:"retries"`
+        Backoff  string         `json:"backoff"`
+        ToolSpec string         `json:"tool_spec"`
+        Messages []oai.Message  `json:"messages"`
+    }
+    payload := hashPayload{
+        Model:    strings.TrimSpace(model),
+        BaseURL:  strings.TrimSpace(base),
+        Temp:     temp,
+        TopP:     topP,
+        Retries:  retries,
+        Backoff:  backoff.String(),
+        ToolSpec: toolSpec,
+        Messages: normalizeMessagesForHash(inMessages),
+    }
+    b, _ := json.Marshal(payload)
+    return sha256SumHex(b)
+}
+
+// normalizeMessagesForHash strips fields that should not affect cache equality.
+func normalizeMessagesForHash(in []oai.Message) []oai.Message {
+    out := make([]oai.Message, 0, len(in))
+    for _, m := range in {
+        nm := oai.Message{Role: strings.TrimSpace(m.Role), Content: strings.TrimSpace(m.Content)}
+        // We intentionally ignore channels and tool calls in the input seed for keying
+        out = append(out, nm)
+    }
+    return out
+}
+
+// prepCacheTTL returns the TTL for prep cache; default 10 minutes, override via GOAGENT_PREP_CACHE_TTL.
+func prepCacheTTL() time.Duration {
+    if v := strings.TrimSpace(os.Getenv("GOAGENT_PREP_CACHE_TTL")); v != "" {
+        if d, err := time.ParseDuration(v); err == nil {
+            return d
+        }
+    }
+    return 10 * time.Minute
+}
+
+// findRepoRoot walks upward from CWD to locate go.mod, mirroring internal/oai moduleRoot.
+func findRepoRoot() string {
+    cwd, err := os.Getwd()
+    if err != nil || cwd == "" { return "." }
+    dir := cwd
+    for {
+        if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil { return dir }
+        parent := filepath.Dir(dir)
+        if parent == dir { return cwd }
+        dir = parent
+    }
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
@@ -830,6 +989,7 @@ func printUsage(w io.Writer) {
     b.WriteString("  -verbose\n    Also print non-final assistant channels (critic/confidence) to stderr\n")
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
     b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
+    b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
 	b.WriteString("  --version | -version\n    Print version and exit\n")
