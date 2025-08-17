@@ -18,6 +18,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive, tool�
   - [Capabilities](#capabilities)
   - [Configuration](#configuration)
 - [Examples](#examples)
+  - [Zero-config with GPT-5](#zero-config-with-gpt-5)
   - [Tool calls transcript](#tool-calls-transcript)
   - [Exec tool](#exec-tool)
   - [Filesystem tools](#filesystem-tools)
@@ -173,6 +174,13 @@ List the enabled tools from a manifest without running the agent:
 ```
 
 ## Examples
+### Zero-config with GPT-5
+Run against a GPT‑5 compatible endpoint without tuning sampling knobs. The CLI sends `temperature: 1.0` by default for models that support it.
+```bash
+./bin/agentcli -prompt "Say ok" -model gpt-5 -base-url "$OAI_BASE_URL" -api-key "$OAI_API_KEY" -max-steps 1 -debug
+# stderr will include a request dump containing "\"temperature\": 1"
+```
+
 ### Tool calls transcript
 Minimal JSON transcript showing correct tool‑call sequencing:
 ```json
