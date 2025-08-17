@@ -82,7 +82,9 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		attempts = 1
 	}
 
-	var lastErr error
+    var lastErr error
+    // Allow a single parameter-recovery retry without consuming the normal retry budget
+    recoveryGranted := false
 	// Generate a stable Idempotency-Key used across all attempts
 	idemKey := generateIdempotencyKey()
 	for attempt := 0; attempt < attempts; attempt++ {
@@ -170,8 +172,32 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			}
 			return zero, fmt.Errorf("read response body: %w", readErr)
 		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			// Retry on 429 and 5xx; otherwise return immediately
+        if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+            // Parameter-recovery: if 400 mentions invalid/unsupported temperature and
+            // the request included temperature, remove it and retry once immediately.
+            if resp.StatusCode == http.StatusBadRequest {
+                // Capture body string for inspection and logs
+                bodyStr := string(respBody)
+                if !recoveryGranted && includesTemperature(req) && mentionsUnsupportedTemperature(bodyStr) {
+                    // Log recovery attempt with a structured audit entry
+                    logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, "param_recovery: temperature")
+                    // Clear temperature and re-marshal request for a one-time recovery retry
+                    req.Temperature = nil
+                    nb, merr := json.Marshal(req)
+                    if merr == nil {
+                        body = nb
+                        // Grant exactly one extra attempt for recovery
+                        recoveryGranted = true
+                        attempts++
+                        // Emit timing audit for the failed attempt before retrying
+                        logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "param_recovery_temperature")
+                        // Perform immediate recovery retry without consuming a normal retry slot
+                        continue
+                    }
+                    // If marshal fails, fall through to normal error handling
+                }
+            }
+            // Retry on 429 and 5xx; otherwise return immediately
 			if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
 				// Respect Retry-After when present; otherwise use exponential backoff
 				if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
@@ -188,7 +214,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				continue
 			}
 			// Final non-retryable failure: log attempt (no backoff) and return
-			logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, truncate(string(respBody), 2000))
+            logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, truncate(string(respBody), 2000))
 			logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
 			return zero, fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(respBody), 2000))
 		}

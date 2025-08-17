@@ -1,6 +1,9 @@
 package oai
 
-import "encoding/json"
+import (
+    "encoding/json"
+    "strings"
+)
 
 // Message roles
 const (
@@ -53,6 +56,20 @@ type ChatCompletionsRequest struct {
 	Tools       []Tool    `json:"tools,omitempty"`
 	ToolChoice  string    `json:"tool_choice,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`
+}
+
+// includesTemperature reports whether the request currently has a temperature set.
+func includesTemperature(req ChatCompletionsRequest) bool { return req.Temperature != nil }
+
+// mentionsUnsupportedTemperature detects common API error messages indicating
+// that the temperature parameter is invalid or unsupported for the model.
+func mentionsUnsupportedTemperature(body string) bool {
+    s := strings.ToLower(body)
+    if s == "" {
+        return false
+    }
+    return (strings.Contains(s, "unsupported") && strings.Contains(s, "temperature")) ||
+        (strings.Contains(s, "invalid") && strings.Contains(s, "temperature"))
 }
 
 // ChatCompletionsResponse represents the response for chat completions.

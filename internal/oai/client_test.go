@@ -172,6 +172,57 @@ func TestCreateChatCompletion_TemperaturePreservedWhenSupported(t *testing.T) {
 	}
 }
 
+// Parameter-recovery retry: when the server responds 400 mentioning invalid/unsupported
+// temperature, the client should remove temperature and retry once before any normal retries.
+func TestCreateChatCompletion_ParameterRecovery_InvalidTemperature(t *testing.T) {
+    attempts := 0
+    var firstReqHadTemp bool
+    var secondReqHadTemp bool
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        attempts++
+        var req ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("decode: %v", err)
+        }
+        if attempts == 1 {
+            firstReqHadTemp = req.Temperature != nil
+            // Simulate OpenAI-style 400 error indicating unsupported temperature
+            w.WriteHeader(http.StatusBadRequest)
+            _, _ = w.Write([]byte(`{"error":{"message":"parameter 'temperature' is unsupported for this model"}}`))
+            return
+        }
+        secondReqHadTemp = req.Temperature != nil
+        // On retry, succeed
+        resp := ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}}
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    // No normal retries; parameter-recovery should still allow exactly one retry
+    c := NewClientWithRetry(srv.URL, "", 2*time.Second, RetryPolicy{MaxRetries: 0})
+    temp := 0.5
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    out, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "oss-gpt-20b", Messages: []Message{{Role: RoleUser, Content: "x"}}, Temperature: &temp})
+    if err != nil {
+        t.Fatalf("call: %v", err)
+    }
+    if out.Choices[0].Message.Content != "ok" {
+        t.Fatalf("unexpected content: %+v", out)
+    }
+    if attempts != 2 {
+        t.Fatalf("expected 2 attempts (1st 400, 2nd success), got %d", attempts)
+    }
+    if !firstReqHadTemp {
+        t.Fatalf("expected temperature set on first request")
+    }
+    if secondReqHadTemp {
+        t.Fatalf("expected temperature to be removed on retry after 400")
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/216
 func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
 	attempts := 0
