@@ -465,6 +465,160 @@ func TestPrep_Builtins_ReadOnlyAndNoExecByDefault(t *testing.T) {
     if !gotRead || !gotEchoErr { t.Fatalf("expected fs.read_file success and echo unknown error; gotRead=%v gotEchoErr=%v", gotRead, gotEchoErr) }
 }
 
+// If -prep-tools-allow-external is enabled, the pre-stage must reuse manifest rules:
+// - resolve the pre-stage manifest relative to its own file
+// - require ./tools/bin/* (Windows .exe honored)
+// - enforce escape/.. rejection and cross-platform path normalization
+func TestPrep_Manifest_ResolvesRelativeAgainstManifestDir(t *testing.T) {
+    // Create nested manifest directory
+    repo := t.TempDir()
+    nested := filepath.Join(repo, "sub", "manifest")
+    if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+
+    // Build a tiny tool binary under the manifest's tools/bin
+    src := filepath.Join(repo, "hello_tool.go")
+    if err := os.WriteFile(src, []byte(`package main
+import ("encoding/json"; "io"; "os")
+func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok":true})}
+`), 0o644); err != nil { t.Fatalf("write src: %v", err) }
+    bin := filepath.Join(nested, "tools", "bin", "hello_tool")
+    if runtime.GOOS == "windows" { bin += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
+        t.Fatalf("build tool: %v: %s", err, string(out))
+    }
+
+    // Write manifest that references ./tools/bin/hello_tool relative to the manifest dir
+    manPath := filepath.Join(nested, "tools.json")
+    manifest := map[string]any{
+        "tools": []map[string]any{{
+            "name": "hello_tool",
+            "description": "say ok",
+            "schema": map[string]any{"type":"object","additionalProperties":false},
+            "command": []string{"./tools/bin/hello_tool"},
+            "timeoutSec": 2,
+        }},
+    }
+    b, err := json.Marshal(manifest)
+    if err != nil { t.Fatalf("marshal manifest: %v", err) }
+    if err := os.WriteFile(manPath, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    // Fake server returning a tool_calls to hello_tool
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t1", Type:"function", Function:oai.ToolCallFunction{Name:"hello_tool", Arguments:"{}"}}}},
+        }}}
+        _ = json.NewEncoder(w).Encode(resp)
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manPath, prepToolsAllowExternal: true}
+    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
+    var errBuf bytes.Buffer
+    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
+    // Expect a tool message from hello_tool with {"ok":true}
+    var found bool
+    for _, m := range outMsgs {
+        if m.Role == oai.RoleTool && m.Name == "hello_tool" {
+            var obj map[string]any
+            _ = json.Unmarshal([]byte(m.Content), &obj)
+            if v, ok := obj["ok"].(bool); ok && v {
+                found = true
+                break
+            }
+        }
+    }
+    if !found { t.Fatalf("expected hello_tool tool output; stderr=%s", errBuf.String()) }
+}
+
+func TestPrep_Manifest_RejectsEscapeAndNonToolsBin(t *testing.T) {
+    dir := t.TempDir()
+
+    // Case 1: escape via .. in command[0]
+    man1 := filepath.Join(dir, "tools_escape.json")
+    m1 := map[string]any{"tools": []map[string]any{{"name":"x","command": []string{"../bin/x"}}}}
+    b1, _ := json.Marshal(m1)
+    if err := os.WriteFile(man1, b1, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t", Type:"function", Function:oai.ToolCallFunction{Name:"x", Arguments:"{}"}}}},
+        }}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: time.Second, httpRetries: 0, toolsPath: man1, prepToolsAllowExternal: true}
+    var errBuf bytes.Buffer
+    if _, err := runPreStage(cfg, []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}, &errBuf); err == nil {
+        t.Fatalf("expected error due to manifest escape; stderr=%s", errBuf.String())
+    }
+    if !strings.Contains(errBuf.String(), "read manifest") && !strings.Contains(errBuf.String(), "command[0] must not start with '..'") {
+        t.Fatalf("stderr should mention escape rejection; got %s", errBuf.String())
+    }
+
+    // Case 2: missing ./tools/bin prefix
+    man2 := filepath.Join(dir, "tools_bad_prefix.json")
+    m2 := map[string]any{"tools": []map[string]any{{"name":"y","command": []string{"bin/y"}}}}
+    b2, _ := json.Marshal(m2)
+    if err := os.WriteFile(man2, b2, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+    cfg.toolsPath = man2
+    errBuf.Reset()
+    if _, err := runPreStage(cfg, []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}, &errBuf); err == nil {
+        t.Fatalf("expected error due to missing ./tools/bin prefix; stderr=%s", errBuf.String())
+    }
+    if !strings.Contains(errBuf.String(), "relative command[0] must start with ./tools/bin/") {
+        t.Fatalf("stderr should mention ./tools/bin requirement; got %s", errBuf.String())
+    }
+}
+
+func TestPrep_Manifest_NormalizesWindowsBackslashes(t *testing.T) {
+    // This test uses a manifest command with backslashes; loader should normalize and accept it.
+    repo := t.TempDir()
+    nested := filepath.Join(repo, "nest")
+    if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+
+    // Build a tiny tool
+    src := filepath.Join(repo, "ok.go")
+    if err := os.WriteFile(src, []byte(`package main
+import ("encoding/json"; "io"; "os")
+func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok":true})}
+`), 0o644); err != nil { t.Fatalf("write src: %v", err) }
+    bin := filepath.Join(nested, "tools", "bin", "ok")
+    if runtime.GOOS == "windows" { bin += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
+        t.Fatalf("build tool: %v: %s", err, string(out))
+    }
+
+    // Use Windows-style path in manifest
+    man := filepath.Join(nested, "tools_backslashes.json")
+    cmd0 := ".\\tools\\bin\\ok"
+    manifest := map[string]any{"tools": []map[string]any{{"name":"ok","command": []string{cmd0}, "schema": map[string]any{"type":"object"}}}}
+    b, _ := json.Marshal(manifest)
+    if err := os.WriteFile(man, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t", Type:"function", Function:oai.ToolCallFunction{Name:"ok", Arguments:"{}"}}}},
+        }}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 2*time.Second, httpRetries: 0, toolsPath: man, prepToolsAllowExternal: true}
+    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
+    var errBuf bytes.Buffer
+    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
+    // Expect one tool output
+    var found bool
+    for _, m := range outMsgs { if m.Role == oai.RoleTool && m.Name == "ok" { found = true } }
+    if !found { t.Fatalf("expected ok tool output; stderr=%s", errBuf.String()) }
+}
+
 // https://github.com/hyperifyio/goagent/issues/289
 // When -top-p is provided, temperature must be omitted and a one-line warning printed.
 func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
