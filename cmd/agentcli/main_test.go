@@ -1171,6 +1171,78 @@ func TestRequest_OmitsMaxTokensWhenCapZero(t *testing.T) {
     }
 }
 
+// https://github.com/hyperifyio/goagent/issues/318
+// When finish_reason=="length" on the first attempt, the agent must perform
+// exactly one in-step retry with a completion cap of at least 256 tokens by
+// setting max_tokens=256 on the retry while omitting it on the first attempt.
+func TestLengthBackoff_OneRetrySetsMaxTokens256(t *testing.T) {
+    // Capture bodies of successive requests
+    var bodies [][]byte
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        b, err := io.ReadAll(r.Body)
+        if err != nil {
+            t.Fatalf("read body: %v", err)
+        }
+        bodies = append(bodies, append([]byte(nil), b...))
+        // Respond with length on first call, stop on second
+        if len(bodies) == 1 {
+            resp := oai.ChatCompletionsResponse{
+                Choices: []oai.ChatCompletionsResponseChoice{{
+                    FinishReason: "length",
+                    Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+                }},
+            }
+            if err := json.NewEncoder(w).Encode(resp); err != nil {
+                t.Fatalf("encode resp1: %v", err)
+            }
+            return
+        }
+        // Second call returns final content
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                FinishReason: "stop",
+                Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
+            }},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode resp2: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       "x",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "m",
+        maxSteps:     1,
+        httpTimeout:  2 * time.Second,
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+        debug:        false,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "done" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+    if len(bodies) != 2 {
+        t.Fatalf("expected two requests (initial + retry), got %d", len(bodies))
+    }
+    // First body must omit max_tokens
+    if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
+        t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
+    }
+    // Second body must include max_tokens:256
+    if !strings.Contains(string(bodies[1]), "\"max_tokens\":256") {
+        t.Fatalf("second attempt must include max_tokens=256; body=%s", string(bodies[1]))
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/300
 // CLI flags must be order-insensitive. This test permutes common flags and
 // asserts parsed values are identical regardless of position. We only compare
