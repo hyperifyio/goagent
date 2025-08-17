@@ -82,6 +82,9 @@ type cliConfig struct {
     printMessages bool // When true, pretty-print final merged messages to stderr before main call
     // Streaming control
     streamFinal bool // When true, request SSE streaming and print only assistant{channel:"final"} progressively
+    // Save/load refined messages
+    saveMessagesPath string // When set, write the final merged Harmony messages to this JSON path and continue
+    loadMessagesPath string // When set, bypass pre-stage and prompt; load messages JSON verbatim (validator-checked)
 	// initMessages allows tests to inject a custom starting transcript to
 	// exercise pre-flight validation paths (e.g., stray tool message). When
 	// empty, the default [system,user] seed is used.
@@ -258,6 +261,9 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.prepDryRun, "prep-dry-run", false, "Run pre-stage only, print refined Harmony messages to stdout, and exit 0")
     flag.BoolVar(&cfg.printMessages, "print-messages", false, "Pretty-print the final merged message array to stderr before the main call")
     flag.BoolVar(&cfg.streamFinal, "stream-final", false, "If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose")
+    // Save/load refined messages
+    flag.StringVar(&cfg.saveMessagesPath, "save-messages", "", "Write the final merged Harmony messages to the given JSON file and continue")
+    flag.StringVar(&cfg.loadMessagesPath, "load-messages", "", "Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
     ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -432,7 +438,17 @@ func parseFlags() (cliConfig, int) {
     }
     if !cfg.capabilities && !cfg.printConfig {
         // Resolve effective prompt presence considering -prompt-file
-        if strings.TrimSpace(cfg.prompt) == "" && strings.TrimSpace(cfg.promptFile) == "" {
+        if strings.TrimSpace(cfg.loadMessagesPath) == "" && strings.TrimSpace(cfg.prompt) == "" && strings.TrimSpace(cfg.promptFile) == "" {
+            return cfg, 2
+        }
+    }
+    // Conflict checks for save/load flags
+    if strings.TrimSpace(cfg.saveMessagesPath) != "" && strings.TrimSpace(cfg.loadMessagesPath) != "" {
+        return cfg, 2
+    }
+    if strings.TrimSpace(cfg.loadMessagesPath) != "" {
+        // Loading messages conflicts with providing -prompt or -prompt-file
+        if strings.TrimSpace(cfg.prompt) != "" || strings.TrimSpace(cfg.promptFile) != "" {
             return cfg, 2
         }
     }
@@ -548,7 +564,22 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
 
     var messages []oai.Message
-    if len(cfg.initMessages) > 0 {
+    if strings.TrimSpace(cfg.loadMessagesPath) != "" {
+        // Load messages from JSON file and validate
+        data, rerr := os.ReadFile(strings.TrimSpace(cfg.loadMessagesPath))
+        if rerr != nil {
+            safeFprintf(stderr, "error: read load-messages file: %v\n", rerr)
+            return 2
+        }
+        if err := json.Unmarshal(data, &messages); err != nil {
+            safeFprintf(stderr, "error: parse load-messages JSON: %v\n", err)
+            return 2
+        }
+        if err := oai.ValidateMessageSequence(messages); err != nil {
+            safeFprintf(stderr, "error: invalid loaded message sequence: %v\n", err)
+            return 2
+        }
+    } else if len(cfg.initMessages) > 0 {
 		// Use injected messages (tests only)
 		messages = cfg.initMessages
 	} else {
@@ -594,7 +625,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
     // to the transcript before entering the main loop. Behavior is additive only.
     if err := func() error {
         // Skip entirely when disabled or when tests inject initMessages
-        if !cfg.prepEnabled || len(cfg.initMessages) > 0 {
+        if !cfg.prepEnabled || len(cfg.initMessages) > 0 || strings.TrimSpace(cfg.loadMessagesPath) != "" {
             return nil
         }
         // Execute pre-stage and update messages if any tool outputs were produced
@@ -614,6 +645,19 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
     if cfg.printMessages {
         if b, err := json.MarshalIndent(messages, "", "  "); err == nil {
             safeFprintln(stderr, string(b))
+        }
+    }
+
+    // Optional: save the final merged messages to a JSON file before main call
+    if strings.TrimSpace(cfg.saveMessagesPath) != "" {
+        b, err := json.MarshalIndent(messages, "", "  ")
+        if err != nil {
+            safeFprintf(stderr, "error: marshal messages: %v\n", err)
+            return 2
+        }
+        if werr := writeFileAtomic(strings.TrimSpace(cfg.saveMessagesPath), b, 0o644); werr != nil {
+            safeFprintf(stderr, "error: write save-messages file: %v\n", werr)
+            return 2
         }
     }
 
@@ -840,8 +884,8 @@ func runPrepDryRun(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
         seed = append(seed, oai.Message{Role: oai.RoleUser, Content: prm})
         messages = seed
     }
-    // Execute pre-stage unless disabled; on failure, exit non-zero
-    if cfg.prepEnabled && len(cfg.initMessages) == 0 {
+    // Execute pre-stage unless disabled or when loading messages; on failure, exit non-zero
+    if cfg.prepEnabled && len(cfg.initMessages) == 0 && strings.TrimSpace(cfg.loadMessagesPath) == "" {
         if out, err := runPreStage(cfg, messages, stderr); err == nil {
             messages = out
         } else {
@@ -1296,6 +1340,8 @@ func printUsage(w io.Writer) {
     b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
     b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
     b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")
+    b.WriteString("  -save-messages string\n    Write the final merged Harmony messages to the given JSON file and continue\n")
+    b.WriteString("  -load-messages string\n    Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)\n")
     b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
     b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
@@ -1442,6 +1488,21 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	}
 	safeFprintln(stdout, string(data))
 	return 0
+}
+
+// writeFileAtomic writes data to path atomically by writing to a temp file
+// in the same directory and then renaming it over the destination. Parent
+// directories are created if missing.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+    dir := filepath.Dir(path)
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return err
+    }
+    tmp := path + ".tmp"
+    if err := os.WriteFile(tmp, data, perm); err != nil {
+        return err
+    }
+    return os.Rename(tmp, path)
 }
 
 // printCapabilities loads the tools manifest (if provided) and prints a concise list

@@ -2420,6 +2420,68 @@ func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {
     }
 }
 
+// FEATURE_CHECKLIST L23: Save/load refined messages. Round-trip test writes the
+// merged Harmony messages to JSON and loads them back to bypass pre-stage and prompt.
+func TestSaveLoadMessages_RoundTrip(t *testing.T) {
+    dir := t.TempDir()
+    path := filepath.Join(dir, "msgs.json")
+
+    // First run: disable HTTP by setting max-steps=0 and pre-stage off; save messages.
+    // Expect exit code 1 due to max-steps==0, but file should be written with a valid array.
+    args1 := []string{"-prompt", "hello", "-prep-enabled=false", "-max-steps", "0", "-save-messages", path}
+    var out1, err1 strings.Builder
+    _ = cliMain(args1, &out1, &err1) // exit code may be 1; we only care about file
+
+    b, rerr := os.ReadFile(path)
+    if rerr != nil {
+        t.Fatalf("read saved messages: %v", rerr)
+    }
+    if !strings.HasPrefix(strings.TrimSpace(string(b)), "[") {
+        t.Fatalf("saved file not JSON array: %s", truncate(string(b), 100))
+    }
+    // Quick schema sniff: must include at least one role field
+    if !strings.Contains(string(b), "\"role\"") {
+        t.Fatalf("saved messages missing role fields: %s", truncate(string(b), 100))
+    }
+
+    // Second run: load messages from file; should parse and validate without requiring -prompt.
+    args2 := []string{"-load-messages", path, "-max-steps", "0", "-prep-enabled=false"}
+    var out2, err2 strings.Builder
+    code2 := cliMain(args2, &out2, &err2)
+    if code2 != 1 && code2 != 0 { // may exit 1 due to max-steps==0
+        t.Fatalf("unexpected exit on load: %d; stderr=%s", code2, err2.String())
+    }
+}
+
+// FEATURE_CHECKLIST L23: Conflicts and errors for save/load flags.
+func TestSaveLoadMessages_FlagConflictsAndErrors(t *testing.T) {
+    // load+save together should exit 2
+    dir := t.TempDir()
+    p := filepath.Join(dir, "x.json")
+    args := []string{"-load-messages", p, "-save-messages", p, "-prompt", "x"}
+    cfg, code := func() (cliConfig, int) {
+        orig := os.Args
+        defer func() { os.Args = orig }()
+        os.Args = append([]string{"agentcli.test"}, args...)
+        return parseFlags()
+    }()
+    if code == 0 {
+        t.Fatalf("expected parse error for conflicting flags; cfg=%+v", cfg)
+    }
+
+    // load-messages conflicts with -prompt/-prompt-file
+    args2 := []string{"-load-messages", p, "-prompt", "x"}
+    cfg2, code2 := func() (cliConfig, int) {
+        orig := os.Args
+        defer func() { os.Args = orig }()
+        os.Args = append([]string{"agentcli.test"}, args2...)
+        return parseFlags()
+    }()
+    if code2 == 0 {
+        t.Fatalf("expected parse error for load+prompt; cfg=%+v", cfg2)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/244
 // Duration flags accept plain seconds (e.g., 300) and Go duration strings.
 func TestDurationFlags_FlexibleParsing(t *testing.T) {
