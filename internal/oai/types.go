@@ -71,6 +71,10 @@ type ChatCompletionsRequest struct {
     // MaxTokens limits the number of tokens generated for the completion.
     // Omitted when zero to preserve backward compatibility.
     MaxTokens int `json:"max_tokens,omitempty"`
+    // Stream requests server-sent events (SSE) streaming mode when true.
+    // When enabled, the server responds with text/event-stream and emits
+    // incremental deltas under choices[].delta.
+    Stream bool `json:"stream,omitempty"`
 }
 
 // includesTemperature reports whether the request currently has a temperature set.
@@ -100,4 +104,21 @@ type ChatCompletionsResponseChoice struct {
 	Index        int     `json:"index"`
 	FinishReason string  `json:"finish_reason"`
 	Message      Message `json:"message"`
+}
+
+// StreamChunk models an SSE delta event payload for streaming responses.
+// Only a subset of fields are needed for CLI streaming.
+type StreamChunk struct {
+    ID      string `json:"id"`
+    Object  string `json:"object"`
+    Model   string `json:"model"`
+    Choices []struct {
+        Index int `json:"index"`
+        Delta struct {
+            Role    string `json:"role"`
+            Channel string `json:"channel"`
+            Content string `json:"content"`
+        } `json:"delta"`
+        FinishReason string `json:"finish_reason"`
+    } `json:"choices"`
 }

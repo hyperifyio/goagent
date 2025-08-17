@@ -913,6 +913,61 @@ func TestChannelPrinting_DefaultVerboseQuiet(t *testing.T) {
     if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
 }
 
+// FEATURE_CHECKLIST L22: Streaming for assistant[final]. If server supports streaming,
+// stream only assistant{channel:"final"} to stdout; buffer other channels for -verbose.
+// -quiet still prints just the streamed final.
+func TestStreaming_FinalChannelOnly_WithVerboseBuffersNonFinal(t *testing.T) {
+    // SSE server that streams when req.Stream is true; otherwise returns minimal JSON
+    mkServer := func() *httptest.Server {
+        return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            var req oai.ChatCompletionsRequest
+            if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                t.Fatalf("bad json: %v", err)
+            }
+            if !req.Stream {
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: ""}}}})
+                return
+            }
+            w.Header().Set("Content-Type", "text/event-stream")
+            flusher, _ := w.(http.Flusher)
+            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"critic\",\"content\":\"c1\"}}]}\n\n")
+            if flusher != nil { flusher.Flush() }
+            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"final\",\"content\":\"he\"}}]}\n\n")
+            if flusher != nil { flusher.Flush() }
+            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"llo\"}}]}\n\n")
+            if flusher != nil { flusher.Flush() }
+            _, _ = io.WriteString(w, "data: [DONE]\n\n")
+            if flusher != nil { flusher.Flush() }
+        }))
+    }
+
+    run := func(args ...string) (string, string, int) {
+        srv := mkServer()
+        defer srv.Close()
+        var outBuf, errBuf bytes.Buffer
+        code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-stream-final"}, args...), &outBuf, &errBuf)
+        return outBuf.String(), errBuf.String(), code
+    }
+
+    // Default: only final streamed to stdout; critic buffered and not printed
+    out, errS, code := run()
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be streamed final only; got %q", strings.TrimSpace(out)) }
+    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under default; got %q", errS) }
+
+    // Verbose: critic printed to stderr after stream completes; final to stdout
+    out, errS, code = run("-verbose")
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out)) }
+    if !strings.Contains(errS, "c1") { t.Fatalf("stderr should include critic under -verbose; got %q", errS) }
+
+    // Quiet: still prints final to stdout; no critic to stderr
+    out, errS, code = run("-quiet")
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out)) }
+    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
+}
+
 // https://github.com/hyperifyio/goagent/issues/285
 // Precedence: flag -temp > env LLM_TEMPERATURE > default 1.0
 func TestTemperaturePrecedence_FlagThenEnvThenDefault(t *testing.T) {

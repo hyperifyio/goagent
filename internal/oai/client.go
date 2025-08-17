@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"bufio"
 	"io"
 	mathrand "math/rand"
 	"net"
@@ -104,7 +105,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		req.Temperature = nil
 	}
 	var zero ChatCompletionsResponse
-	body, err := json.Marshal(req)
+    body, err := json.Marshal(req)
 	if err != nil {
 		return zero, fmt.Errorf("marshal request: %w", err)
 	}
@@ -188,7 +189,15 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			return zero, fmt.Errorf("chat POST failed: %v (base=%s, http-timeout=%s)", derr, c.baseURL, tmo)
 		}
 
-		respBody, readErr := io.ReadAll(resp.Body)
+        // When streaming is requested, the server should respond with SSE. We do not
+        // support streaming in this method. Return 400 guidance to call StreamChat.
+        if req.Stream {
+            // Read a small portion to include in error, then return
+            _, _ = io.CopyN(io.Discard, resp.Body, 0)
+            _ = resp.Body.Close()
+            return zero, fmt.Errorf("stream=true not supported in CreateChatCompletion; use StreamChat")
+        }
+        respBody, readErr := io.ReadAll(resp.Body)
 		if cerr := resp.Body.Close(); cerr != nil {
 			// best-effort: record close error as lastErr if none
 			if lastErr == nil {
@@ -267,6 +276,92 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		return zero, lastErr
 	}
 	return zero, fmt.Errorf("chat request failed without a specific error")
+}
+
+// StreamChat performs a streaming chat completion request (SSE) and delivers
+// parsed chunks to the provided callback as they arrive. The callback should be
+// fast and non-blocking. The function returns when the stream completes or an
+// error occurs. Retries are not applied in streaming mode.
+func (c *Client) StreamChat(ctx context.Context, req ChatCompletionsRequest, onChunk func(StreamChunk) error) error {
+    // Encoder guard: omit temperature when unsupported
+    if !SupportsTemperature(req.Model) {
+        req.Temperature = nil
+    }
+    req.Stream = true
+    body, err := json.Marshal(req)
+    if err != nil {
+        return fmt.Errorf("marshal request: %w", err)
+    }
+    endpoint := c.baseURL + "/chat/completions"
+    httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+    if nerr != nil {
+        return fmt.Errorf("new request: %w", nerr)
+    }
+    httpReq.Header.Set("Content-Type", "application/json")
+    if c.apiKey != "" {
+        httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+    }
+    // Idempotency not relevant for streaming; still set for consistency
+    httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
+
+    resp, derr := c.httpClient.Do(httpReq)
+    if derr != nil {
+        return derr
+    }
+    defer func(){ _ = resp.Body.Close() }()
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+        b, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(b), 2000))
+    }
+    // Require SSE content type for streaming
+    ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+    if !strings.Contains(ct, "text/event-stream") {
+        // Not a streaming response; signal caller to fallback
+        b, _ := io.ReadAll(resp.Body)
+        _ = b
+        return fmt.Errorf("server does not support streaming (content-type=%q)", ct)
+    }
+    // Simple SSE parser: read lines; handle "data: ..." and [DONE]
+    dec := newLineReader(resp.Body)
+    for {
+        line, err := dec()
+        if err != nil {
+            if errors.Is(err, io.EOF) {
+                return nil
+            }
+            return fmt.Errorf("stream read: %w", err)
+        }
+        s := strings.TrimSpace(line)
+        if s == "" { continue }
+        if strings.HasPrefix(s, "data:") {
+            payload := strings.TrimSpace(strings.TrimPrefix(s, "data:"))
+            if payload == "[DONE]" {
+                return nil
+            }
+            var chunk StreamChunk
+            if jerr := json.Unmarshal([]byte(payload), &chunk); jerr != nil {
+                // Skip malformed chunk
+                continue
+            }
+            if onChunk != nil {
+                if err := onChunk(chunk); err != nil {
+                    return err
+                }
+            }
+        }
+    }
+}
+
+// newLineReader returns a closure that reads one line (terminated by \n) from r each call.
+func newLineReader(r io.Reader) func() (string, error) {
+    br := bufio.NewReader(r)
+    return func() (string, error) {
+        b, err := br.ReadBytes('\n')
+        if err != nil {
+            return "", err
+        }
+        return string(b), nil
+    }
 }
 
 func truncate(s string, n int) string {

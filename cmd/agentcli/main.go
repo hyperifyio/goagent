@@ -80,6 +80,8 @@ type cliConfig struct {
     // Message viewing modes
     prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
     printMessages bool // When true, pretty-print final merged messages to stderr before main call
+    // Streaming control
+    streamFinal bool // When true, request SSE streaming and print only assistant{channel:"final"} progressively
 	// initMessages allows tests to inject a custom starting transcript to
 	// exercise pre-flight validation paths (e.g., stray tool message). When
 	// empty, the default [system,user] seed is used.
@@ -255,6 +257,7 @@ func parseFlags() (cliConfig, int) {
     // Message viewing flags
     flag.BoolVar(&cfg.prepDryRun, "prep-dry-run", false, "Run pre-stage only, print refined Harmony messages to stdout, and exit 0")
     flag.BoolVar(&cfg.printMessages, "print-messages", false, "Pretty-print the final merged message array to stderr before the main call")
+    flag.BoolVar(&cfg.streamFinal, "stream-final", false, "If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
     ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -663,21 +666,57 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
             // Per-call context
             callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
+            // Attempt streaming first when enabled; on unsupported, fall back
+            if cfg.streamFinal {
+                var streamedFinal strings.Builder
+                var bufferedNonFinal []string
+                streamErr := httpClient.StreamChat(callCtx, req, func(chunk oai.StreamChunk) error {
+                    // Accumulate only final channel content to stdout progressively; buffer others
+                    for _, ch := range chunk.Choices {
+                        delta := ch.Delta
+                        if strings.TrimSpace(delta.Content) == "" { continue }
+                        if strings.TrimSpace(delta.Channel) == "final" || strings.TrimSpace(delta.Channel) == "" {
+                            safeFprintf(stdout, "%s", delta.Content)
+                            streamedFinal.WriteString(delta.Content)
+                        } else {
+                            bufferedNonFinal = append(bufferedNonFinal, delta.Content)
+                        }
+                    }
+                    return nil
+                })
+                cancel()
+                if streamErr == nil {
+                    // Stream finished successfully. Emit newline to finalize stdout.
+                    safeFprintln(stdout, "")
+                    if cfg.verbose {
+                        for _, s := range bufferedNonFinal { safeFprintln(stderr, strings.TrimSpace(s)) }
+                    }
+                    return 0
+                }
+                // If not supported, fall through to non-streaming; otherwise treat as error
+                if !strings.Contains(strings.ToLower(streamErr.Error()), "does not support streaming") {
+                    src := cfg.httpTimeoutSource; if src == "" { src = "default" }
+                    safeFprintf(stderr, "error: chat call failed: %v (http-timeout source=%s)\n", streamErr, src)
+                    return 1
+                }
+                // Reset context for fallback after streaming attempt
+                callCtx, cancel = context.WithTimeout(context.Background(), cfg.httpTimeout)
+            } else {
+                cancel()
+                // Reset context for non-streaming path when streaming disabled
+                callCtx, cancel = context.WithTimeout(context.Background(), cfg.httpTimeout)
+            }
+
+            // Fallback: non-streaming request
             resp, err := httpClient.CreateChatCompletion(callCtx, req)
             cancel()
             if err != nil {
-                // Append source for http-timeout to aid diagnostics
                 src := cfg.httpTimeoutSource
-                if src == "" {
-                    src = "default"
-                }
+                if src == "" { src = "default" }
                 safeFprintf(stderr, "error: chat call failed: %v (http-timeout source=%s)\n", err, src)
                 return 1
             }
-            if len(resp.Choices) == 0 {
-                safeFprintln(stderr, "error: chat response has no choices")
-                return 1
-            }
+            if len(resp.Choices) == 0 { safeFprintln(stderr, "error: chat response has no choices"); return 1 }
 
             choice := resp.Choices[0]
 
@@ -1256,6 +1295,7 @@ func printUsage(w io.Writer) {
     b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
     b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
     b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
+    b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")
     b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
     b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
