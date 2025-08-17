@@ -263,7 +263,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
 	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	for step := 0; step < cfg.maxSteps; step++ {
-        req := oai.ChatCompletionsRequest{
+		req := oai.ChatCompletionsRequest{
 			Model:    cfg.model,
 			Messages: messages,
 		}
@@ -276,13 +276,13 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			req.ToolChoice = "auto"
 		}
 
-        // Pre-flight validate message sequence to avoid API 400s for stray tool messages
-        if err := oai.ValidateMessageSequence(req.Messages); err != nil {
-            safeFprintf(stderr, "error: %v\n", err)
-            return 1
-        }
+		// Pre-flight validate message sequence to avoid API 400s for stray tool messages
+		if err := oai.ValidateMessageSequence(req.Messages); err != nil {
+			safeFprintf(stderr, "error: %v\n", err)
+			return 1
+		}
 
-        dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
+		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
 
 		// Per-call context
 		callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
@@ -307,16 +307,16 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		choice := resp.Choices[0]
 		msg := choice.Message
 
-        // If the model returned tool calls and we have a registry, first append
-        // the assistant message that carries tool_calls to preserve correct
-        // sequencing (assistant -> tool messages -> assistant). Then append the
-        // corresponding tool messages and continue the loop for the next turn.
-        if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
-            messages = append(messages, msg)
-            messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
-            // Continue loop for another assistant response using appended tool outputs
-            continue
-        }
+		// If the model returned tool calls and we have a registry, first append
+		// the assistant message that carries tool_calls to preserve correct
+		// sequencing (assistant -> tool messages -> assistant). Then append the
+		// corresponding tool messages and continue the loop for the next turn.
+		if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
+			messages = append(messages, msg)
+			messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
+			// Continue loop for another assistant response using appended tool outputs
+			continue
+		}
 
 		// If the model returned final assistant content, print and exit 0
 		if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
