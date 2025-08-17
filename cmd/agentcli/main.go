@@ -31,8 +31,8 @@ type cliConfig struct {
 	toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
 	httpRetries  int           // number of retries for HTTP
 	httpBackoff  time.Duration // base backoff between retries
-    temperature  float64
-    topP         float64
+	temperature  float64
+	topP         float64
 	debug        bool
 	capabilities bool
 	printConfig  bool
@@ -48,29 +48,29 @@ type cliConfig struct {
 
 // float64FlexFlag wires a float64 destination and records if it was set via flag.
 type float64FlexFlag struct {
-    dst *float64
-    set *bool
+	dst *float64
+	set *bool
 }
 
 func (f *float64FlexFlag) String() string {
-    if f == nil || f.dst == nil {
-        return ""
-    }
-    return strconv.FormatFloat(*f.dst, 'f', -1, 64)
+	if f == nil || f.dst == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*f.dst, 'f', -1, 64)
 }
 
 func (f *float64FlexFlag) Set(s string) error {
-    v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-    if err != nil {
-        return err
-    }
-    if f.dst != nil {
-        *f.dst = v
-    }
-    if f.set != nil {
-        *f.set = true
-    }
-    return nil
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return err
+	}
+	if f.dst != nil {
+		*f.dst = v
+	}
+	if f.set != nil {
+		*f.set = true
+	}
+	return nil
 }
 
 func getEnv(key, def string) string {
@@ -150,18 +150,18 @@ func parseFlags() (cliConfig, int) {
 	var httpSet, toolSet bool
 	flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.toolTimeout, set: &toolSet}, "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
-    // Use a flexible float flag to detect whether -temp was explicitly set
-    var tempSet bool
-    var _ flag.Value = (*float64FlexFlag)(nil)
-    (func() {
-        f := &float64FlexFlag{dst: &cfg.temperature, set: &tempSet}
-        // initialize default before registering
-        cfg.temperature = 1.0
-        flag.CommandLine.Var(f, "temp", "Sampling temperature")
-    })()
+	// Use a flexible float flag to detect whether -temp was explicitly set
+	var tempSet bool
+	var _ flag.Value = (*float64FlexFlag)(nil)
+	(func() {
+		f := &float64FlexFlag{dst: &cfg.temperature, set: &tempSet}
+		// initialize default before registering
+		cfg.temperature = 1.0
+		flag.CommandLine.Var(f, "temp", "Sampling temperature")
+	})()
 
-    // Nucleus sampling (one-knob with temperature). Not yet sent to API; used to gate temperature.
-    flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
+	// Nucleus sampling (one-knob with temperature). Not yet sent to API; used to gate temperature.
+	flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
@@ -169,15 +169,15 @@ func parseFlags() (cliConfig, int) {
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 
-    // Resolve temperature precedence: flag > env (LLM_TEMPERATURE) > config file (not implemented) > default 1.0
-    if !tempSet {
-        if v := strings.TrimSpace(os.Getenv("LLM_TEMPERATURE")); v != "" {
-            if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-                cfg.temperature = parsed
-            }
-        }
-        // Config file precedence placeholder: no-op (no config file mechanism yet)
-    }
+	// Resolve temperature precedence: flag > env (LLM_TEMPERATURE) > config file (not implemented) > default 1.0
+	if !tempSet {
+		if v := strings.TrimSpace(os.Getenv("LLM_TEMPERATURE")); v != "" {
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				cfg.temperature = parsed
+			}
+		}
+		// Config file precedence placeholder: no-op (no config file mechanism yet)
+	}
 
 	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
@@ -338,27 +338,27 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
-    warnedOneKnob := false
-    for step := 0; step < cfg.maxSteps; step++ {
+	warnedOneKnob := false
+	for step := 0; step < cfg.maxSteps; step++ {
 		req := oai.ChatCompletionsRequest{
 			Model:    cfg.model,
 			Messages: messages,
 		}
-        // One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
-        if cfg.topP > 0 {
-            // Set top_p in the request payload
-            topP := cfg.topP
-            req.TopP = &topP
-            if !warnedOneKnob {
-                safeFprintln(stderr, "warning: -top-p is set; omitting temperature per one-knob rule")
-                warnedOneKnob = true
-            }
-        } else {
-            // Include temperature only when supported by the target model.
-            if oai.SupportsTemperature(cfg.model) {
-                req.Temperature = &cfg.temperature
-            }
-        }
+		// One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
+		if cfg.topP > 0 {
+			// Set top_p in the request payload
+			topP := cfg.topP
+			req.TopP = &topP
+			if !warnedOneKnob {
+				safeFprintln(stderr, "warning: -top-p is set; omitting temperature per one-knob rule")
+				warnedOneKnob = true
+			}
+		} else {
+			// Include temperature only when supported by the target model.
+			if oai.SupportsTemperature(cfg.model) {
+				req.Temperature = &cfg.temperature
+			}
+		}
 		if len(oaiTools) > 0 {
 			req.Tools = oaiTools
 			req.ToolChoice = "auto"
@@ -561,8 +561,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
 	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
-    b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
-    b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
+	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
+	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")

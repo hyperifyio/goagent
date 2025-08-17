@@ -1,8 +1,8 @@
 package oai
 
 import (
-    "encoding/json"
-    "strings"
+	"encoding/json"
+	"strings"
 )
 
 // Message roles
@@ -51,14 +51,14 @@ type ToolFunction struct {
 // ChatCompletionsRequest is the payload for POST /v1/chat/completions
 // Compatible with OpenAI API.
 type ChatCompletionsRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	ToolChoice  string    `json:"tool_choice,omitempty"`
-    // TopP enables nucleus sampling when provided. One‑knob rule ensures either
-    // top_p or temperature is set, but never both.
-    TopP        *float64  `json:"top_p,omitempty"`
-	Temperature *float64  `json:"temperature,omitempty"`
+	Model      string    `json:"model"`
+	Messages   []Message `json:"messages"`
+	Tools      []Tool    `json:"tools,omitempty"`
+	ToolChoice string    `json:"tool_choice,omitempty"`
+	// TopP enables nucleus sampling when provided. One‑knob rule ensures either
+	// top_p or temperature is set, but never both.
+	TopP        *float64 `json:"top_p,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
 }
 
 // includesTemperature reports whether the request currently has a temperature set.
@@ -67,12 +67,12 @@ func includesTemperature(req ChatCompletionsRequest) bool { return req.Temperatu
 // mentionsUnsupportedTemperature detects common API error messages indicating
 // that the temperature parameter is invalid or unsupported for the model.
 func mentionsUnsupportedTemperature(body string) bool {
-    s := strings.ToLower(body)
-    if s == "" {
-        return false
-    }
-    return (strings.Contains(s, "unsupported") && strings.Contains(s, "temperature")) ||
-        (strings.Contains(s, "invalid") && strings.Contains(s, "temperature"))
+	s := strings.ToLower(body)
+	if s == "" {
+		return false
+	}
+	return (strings.Contains(s, "unsupported") && strings.Contains(s, "temperature")) ||
+		(strings.Contains(s, "invalid") && strings.Contains(s, "temperature"))
 }
 
 // ChatCompletionsResponse represents the response for chat completions.
