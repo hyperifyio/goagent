@@ -584,6 +584,11 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) error 
         Model:    cfg.model,
         Messages: messages,
     }
+    // Pre-flight validate message sequence to avoid API 400s for stray tool messages
+    if err := oai.ValidateMessageSequence(req.Messages); err != nil {
+        safeFprintf(stderr, "error: prep invalid message sequence: %v\n", err)
+        return err
+    }
     if cfg.prepTopP > 0 {
         topP := cfg.prepTopP
         req.TopP = &topP

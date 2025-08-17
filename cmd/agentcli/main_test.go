@@ -326,6 +326,36 @@ func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {
     }
 }
 
+// Pre-stage validator: a stray role:"tool" in the pre-stage input must be rejected
+// before sending the prep HTTP call, mirroring the main-loop validator behavior.
+func TestPrepValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
+    called := false
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        called = true
+        t.Fatal("prep server should not be called when pre-stage validation fails")
+    }))
+    defer srv.Close()
+
+    // Messages contain a stray tool message without a prior assistant tool_calls
+    msgs := []oai.Message{
+        {Role: oai.RoleUser, Content: "hi"},
+        {Role: oai.RoleTool, Name: "echo", ToolCallID: "1", Content: "{\"echo\":\"hi\"}"},
+    }
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 200 * time.Millisecond, httpRetries: 0}
+    var errBuf bytes.Buffer
+    err := runPreStage(cfg, msgs, &errBuf)
+    if err == nil {
+        t.Fatalf("expected error due to pre-stage validation failure; stderr=%q", errBuf.String())
+    }
+    if called {
+        t.Fatalf("HTTP server was contacted despite pre-stage validation failure")
+    }
+    if !strings.Contains(errBuf.String(), "prep invalid message sequence") {
+        t.Fatalf("stderr should mention prep invalid message sequence; got: %q", errBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/289
 // When -top-p is provided, temperature must be omitted and a one-line warning printed.
 func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {

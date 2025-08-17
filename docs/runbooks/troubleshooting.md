@@ -162,7 +162,7 @@ make tidy build build-tools
 
 ## Invalid tool message sequencing
 - Symptom: the CLI exits with an error like:
-  - `error: invalid message sequence at index N: found role:"tool" without a prior assistant message containing tool_calls; each tool message must respond to an assistant tool call id`
-  - or: `error: invalid message sequence at index N: role:"tool" has tool_call_id "..." that does not match any id from the most recent assistant tool_calls`
+- `error: invalid message sequence at index N: found role:"tool" without a prior assistant message containing tool_calls; each tool message must respond to an assistant tool call id`
+- or: `error: invalid message sequence at index N: role:"tool" has tool_call_id "..." that does not match any id from the most recent assistant tool_calls`
 - Cause: a tool result message was appended without a preceding assistant message that requested tool calls, or the `tool_call_id` does not match the most recent assistant `tool_calls` ids.
-- Fix: ensure the message flow strictly follows: assistant with `tool_calls[]` → one tool message per `tool_call_id` → assistant. Do not emit standalone tool messages. The CLI enforces this pre-flight and will refuse to send an invalid transcript to the API.
+- Fix: ensure the message flow strictly follows: assistant with `tool_calls[]` → one tool message per `tool_call_id` → assistant. Do not emit standalone tool messages. The CLI enforces this pre-flight and will refuse to send an invalid transcript to the API. This validator runs for both the main loop and the pre-stage (prep) call; errors during pre-stage may appear as `prep invalid message sequence`.
