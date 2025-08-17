@@ -184,26 +184,38 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
-	// Handle help flags prior to any parsing/validation or side effects
-	if helpRequested(os.Args[1:]) {
-		printUsage(os.Stdout)
-		os.Exit(0)
-	}
-	cfg, exitOn := parseFlags()
-	if exitOn != 0 {
-		safeFprintln(os.Stderr, "error: -prompt is required")
-		os.Exit(exitOn)
-	}
-	if cfg.printConfig {
-		code := printResolvedConfig(cfg, os.Stdout)
-		os.Exit(code)
-	}
-	if cfg.capabilities {
-		code := printCapabilities(cfg, os.Stdout, os.Stderr)
-		os.Exit(code)
-	}
-	code := runAgent(cfg, os.Stdout, os.Stderr)
-	os.Exit(code)
+    os.Exit(cliMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// cliMain is a testable entrypoint for the CLI. It accepts argv (excluding program name)
+// and writers for stdout/stderr, returns the intended process exit code, and performs
+// no global side effects beyond temporarily setting os.Args for flag parsing.
+func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
+    // Handle help flags prior to any parsing/validation or side effects
+    if helpRequested(args) {
+        printUsage(stdout)
+        return 0
+    }
+
+    // Temporarily set os.Args so parseFlags() (which reads os.Args) sees our args
+    origArgs := os.Args
+    os.Args = append([]string{origArgs[0]}, args...)
+    defer func() { os.Args = origArgs }()
+
+    cfg, exitOn := parseFlags()
+    if exitOn != 0 {
+        safeFprintln(stderr, "error: -prompt is required")
+        // Also print usage synopsis for guidance on missing required flag
+        printUsage(stderr)
+        return exitOn
+    }
+    if cfg.printConfig {
+        return printResolvedConfig(cfg, stdout)
+    }
+    if cfg.capabilities {
+        return printCapabilities(cfg, stdout, stderr)
+    }
+    return runAgent(cfg, stdout, stderr)
 }
 
 // runAgent executes the non-interactive agent loop and returns a process exit code.
