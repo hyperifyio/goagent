@@ -39,7 +39,7 @@ TOOLS := \
   fs_listdir \
   fs_stat
 
-.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version install-golangci
+.PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint lint-precheck fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version install-golangci
 
 tidy:
 	$(GO) mod tidy
@@ -164,6 +164,8 @@ lint:
 	@$(MAKE) check-go-version
 	@set -euo pipefail; \
 		LINTBIN="$(GOBIN)/golangci-lint$(EXE)"; \
+	# Fail fast if an existing linter is too old relative to MIN
+	$(MAKE) -s lint-precheck; \
 	NEED_INSTALL=0; \
 	if [ ! -x "$$LINTBIN" ]; then \
 	  NEED_INSTALL=1; \
@@ -182,6 +184,29 @@ lint:
 	$(MAKE) ensure-rg; \
 	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) check-tools-paths; \
 	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) verify-manifest-paths
+
+# Fail fast when golangci-lint is older than the minimum supported version
+# Usage: make lint-precheck
+lint-precheck:
+	@set -euo pipefail; \
+	LINTBIN="$(GOBIN)/golangci-lint$(EXE)"; \
+	MIN="v1.60.0"; \
+	if [ ! -x "$$LINTBIN" ]; then \
+	  # Not installed yet; installation in the lint target will handle it \
+	  echo "lint-precheck: $$LINTBIN not found; will install $(GOLANGCI_LINT_VERSION)"; \
+	  exit 0; \
+	fi; \
+	GCL="$$($$LINTBIN version | sed -nE 's/.*version ([v0-9\.]+).*/\1/p')"; \
+	if [ -z "$$GCL" ]; then \
+	  echo "lint-precheck: unable to parse golangci-lint version from '$$($$LINTBIN version | head -n1)'"; \
+	  exit 2; \
+	fi; \
+	MAX_VER="$$(printf '%s\n%s\n' "$$GCL" "$$MIN" | sort -V | tail -n1)"; \
+	if [ "$$MAX_VER" != "$$GCL" ]; then \
+	  echo "golangci-lint $$GCL < $$MIN with Go $$(go version) — update GOLANGCI_LINT_VERSION"; \
+	  exit 2; \
+	fi; \
+	echo "lint-precheck: OK (golangci-lint $$GCL >= $$MIN)"
 
 ## Pin ripgrep for optional local, non-root install when missing
 RG_VERSION ?= 14.1.0
