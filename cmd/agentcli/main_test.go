@@ -192,6 +192,88 @@ func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/289
+// When -top-p is provided, temperature must be omitted and a one-line warning printed.
+func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
+    // Fake server to capture request
+    var seenTemp *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("decode: %v", err)
+        }
+        seenTemp = req.Temperature
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    // Run with -top-p set and ensure temp omitted and warning emitted
+    var outBuf, errBuf bytes.Buffer
+    code := cliMain([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-top-p", "0.9"}, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if seenTemp != nil {
+        t.Fatalf("expected temperature to be omitted when -top-p is set")
+    }
+    if !strings.Contains(errBuf.String(), "omitting temperature per one-knob rule") {
+        t.Fatalf("expected one-knob warning on stderr; got: %q", errBuf.String())
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/285
+// Precedence: flag -temp > env LLM_TEMPERATURE > default 1.0
+func TestTemperaturePrecedence_FlagThenEnvThenDefault(t *testing.T) {
+    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+    restore := func(k, v string, ok bool) {
+        if ok {
+            _ = os.Setenv(k, v)
+        } else {
+            _ = os.Unsetenv(k)
+        }
+    }
+    envVal, envOK := save("LLM_TEMPERATURE")
+    defer restore("LLM_TEMPERATURE", envVal, envOK)
+
+    // Case: env only
+    if err := os.Setenv("LLM_TEMPERATURE", "0.7"); err != nil {
+        t.Fatalf("set env: %v", err)
+    }
+    orig := os.Args
+    defer func() { os.Args = orig }()
+    os.Args = []string{"agentcli.test", "-prompt", "x"}
+    cfg, code := parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    if cfg.temperature != 0.7 {
+        t.Fatalf("env should set temperature=0.7; got %v", cfg.temperature)
+    }
+
+    // Case: flag overrides env
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-temp", "0.4"}
+    cfg, code = parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    if cfg.temperature != 0.4 {
+        t.Fatalf("flag should override env; got %v", cfg.temperature)
+    }
+
+    // Case: default when env unset and no flag
+    if err := os.Unsetenv("LLM_TEMPERATURE"); err != nil {
+        t.Fatalf("unset env: %v", err)
+    }
+    os.Args = []string{"agentcli.test", "-prompt", "x"}
+    cfg, code = parseFlags()
+    if code != 0 {
+        t.Fatalf("parse exit: %d", code)
+    }
+    if cfg.temperature != 1.0 {
+        t.Fatalf("default temperature should be 1.0; got %v", cfg.temperature)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/214
 func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 	// Capture stdout
