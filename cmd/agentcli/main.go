@@ -65,6 +65,18 @@ type cliConfig struct {
     // Sources for sampling knobs
     temperatureSource string // "flag" | "env" | "default"
     prepTopPSource    string // "flag" | "inherit"
+    // Pre-stage explicit overrides
+    prepModel              string
+    prepBaseURL            string
+    prepAPIKey             string
+    prepHTTPRetries        int
+    prepHTTPBackoff        time.Duration
+    // Sources for prep overrides
+    prepModelSource        string // "flag" | "env" | "inherit"
+    prepBaseURLSource      string // "flag" | "env" | "inherit"
+    prepAPIKeySource       string // "flag" | "env:OAI_PREP_API_KEY|env:OAI_API_KEY|env:OPENAI_API_KEY" | "inherit|empty"
+    prepHTTPRetriesSource  string // "flag" | "env" | "inherit"
+    prepHTTPBackoffSource  string // "flag" | "env" | "inherit"
 	// initMessages allows tests to inject a custom starting transcript to
 	// exercise pre-flight validation paths (e.g., stray tool message). When
 	// empty, the default [system,user] seed is used.
@@ -215,12 +227,18 @@ func parseFlags() (cliConfig, int) {
 	})()
 
 	// Nucleus sampling (one-knob with temperature). Not yet sent to API; used to gate temperature.
-	flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
+    flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
     // Pre-stage nucleus sampling (one-knob with temperature for pre-stage)
     flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (conflicts with temperature)")
     // Pre-stage profile selector (deterministic|general|creative|reasoning)
     var prepProfileRaw string
     flag.StringVar(&prepProfileRaw, "prep-profile", "", "Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)")
+    // Pre-stage explicit overrides
+    flag.StringVar(&cfg.prepModel, "prep-model", "", "Pre-stage model ID (env OAI_PREP_MODEL; inherits -model if unset)")
+    flag.StringVar(&cfg.prepBaseURL, "prep-base-url", "", "Pre-stage base URL (env OAI_PREP_BASE_URL; inherits -base-url if unset)")
+    flag.StringVar(&cfg.prepAPIKey, "prep-api-key", "", "Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)")
+    flag.IntVar(&cfg.prepHTTPRetries, "prep-http-retries", 0, "Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)")
+    flag.DurationVar(&cfg.prepHTTPBackoff, "prep-http-retry-backoff", 0, "Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
     flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
@@ -300,7 +318,75 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-	// Set source labels
+    // Resolve prep overrides precedence: flag > env OAI_PREP_* > inherit main-call
+    // Model
+    if strings.TrimSpace(cfg.prepModel) != "" {
+        cfg.prepModelSource = "flag"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_PREP_MODEL")); v != "" {
+        cfg.prepModel = v
+        cfg.prepModelSource = "env"
+    } else {
+        cfg.prepModel = cfg.model
+        cfg.prepModelSource = "inherit"
+    }
+    // Base URL
+    if strings.TrimSpace(cfg.prepBaseURL) != "" {
+        cfg.prepBaseURLSource = "flag"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_PREP_BASE_URL")); v != "" {
+        cfg.prepBaseURL = v
+        cfg.prepBaseURLSource = "env"
+    } else {
+        cfg.prepBaseURL = cfg.baseURL
+        cfg.prepBaseURLSource = "inherit"
+    }
+    // API key
+    if strings.TrimSpace(cfg.prepAPIKey) != "" {
+        cfg.prepAPIKeySource = "flag"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_PREP_API_KEY")); v != "" {
+        cfg.prepAPIKey = v
+        cfg.prepAPIKeySource = "env:OAI_PREP_API_KEY"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_API_KEY")); v != "" {
+        cfg.prepAPIKey = v
+        cfg.prepAPIKeySource = "env:OAI_API_KEY"
+    } else if v := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); v != "" {
+        cfg.prepAPIKey = v
+        cfg.prepAPIKeySource = "env:OPENAI_API_KEY"
+    } else {
+        cfg.prepAPIKey = cfg.apiKey
+        if strings.TrimSpace(cfg.apiKey) != "" {
+            cfg.prepAPIKeySource = "inherit"
+        } else {
+            cfg.prepAPIKeySource = "empty"
+        }
+    }
+    // HTTP retries
+    if cfg.prepHTTPRetries > 0 {
+        cfg.prepHTTPRetriesSource = "flag"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_PREP_HTTP_RETRIES")); v != "" {
+        if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+            cfg.prepHTTPRetries = n
+            cfg.prepHTTPRetriesSource = "env"
+        }
+    }
+    if cfg.prepHTTPRetries == 0 {
+        cfg.prepHTTPRetries = cfg.httpRetries
+        if cfg.prepHTTPRetriesSource == "" { cfg.prepHTTPRetriesSource = "inherit" }
+    }
+    // HTTP retry backoff
+    if cfg.prepHTTPBackoff > 0 {
+        cfg.prepHTTPBackoffSource = "flag"
+    } else if v := strings.TrimSpace(os.Getenv("OAI_PREP_HTTP_RETRY_BACKOFF")); v != "" {
+        if d, err := parseDurationFlexible(v); err == nil && d > 0 {
+            cfg.prepHTTPBackoff = d
+            cfg.prepHTTPBackoffSource = "env"
+        }
+    }
+    if cfg.prepHTTPBackoff == 0 {
+        cfg.prepHTTPBackoff = cfg.httpBackoff
+        if cfg.prepHTTPBackoffSource == "" { cfg.prepHTTPBackoffSource = "inherit" }
+    }
+
+    // Set source labels
 	if httpSet {
 		cfg.httpTimeoutSource = "flag"
 	} else if httpEnvUsed {
@@ -739,21 +825,28 @@ func dumpJSONIfDebug(w io.Writer, label string, v any, debug bool) {
 // one tool message per id to the returned transcript. The function uses
 // cfg.prepHTTPTimeout for its HTTP budget.
 func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai.Message, error) {
-    // Resolve pre-stage overrides from env: OAI_PREP_* > inherit main
+    // Resolve pre-stage overrides with robust fallbacks so tests that construct cfg directly still work
     prepModel := func() string {
+        if v := strings.TrimSpace(cfg.prepModel); v != "" { return v }
         if v := strings.TrimSpace(os.Getenv("OAI_PREP_MODEL")); v != "" { return v }
         return cfg.model
     }()
     prepBaseURL := func() string {
+        if v := strings.TrimSpace(cfg.prepBaseURL); v != "" { return v }
         if v := strings.TrimSpace(os.Getenv("OAI_PREP_BASE_URL")); v != "" { return v }
         return cfg.baseURL
     }()
     prepAPIKey := func() string {
+        if v := strings.TrimSpace(cfg.prepAPIKey); v != "" { return v }
         if v := strings.TrimSpace(os.Getenv("OAI_PREP_API_KEY")); v != "" { return v }
         if v := strings.TrimSpace(os.Getenv("OAI_API_KEY")); v != "" { return v }
         if v := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); v != "" { return v }
         return cfg.apiKey
     }()
+    retries := cfg.prepHTTPRetries
+    if retries <= 0 { retries = cfg.httpRetries }
+    backoff := cfg.prepHTTPBackoff
+    if backoff == 0 { backoff = cfg.httpBackoff }
 
     // Compute pre-stage sampling effective knobs for cache key
     var (
@@ -814,7 +907,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         req.Temperature = effectiveTemp
     }
     // Create a dedicated client honoring pre-stage timeout and normal retry policy
-    httpClient := oai.NewClientWithRetry(prepBaseURL, prepAPIKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
+    httpClient := oai.NewClientWithRetry(prepBaseURL, prepAPIKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: retries, Backoff: backoff})
     dumpJSONIfDebug(stderr, "prep.request", req, cfg.debug)
     // Tag context with audit stage so HTTP audit lines include stage: "prep"
     ctx, cancel := context.WithTimeout(oai.WithAuditStage(context.Background(), "prep"), cfg.prepHTTPTimeout)
@@ -1082,6 +1175,11 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
     b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
     b.WriteString("  -prep-profile string\n    Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)\n")
+    b.WriteString("  -prep-model string\n    Pre-stage model ID (env OAI_PREP_MODEL; inherits -model if unset)\n")
+    b.WriteString("  -prep-base-url string\n    Pre-stage base URL (env OAI_PREP_BASE_URL; inherits -base-url if unset)\n")
+    b.WriteString("  -prep-api-key string\n    Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)\n")
+    b.WriteString("  -prep-http-retries int\n    Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)\n")
+    b.WriteString("  -prep-http-retry-backoff duration\n    Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)\n")
     b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
     b.WriteString("  -verbose\n    Also print non-final assistant channels (critic/confidence) to stderr\n")
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
@@ -1174,31 +1272,12 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	}
 
     // Resolve prep-specific view for printing: env OAI_PREP_* > inherit from main
-    resolvePrepAPIKey := func() (present bool, source string) {
-        if v := strings.TrimSpace(os.Getenv("OAI_PREP_API_KEY")); v != "" {
-            return true, "env:OAI_PREP_API_KEY"
-        }
-        if v := strings.TrimSpace(os.Getenv("OAI_API_KEY")); v != "" {
-            return true, "env:OAI_API_KEY"
-        }
-        if v := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); v != "" {
-            return true, "env:OPENAI_API_KEY"
-        }
-        return false, "empty"
-    }
-    prepModel, prepModelSource := func() (string, string) {
-        if v := strings.TrimSpace(os.Getenv("OAI_PREP_MODEL")); v != "" {
-            return v, "env"
-        }
-        return cfg.model, "inherit"
-    }()
-    prepBase, prepBaseSource := func() (string, string) {
-        if v := strings.TrimSpace(os.Getenv("OAI_PREP_BASE_URL")); v != "" {
-            return v, "env"
-        }
-        return cfg.baseURL, "inherit"
-    }()
-    apiKeyPresent, apiKeySource := resolvePrepAPIKey()
+    // Use resolved cfg prep fields and sources
+    prepModel, prepModelSource := cfg.prepModel, cfg.prepModelSource
+    prepBase, prepBaseSource := cfg.prepBaseURL, cfg.prepBaseURLSource
+    var apiKeyPresent bool
+    apiKeySource := cfg.prepAPIKeySource
+    if strings.TrimSpace(cfg.prepAPIKey) != "" { apiKeyPresent = true } else { apiKeyPresent = false }
 
     // Resolve sampling for prep: one-knob behavior
     var prepTempStr, prepTempSource, prepTopPStr, prepTopPSource string
@@ -1233,10 +1312,10 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
         "apiKeySource":        apiKeySource,
         "httpTimeout":         cfg.prepHTTPTimeout.String(),
         "httpTimeoutSource":   cfg.prepHTTPTimeoutSource,
-        "httpRetries":         cfg.httpRetries,
-        "httpRetriesSource":   "inherit",
-        "httpRetryBackoff":    cfg.httpBackoff.String(),
-        "httpRetryBackoffSource": "inherit",
+        "httpRetries":         cfg.prepHTTPRetries,
+        "httpRetriesSource":   cfg.prepHTTPRetriesSource,
+        "httpRetryBackoff":    cfg.prepHTTPBackoff.String(),
+        "httpRetryBackoffSource": cfg.prepHTTPBackoffSource,
         "sampling": map[string]any{
             "temperature":       prepTempStr,
             "temperatureSource": prepTempSource,

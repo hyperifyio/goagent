@@ -25,6 +25,11 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
 - `-prep-top-p float`: Pre-stage nucleus sampling probability mass (conflicts with `-temp`; when set, pre-stage omits temperature and sends `top_p`)
 - `-prep-profile string`: Pre-stage prompt profile (`deterministic|general|creative|reasoning`); sets temperature when supported (conflicts with `-prep-top-p`)
+- `-prep-model string`: Pre-stage model ID (env `OAI_PREP_MODEL`; inherits `-model` if unset)
+- `-prep-base-url string`: Pre-stage base URL (env `OAI_PREP_BASE_URL`; inherits `-base-url` if unset)
+- `-prep-api-key string`: Pre-stage API key (env `OAI_PREP_API_KEY`; falls back to `OAI_API_KEY`/`OPENAI_API_KEY`; inherits `-api-key` if unset)
+- `-prep-http-retries int`: Pre-stage HTTP retries (env `OAI_PREP_HTTP_RETRIES`; inherits `-http-retries` if unset)
+- `-prep-http-retry-backoff duration`: Pre-stage HTTP retry backoff (env `OAI_PREP_HTTP_RETRY_BACKOFF`; inherits `-http-retry-backoff` if unset)
 - `-prep-cache-bust`: Skip pre-stage cache and force recompute
 - `-prep-enabled`: Enable pre-stage processing (default true). When false, pre-stage is skipped and the agent proceeds directly with the original `{system,user}` messages.
 - `-debug`: Dump request/response JSON to stderr

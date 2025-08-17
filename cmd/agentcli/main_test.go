@@ -1179,11 +1179,77 @@ func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
 		"\"toolTimeout\": ",
 		"\"timeout\": ",
 		"\"timeoutSource\": ",
+        "\"httpRetries\": ",
+        "\"httpRetryBackoff\": ",
 	} {
 		if !strings.Contains(got, substr) {
 			t.Fatalf("print-config missing %q; got:\n%s", substr, got)
 		}
 	}
+}
+
+func TestPrepOverrides_Precedence_FlagThenEnvThenInherit(t *testing.T) {
+    t.Setenv("OAI_PREP_MODEL", "env-model")
+    t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
+    t.Setenv("OAI_PREP_API_KEY", "env-key")
+    t.Setenv("OAI_PREP_HTTP_RETRIES", "5")
+    t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "750ms")
+
+    orig := os.Args
+    defer func(){ os.Args = orig }()
+    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base", "-api-key", "k",
+        "-prep-model", "flag-model", "-prep-base-url", "http://flag-base", "-prep-api-key", "flag-key",
+        "-prep-http-retries", "7", "-prep-http-retry-backoff", "900ms"}
+
+    cfg, code := parseFlags()
+    if code != 0 { t.Fatalf("parse exit: %d", code) }
+
+    var out bytes.Buffer
+    if exit := printResolvedConfig(cfg, &out); exit != 0 { t.Fatalf("exit %d", exit) }
+    got := out.String()
+    for _, want := range []string{
+        "\"prep\": ",
+        "\"model\": \"flag-model\"",
+        "\"baseURL\": \"http://flag-base\"",
+        "\"apiKeyPresent\": true",
+        "\"httpRetries\": 7",
+        "\"httpRetryBackoff\": \"900ms\"",
+    } {
+        if !strings.Contains(got, want) {
+            t.Fatalf("print-config missing %q; got:\n%s", want, got)
+        }
+    }
+}
+
+func TestPrepOverrides_EnvWhenNoFlags(t *testing.T) {
+    t.Setenv("OAI_PREP_MODEL", "env-model")
+    t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
+    t.Setenv("OAI_PREP_API_KEY", "env-key")
+    t.Setenv("OAI_PREP_HTTP_RETRIES", "4")
+    t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "550ms")
+
+    orig := os.Args
+    defer func(){ os.Args = orig }()
+    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base"}
+    cfg, code := parseFlags()
+    if code != 0 { t.Fatalf("parse exit: %d", code) }
+    var out bytes.Buffer
+    if exit := printResolvedConfig(cfg, &out); exit != 0 { t.Fatalf("exit %d", exit) }
+    got := out.String()
+    for _, want := range []string{
+        "\"prep\": ",
+        "\"modelSource\": \"env\"",
+        "\"baseURLSource\": \"env\"",
+        "\"apiKeySource\": \"env:OAI_PREP_API_KEY\"",
+        "\"httpRetriesSource\": \"env\"",
+        "\"httpRetryBackoffSource\": \"env\"",
+        "\"httpRetries\": 4",
+        "\"httpRetryBackoff\": \"550ms\"",
+    } {
+        if !strings.Contains(got, want) {
+            t.Fatalf("print-config missing %q; got:\n%s", want, got)
+        }
+    }
 }
 
 // https://github.com/hyperifyio/goagent/issues/1

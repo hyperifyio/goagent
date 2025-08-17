@@ -166,6 +166,11 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
                        terminates with: "needs human review".
 -http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
 -prep-http-timeout duration HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; default falls back to -http-timeout)
+-prep-model string      Pre-stage model ID (env OAI_PREP_MODEL; inherits -model if unset)
+-prep-base-url string   Pre-stage base URL (env OAI_PREP_BASE_URL; inherits -base-url if unset)
+-prep-api-key string    Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)
+-prep-http-retries int  Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)
+-prep-http-retry-backoff duration Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)
 -http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx). Uses jittered exponential backoff. (default 2)
 -http-retry-backoff duration Base backoff between HTTP retry attempts (exponential with jitter). (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
