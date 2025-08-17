@@ -1,15 +1,15 @@
 package oai
 
 import (
-    "context"
-    "encoding/json"
-    "net/http"
-    "net/http/httptest"
-    "os"
-    "path/filepath"
-    "strings"
-    "testing"
-    "time"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
 )
 
 // waitForAuditFile polls the audit directory until a file appears or timeout elapses.
@@ -57,18 +57,24 @@ func findRepoRoot(t *testing.T) string {
 func TestObservabilityTemperatureAudit(t *testing.T) {
 	// Clean audit dir at repo root
 	root := findRepoRoot(t)
-	_ = os.RemoveAll(filepath.Join(root, ".goagent"))
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+		t.Logf("cleanup: %v", err)
+	}
 
 	// Fake server to accept request and return minimal success
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
 		// Read and discard, but ensure it is valid JSON
 		var req ChatCompletionsRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
+		if cerr := r.Body.Close(); cerr != nil {
+			t.Logf("close body: %v", cerr)
+		}
 		resp := ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}}
-		_ = json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -76,8 +82,8 @@ func TestObservabilityTemperatureAudit(t *testing.T) {
 	model := "oss-gpt-20b"
 	temp := 0.7
 	req := ChatCompletionsRequest{
-		Model:    model,
-		Messages: []Message{{Role: RoleUser, Content: "hi"}},
+		Model:       model,
+		Messages:    []Message{{Role: RoleUser, Content: "hi"}},
 		Temperature: &temp,
 	}
 
