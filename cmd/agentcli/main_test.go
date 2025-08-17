@@ -197,12 +197,14 @@ func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
 func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
     // Fake server to capture request
     var seenTemp *float64
+    var seenTopP *float64
     srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         var req oai.ChatCompletionsRequest
         if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
             t.Fatalf("decode: %v", err)
         }
         seenTemp = req.Temperature
+        seenTopP = req.TopP
         _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
     }))
     defer srv.Close()
@@ -215,6 +217,12 @@ func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
     }
     if seenTemp != nil {
         t.Fatalf("expected temperature to be omitted when -top-p is set")
+    }
+    if seenTopP == nil || *seenTopP != 0.9 {
+        if seenTopP == nil {
+            t.Fatalf("expected top_p to be set when -top-p is provided")
+        }
+        t.Fatalf("expected top_p=0.9, got %v", *seenTopP)
     }
     if !strings.Contains(errBuf.String(), "omitting temperature per one-knob rule") {
         t.Fatalf("expected one-knob warning on stderr; got: %q", errBuf.String())

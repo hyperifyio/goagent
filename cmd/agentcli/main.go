@@ -344,8 +344,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			Model:    cfg.model,
 			Messages: messages,
 		}
-        // One-knob rule: if -top-p is set, omit temperature and warn once.
+        // One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
         if cfg.topP > 0 {
+            // Set top_p in the request payload
+            topP := cfg.topP
+            req.TopP = &topP
             if !warnedOneKnob {
                 safeFprintln(stderr, "warning: -top-p is set; omitting temperature per one-knob rule")
                 warnedOneKnob = true

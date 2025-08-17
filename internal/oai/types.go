@@ -55,6 +55,9 @@ type ChatCompletionsRequest struct {
 	Messages    []Message `json:"messages"`
 	Tools       []Tool    `json:"tools,omitempty"`
 	ToolChoice  string    `json:"tool_choice,omitempty"`
+    // TopP enables nucleus sampling when provided. One‑knob rule ensures either
+    // top_p or temperature is set, but never both.
+    TopP        *float64  `json:"top_p,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`
 }
 

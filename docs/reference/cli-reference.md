@@ -17,7 +17,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-tool-timeout duration`: Per-tool timeout (falls back to `-timeout` if unset)
 - `-timeout duration`: [DEPRECATED] Global timeout; prefer `-http-timeout` and `-tool-timeout` (default 30s)
 - `-temp float`: Sampling temperature (default 1.0; omitted for models that do not support it)
-- `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule)
+- `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
 - `-debug`: Dump request/response JSON to stderr
 - `-capabilities`: Print enabled tools and exit
 - `-print-config`: Print resolved config and exit
@@ -39,5 +39,5 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 
 ## Notes
 
-- Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted and a one-line warning is printed to stderr.
+- Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted, `top_p` is included, and a one-line warning is printed to stderr.
 - Tools are executed via argv only with JSON stdin/stdout and strict timeouts; no shell is used.
