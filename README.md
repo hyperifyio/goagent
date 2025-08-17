@@ -19,6 +19,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive “too
   - [Capabilities](#capabilities)
 - [Examples](#examples)
   - [Exec tool](#exec-tool)
+  - [Tool calls](#tool-calls)
   - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
   - [fs_read_file](#fs_read_file)
   - [fs_append_file](#fs_append_file)
@@ -172,6 +173,37 @@ List the enabled tools from a manifest without running the agent:
 
 ## Examples
 ### Exec tool
+### Tool calls
+Minimal JSON transcript showing correct tool-call sequencing:
+```json
+[
+  {"role":"user","content":"What's the local time in Helsinki?"},
+  {
+    "role":"assistant",
+    "content":null,
+    "tool_calls":[
+      {
+        "id":"call_get_time_1",
+        "type":"function",
+        "function":{
+          "name":"get_time",
+          "arguments":"{\"timezone\":\"Europe/Helsinki\"}"
+        }
+      }
+    ]
+  },
+  {
+    "role":"tool",
+    "tool_call_id":"call_get_time_1",
+    "name":"get_time",
+    "content":"{\"timezone\":\"Europe/Helsinki\",\"iso\":\"2025-08-17T12:34:56Z\",\"unix\":1755424496}"
+  },
+  {"role":"assistant","content":"It's 15:34 in Helsinki."}
+]
+```
+Notes:
+- For parallel tool calls (multiple entries in `tool_calls`), append one `role:"tool"` message per `id` before calling the API again. Order of tool messages is not significant as long as each `tool_call_id` is present exactly once.
+
 ### Worked example: tool calls and transcript
 See `examples/tool_calls.md` for a self-contained, test-driven worked example that:
 - Exercises default temperature 1.0
