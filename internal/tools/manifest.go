@@ -53,11 +53,11 @@ func LoadManifest(manifestPath string) (map[string]ToolSpec, []oai.Tool, error) 
 		// S52/S30: Harden command[0] validation. For any relative program path,
 		// enforce the canonical tools bin prefix and prevent path escapes.
 		cmd0 := t.Command[0]
-		if !filepath.IsAbs(cmd0) {
-			// Normalize separators first (convert backslashes to slashes cross‑platform),
-			// then apply a platform-agnostic clean.
-			raw := strings.ReplaceAll(cmd0, "\\", "/")
-			norm := path.Clean(raw)
+        if !filepath.IsAbs(cmd0) {
+            // Normalize separators: convert backslashes to slashes (works cross‑platform)
+            // and then perform a platform-agnostic clean. Finally, ensure forward slashes.
+            raw := strings.ReplaceAll(cmd0, "\\", "/")
+            norm := filepath.ToSlash(path.Clean(raw))
 			// Normalize to a consistent leading ./ for prefix checks
 			if strings.HasPrefix(norm, "tools/") || norm == "tools" {
 				norm = "./" + norm
