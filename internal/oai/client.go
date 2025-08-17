@@ -85,6 +85,8 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
     var lastErr error
     // Allow a single parameter-recovery retry without consuming the normal retry budget
     recoveryGranted := false
+    // Emit a meta audit entry capturing observability fields derived from the request
+    emitChatMetaAudit(req)
 	// Generate a stable Idempotency-Key used across all attempts
 	idemKey := generateIdempotencyKey()
 	for attempt := 0; attempt < attempts; attempt++ {
@@ -395,6 +397,38 @@ func logHTTPTiming(attempt int, endpoint string, status int, start time.Time, dn
 	}
 }
 
+// emitChatMetaAudit writes a one-line NDJSON entry describing request-level
+// observability fields such as the effective temperature and whether the
+// temperature parameter is included in the payload for the target model.
+func emitChatMetaAudit(req ChatCompletionsRequest) {
+    // Compute effective temperature based on model support and clamp rules.
+    effectiveTemp, supported := EffectiveTemperatureForModel(req.Model, valueOrDefault(req.Temperature, 1.0))
+    type meta struct {
+        TS                       string  `json:"ts"`
+        Event                    string  `json:"event"`
+        Model                    string  `json:"model"`
+        TemperatureEffective     float64 `json:"temperature_effective"`
+        TemperatureInPayload     bool    `json:"temperature_in_payload"`
+    }
+    entry := meta{
+        TS:                   time.Now().UTC().Format(time.RFC3339Nano),
+        Event:                "chat_meta",
+        Model:                req.Model,
+        TemperatureEffective: effectiveTemp,
+        TemperatureInPayload: supported && req.Temperature != nil,
+    }
+    if err := appendAuditLog(entry); err != nil {
+        _ = err
+    }
+}
+
+func valueOrDefault(ptr *float64, def float64) float64 {
+    if ptr == nil {
+        return def
+    }
+    return *ptr
+}
+
 // classifyHTTPCause returns a short cause label for audit based on error/context.
 func classifyHTTPCause(ctx context.Context, err error) string {
 	if err == nil {
@@ -431,7 +465,8 @@ func appendAuditLog(entry any) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(".goagent", "audit")
+	root := moduleRoot()
+	dir := filepath.Join(root, ".goagent", "audit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -450,4 +485,25 @@ func appendAuditLog(entry any) error {
 		return err
 	}
 	return nil
+}
+
+// moduleRoot walks upward from the current working directory to locate the directory
+// containing go.mod. If none is found, it returns the current working directory.
+func moduleRoot() string {
+    cwd, err := os.Getwd()
+    if err != nil || cwd == "" {
+        return "."
+    }
+    dir := cwd
+    for {
+        if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+            return dir
+        }
+        parent := filepath.Dir(dir)
+        if parent == dir {
+            // Reached filesystem root; fallback to original cwd
+            return cwd
+        }
+        dir = parent
+    }
 }
