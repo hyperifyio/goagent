@@ -144,6 +144,8 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -api-key string        API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)
 -model string          Model ID (env OAI_MODEL; scripts accept LLM_MODEL fallback)
 -max-steps int         Maximum reasoning/tool steps (default 8)
+                       A hard ceiling of 15 is enforced; exceeding the cap
+                       terminates with: "needs human review".
 -http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
 -http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
 -http-retry-backoff duration Base backoff between HTTP retry attempts (exponential) (default 300ms)

@@ -332,6 +332,85 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/350
+// When the agent reaches the configured step cap, it must terminate with a
+// clear "needs human review" message and a non-zero exit. The loop should
+// perform exactly cfg.maxSteps HTTP calls in this case.
+func TestAgentLoop_MaxStepsCap_HumanReviewMessage(t *testing.T) {
+    var calls int
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        calls++
+        // Return an assistant message with empty content and no tool_calls
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "stop",
+            Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+        }}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       "x",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "m",
+        maxSteps:     3,
+        httpTimeout:  2 * time.Second,
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit when step cap is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    if calls != 3 {
+        t.Fatalf("expected exactly 3 HTTP calls (one per step), got %d", calls)
+    }
+    if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
+        t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/350
+// Hard ceiling: regardless of the provided -max-steps, the agent must clamp to 15.
+// Verify that with an excessively large maxSteps, we perform exactly 15 calls and
+// emit the human review message.
+func TestAgentLoop_HardCeilingOf15(t *testing.T) {
+    var calls int
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        calls++
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "stop",
+            Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+        }}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       "x",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "m",
+        maxSteps:     100, // should be clamped to 15
+        httpTimeout:  2 * time.Second,
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit when hard ceiling is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    if calls != 15 {
+        t.Fatalf("expected exactly 15 HTTP calls due to hard ceiling; got %d", calls)
+    }
+    if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
+        t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/262
 func TestVersion_PrintsAndExitsZero(t *testing.T) {
 	var outBuf, errBuf bytes.Buffer

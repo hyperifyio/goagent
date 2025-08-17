@@ -339,7 +339,13 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
     // Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	warnedOneKnob := false
-	for step := 0; step < cfg.maxSteps; step++ {
+    // Enforce a hard ceiling of 15 steps regardless of the provided value.
+    effectiveMaxSteps := cfg.maxSteps
+    if effectiveMaxSteps > 15 {
+        effectiveMaxSteps = 15
+    }
+    var step int
+    for step = 0; step < effectiveMaxSteps; step++ {
         // completionCap governs optional MaxTokens on the request. It defaults to 0
         // (omitted) and will be adjusted by length backoff logic.
         completionCap := 0
@@ -454,10 +460,16 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
             messages = append(messages, msg)
             break
         }
-	}
+    }
 
-	safeFprintln(stderr, "error: run ended without final assistant content")
-	return 1
+    // If we reach here, the loop ended without printing final content.
+    // Distinguish between generic termination and hitting the step cap.
+    if step >= effectiveMaxSteps {
+        safeFprintln(stderr, fmt.Sprintf("info: reached maximum steps (%d); needs human review", effectiveMaxSteps))
+    } else {
+        safeFprintln(stderr, "error: run ended without final assistant content")
+    }
+    return 1
 }
 
 // appendToolCallOutputs executes assistant-requested tool calls and appends their
