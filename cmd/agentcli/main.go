@@ -341,87 +341,112 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	warnedOneKnob := false
 	for step := 0; step < cfg.maxSteps; step++ {
         // completionCap governs optional MaxTokens on the request. It defaults to 0
-        // (omitted) and will be adjusted by length backoff logic in later slices.
+        // (omitted) and will be adjusted by length backoff logic.
         completionCap := 0
-		req := oai.ChatCompletionsRequest{
-			Model:    cfg.model,
-			Messages: messages,
-		}
-		// One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
-		if cfg.topP > 0 {
-			// Set top_p in the request payload
-			topP := cfg.topP
-			req.TopP = &topP
-			if !warnedOneKnob {
-				safeFprintln(stderr, "warning: -top-p is set; omitting temperature per one-knob rule")
-				warnedOneKnob = true
-			}
-		} else {
-			// Include temperature only when supported by the target model.
-			if oai.SupportsTemperature(cfg.model) {
-				req.Temperature = &cfg.temperature
-			}
-		}
-		if len(oaiTools) > 0 {
-			req.Tools = oaiTools
-			req.ToolChoice = "auto"
-		}
+        retriedForLength := false
 
-        // Include MaxTokens only when a positive completionCap is set.
-        if completionCap > 0 {
-            req.MaxTokens = completionCap
+        // Perform at most one in-step retry when finish_reason=="length".
+        for {
+            req := oai.ChatCompletionsRequest{
+                Model:    cfg.model,
+                Messages: messages,
+            }
+            // One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
+            if cfg.topP > 0 {
+                // Set top_p in the request payload
+                topP := cfg.topP
+                req.TopP = &topP
+                if !warnedOneKnob {
+                    safeFprintln(stderr, "warning: -top-p is set; omitting temperature per one-knob rule")
+                    warnedOneKnob = true
+                }
+            } else {
+                // Include temperature only when supported by the target model.
+                if oai.SupportsTemperature(cfg.model) {
+                    req.Temperature = &cfg.temperature
+                }
+            }
+            if len(oaiTools) > 0 {
+                req.Tools = oaiTools
+                req.ToolChoice = "auto"
+            }
+
+            // Include MaxTokens only when a positive completionCap is set.
+            if completionCap > 0 {
+                req.MaxTokens = completionCap
+            }
+
+            // Pre-flight validate message sequence to avoid API 400s for stray tool messages
+            if err := oai.ValidateMessageSequence(req.Messages); err != nil {
+                safeFprintf(stderr, "error: %v\n", err)
+                return 1
+            }
+
+            dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
+
+            // Per-call context
+            callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
+            resp, err := httpClient.CreateChatCompletion(callCtx, req)
+            cancel()
+            if err != nil {
+                // Append source for http-timeout to aid diagnostics
+                src := cfg.httpTimeoutSource
+                if src == "" {
+                    src = "default"
+                }
+                safeFprintf(stderr, "error: chat call failed: %v (http-timeout source=%s)\n", err, src)
+                return 1
+            }
+            dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
+
+            if len(resp.Choices) == 0 {
+                safeFprintln(stderr, "error: chat response has no choices")
+                return 1
+            }
+
+            choice := resp.Choices[0]
+
+            // Length backoff: one-time in-step retry doubling the completion cap (min 256)
+            if strings.TrimSpace(choice.FinishReason) == "length" && !retriedForLength {
+                // Compute next cap: max(256, completionCap*2)
+                if completionCap <= 0 {
+                    completionCap = 256
+                } else {
+                    // Double with safe lower bound
+                    next := completionCap * 2
+                    if next < 256 {
+                        next = 256
+                    }
+                    completionCap = next
+                }
+                retriedForLength = true
+                // Re-send within the same agent step without appending any messages yet
+                continue
+            }
+
+            msg := choice.Message
+
+            // If the model returned tool calls and we have a registry, first append
+            // the assistant message that carries tool_calls to preserve correct
+            // sequencing (assistant -> tool messages -> assistant). Then append the
+            // corresponding tool messages and continue the loop for the next turn.
+            if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
+                messages = append(messages, msg)
+                messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
+                // Continue outer loop for another assistant response using appended tool outputs
+                break
+            }
+
+            // If the model returned final assistant content, print and exit 0
+            if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
+                safeFprintln(stdout, strings.TrimSpace(msg.Content))
+                return 0
+            }
+
+            // Otherwise, append message and continue (some models return assistant with empty content and no tools)
+            messages = append(messages, msg)
+            break
         }
-
-		// Pre-flight validate message sequence to avoid API 400s for stray tool messages
-		if err := oai.ValidateMessageSequence(req.Messages); err != nil {
-			safeFprintf(stderr, "error: %v\n", err)
-			return 1
-		}
-
-		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
-
-		// Per-call context
-		callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
-		resp, err := httpClient.CreateChatCompletion(callCtx, req)
-		cancel()
-		if err != nil {
-			// Append source for http-timeout to aid diagnostics
-			src := cfg.httpTimeoutSource
-			if src == "" {
-				src = "default"
-			}
-			safeFprintf(stderr, "error: chat call failed: %v (http-timeout source=%s)\n", err, src)
-			return 1
-		}
-		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
-
-		if len(resp.Choices) == 0 {
-			safeFprintln(stderr, "error: chat response has no choices")
-			return 1
-		}
-
-		choice := resp.Choices[0]
-		msg := choice.Message
-
-		// If the model returned tool calls and we have a registry, first append
-		// the assistant message that carries tool_calls to preserve correct
-		// sequencing (assistant -> tool messages -> assistant). Then append the
-		// corresponding tool messages and continue the loop for the next turn.
-		if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
-			messages = append(messages, msg)
-			messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
-			// Continue loop for another assistant response using appended tool outputs
-			continue
-		}
-
-		// If the model returned final assistant content, print and exit 0
-		if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
-			safeFprintln(stdout, strings.TrimSpace(msg.Content))
-			return 0
-		}
-
-		// Otherwise, append message and continue (some models return assistant with empty content and no tools)
-		messages = append(messages, msg)
 	}
 
 	safeFprintln(stderr, "error: run ended without final assistant content")
