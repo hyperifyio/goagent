@@ -355,6 +355,7 @@ Common issues and deterministic fixes are documented with copy‑paste commands 
 ## Documentation
 Start with the [Documentation index](docs/README.md) for design docs, ADRs, and references:
 - [Tools manifest reference](docs/reference/tools-manifest.md)
+- [CLI reference](docs/reference/cli-reference.md)
 - [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Security: Threat model](docs/security/threat-model.md)
 
