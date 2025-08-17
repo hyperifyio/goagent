@@ -26,6 +26,35 @@ type Client struct {
 	retry      RetryPolicy
 }
 
+// audit context keys are unexported to avoid collisions. Use helper to set.
+type auditCtxKey string
+
+const (
+    auditCtxKeyStage auditCtxKey = "audit_stage"
+)
+
+// WithAuditStage returns a child context that carries an audit stage label
+// (e.g., "prep") that will be included in HTTP audit entries.
+func WithAuditStage(parent context.Context, stage string) context.Context {
+    stage = strings.TrimSpace(stage)
+    if stage == "" {
+        return parent
+    }
+    return context.WithValue(parent, auditCtxKeyStage, stage)
+}
+
+func auditStageFromContext(ctx context.Context) string {
+    if ctx == nil {
+        return ""
+    }
+    if v := ctx.Value(auditCtxKeyStage); v != nil {
+        if s, ok := v.(string); ok {
+            return s
+        }
+    }
+    return ""
+}
+
 // RetryPolicy controls HTTP retry behavior for transient failures.
 // MaxRetries specifies the number of retries after the initial attempt.
 // Backoff specifies the base delay between attempts; exponential backoff is applied.
@@ -89,10 +118,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 	var lastErr error
 	// Allow a single parameter-recovery retry without consuming the normal retry budget
 	recoveryGranted := false
-	// Emit a meta audit entry capturing observability fields derived from the request
+    // Emit a meta audit entry capturing observability fields derived from the request
 	emitChatMetaAudit(req)
 	// Generate a stable Idempotency-Key used across all attempts
 	idemKey := generateIdempotencyKey()
+    // Capture any stage label from context for audit enrichment
+    stage := auditStageFromContext(ctx)
 	for attempt := 0; attempt < attempts; attempt++ {
 		// Per-attempt timing capture using httptrace
 		attemptStart := time.Now()
@@ -122,7 +153,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		// Since httptrace.TLSHandshakeDone requires crypto/tls type, replicate using any to avoid import on older Go.
 		// Note: we will compute tlsDur as zero unless supported; acceptable for audit purposes.
 
-		httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+        httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 		if nerr != nil {
 			return zero, fmt.Errorf("new request: %w", nerr)
 		}
@@ -133,17 +164,17 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		httpReq.Header.Set("Idempotency-Key", idemKey)
 		httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace))
 
-		resp, derr := c.httpClient.Do(httpReq)
+        resp, derr := c.httpClient.Do(httpReq)
 		if derr != nil {
 			lastErr = derr
 			// Log attempt with error
-			logHTTPAttempt(attempt+1, attempts, 0, 0, endpoint, derr.Error())
+			logHTTPAttempt(stage, idemKey, attempt+1, attempts, 0, 0, endpoint, derr.Error())
 			// Emit timing audit for error case
-			logHTTPTiming(attempt+1, endpoint, 0, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, derr), userHintForCause(ctx, derr))
+			logHTTPTiming(stage, idemKey, attempt+1, endpoint, 0, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, derr), userHintForCause(ctx, derr))
             if attempt < attempts-1 && isRetryableError(derr) {
                 // compute backoff (with jitter) for audit then sleep
                 back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
-				logHTTPAttempt(attempt+1, attempts, 0, back.Milliseconds(), endpoint, derr.Error())
+				logHTTPAttempt(stage, idemKey, attempt+1, attempts, 0, back.Milliseconds(), endpoint, derr.Error())
                 sleepFunc(back)
 				continue
 			}
@@ -167,12 +198,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		if readErr != nil {
 			lastErr = readErr
 			// Log attempt with read error
-			logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, readErr.Error())
+			logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, 0, endpoint, readErr.Error())
 			// Emit timing audit including read duration up to error
-			logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, readErr), userHintForCause(ctx, readErr))
+			logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, readErr), userHintForCause(ctx, readErr))
             if attempt < attempts-1 && isRetryableError(readErr) {
                 back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
-				logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, readErr.Error())
+				logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, readErr.Error())
                 sleepFunc(back)
 				continue
 			}
@@ -186,7 +217,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				bodyStr := string(respBody)
 				if !recoveryGranted && includesTemperature(req) && mentionsUnsupportedTemperature(bodyStr) {
 					// Log recovery attempt with a structured audit entry
-					logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, "param_recovery: temperature")
+					logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, 0, endpoint, "param_recovery: temperature")
 					// Clear temperature and re-marshal request for a one-time recovery retry
 					req.Temperature = nil
 					nb, merr := json.Marshal(req)
@@ -196,7 +227,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 						recoveryGranted = true
 						attempts++
 						// Emit timing audit for the failed attempt before retrying
-						logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "param_recovery_temperature")
+						logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "param_recovery_temperature")
 						// Perform immediate recovery retry without consuming a normal retry slot
 						continue
 					}
@@ -208,28 +239,28 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				// Respect Retry-After when present; otherwise use exponential backoff
 				if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
 					// Log with Retry-After derived backoff
-					logHTTPAttempt(attempt+1, attempts, resp.StatusCode, ra.Milliseconds(), endpoint, "")
+					logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, ra.Milliseconds(), endpoint, "")
                     sleepFunc(ra)
 				} else {
                     back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
-					logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, "")
+					logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, "")
                     sleepFunc(back)
 				}
 				// Emit timing audit for non-2xx attempt
-				logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
+				logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
 				continue
 			}
 			// Final non-retryable failure: log attempt (no backoff) and return
-			logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, truncate(string(respBody), 2000))
-			logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
+			logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, 0, endpoint, truncate(string(respBody), 2000))
+			logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
 			return zero, fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(respBody), 2000))
 		}
 		if err := json.Unmarshal(respBody, &zero); err != nil {
 			return ChatCompletionsResponse{}, fmt.Errorf("decode response: %w; body: %s", err, truncate(string(respBody), 1000))
 		}
 		// Success: log attempt with status and no backoff
-		logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, "")
-		logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "success", "")
+		logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, 0, endpoint, "")
+		logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "success", "")
 		return zero, nil
 	}
 	if lastErr != nil {
@@ -352,10 +383,12 @@ func generateIdempotencyKey() string {
 }
 
 // logHTTPAttempt appends an NDJSON line describing an HTTP attempt and planned backoff.
-func logHTTPAttempt(attempt, maxAttempts, status int, backoffMs int64, endpoint, errStr string) {
+func logHTTPAttempt(stage, idemKey string, attempt, maxAttempts, status int, backoffMs int64, endpoint, errStr string) {
 	type audit struct {
 		TS        string `json:"ts"`
 		Event     string `json:"event"`
+		Stage     string `json:"stage,omitempty"`
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
 		Attempt   int    `json:"attempt"`
 		Max       int    `json:"max"`
 		Status    int    `json:"status"`
@@ -366,6 +399,8 @@ func logHTTPAttempt(attempt, maxAttempts, status int, backoffMs int64, endpoint,
 	entry := audit{
 		TS:        time.Now().UTC().Format(time.RFC3339Nano),
 		Event:     "http_attempt",
+		Stage:     stage,
+		IdempotencyKey: idemKey,
 		Attempt:   attempt,
 		Max:       maxAttempts,
 		Status:    status,
@@ -379,10 +414,12 @@ func logHTTPAttempt(attempt, maxAttempts, status int, backoffMs int64, endpoint,
 }
 
 // logHTTPTiming appends detailed HTTP timing metrics to the audit log.
-func logHTTPTiming(attempt int, endpoint string, status int, start time.Time, dnsDur, connDur, tlsDur time.Duration, wroteAt, firstByteAt, end time.Time, cause, hint string) {
+func logHTTPTiming(stage, idemKey string, attempt int, endpoint string, status int, start time.Time, dnsDur, connDur, tlsDur time.Duration, wroteAt, firstByteAt, end time.Time, cause, hint string) {
 	type timing struct {
 		TS        string `json:"ts"`
 		Event     string `json:"event"`
+		Stage     string `json:"stage,omitempty"`
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
 		Attempt   int    `json:"attempt"`
 		Endpoint  string `json:"endpoint"`
 		Status    int    `json:"status"`
@@ -413,6 +450,8 @@ func logHTTPTiming(attempt int, endpoint string, status int, start time.Time, dn
 	entry := timing{
 		TS:        time.Now().UTC().Format(time.RFC3339Nano),
 		Event:     "http_timing",
+		Stage:     stage,
+		IdempotencyKey: idemKey,
 		Attempt:   attempt,
 		Endpoint:  endpoint,
 		Status:    status,

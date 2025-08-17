@@ -1879,6 +1879,41 @@ func TestLengthBackoff_AuditEmitted(t *testing.T) {
     }
 }
 
+// FEATURE_CHECKLIST L8
+// Audit for pre-stage must include stage:"prep" and idempotency_key on http_timing/attempt.
+func TestPreStage_AuditIncludesStageAndIdempotency(t *testing.T) {
+    // Clean audit dir at repo root
+    root := findRepoRoot(t)
+    _ = os.RemoveAll(filepath.Join(root, ".goagent"))
+
+    // Server returns an assistant with no tool calls to keep it simple
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Respond minimal success
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: time.Second, toolTimeout: time.Second, prepHTTPTimeout: time.Second}
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    // Locate today's audit file under repo root and read it
+    auditDir := filepath.Join(root, ".goagent", "audit")
+    logFile := waitForAuditFile(t, auditDir, 2*time.Second)
+    data, err := os.ReadFile(logFile)
+    if err != nil { t.Fatalf("read audit: %v", err) }
+    s := string(data)
+    // Expect at least one timing or attempt line with stage prep and idempotency_key
+    if !strings.Contains(s, "\"stage\":\"prep\"") {
+        t.Fatalf("missing stage prep in audit; got:\n%s", truncate(s, 1000))
+    }
+    if !strings.Contains(s, "\"idempotency_key\":") {
+        t.Fatalf("missing idempotency_key in audit; got:\n%s", truncate(s, 1000))
+    }
+}
+
 // findRepoRoot walks upward from CWD to locate the directory containing go.mod.
 func findRepoRoot(t *testing.T) string {
     t.Helper()

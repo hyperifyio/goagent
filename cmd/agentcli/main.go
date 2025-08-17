@@ -625,7 +625,8 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     // Create a dedicated client honoring pre-stage timeout and normal retry policy
     httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
     dumpJSONIfDebug(stderr, "prep.request", req, cfg.debug)
-    ctx, cancel := context.WithTimeout(context.Background(), cfg.prepHTTPTimeout)
+    // Tag context with audit stage so HTTP audit lines include stage: "prep"
+    ctx, cancel := context.WithTimeout(oai.WithAuditStage(context.Background(), "prep"), cfg.prepHTTPTimeout)
     defer cancel()
     resp, err := httpClient.CreateChatCompletion(ctx, req)
     if err != nil {
