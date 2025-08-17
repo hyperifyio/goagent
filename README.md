@@ -14,6 +14,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive, tool�
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
+  - [Why you usually don’t need to change knobs](#why-you-usually-don’t-need-to-change-knobs)
   - [Capabilities](#capabilities)
   - [Configuration](#configuration)
 - [Examples](#examples)
@@ -152,12 +153,18 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
 -timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
 -temp float            Sampling temperature (default 1.0)
+-top-p float           Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)
 -debug                 Dump request/response JSON to stderr
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit
 --version | -version   Print version and exit
 ```
 Run `./bin/agentcli -h` to see the built‑in help.
+
+### Why you usually don’t need to change knobs
+- The default `-temp 1.0` is standardized for broad provider/model parity and GPT‑5 compatibility.
+- The one‑knob rule applies: if you set `-top-p`, the agent omits `temperature`; otherwise it sends `temperature` (default 1.0) and leaves `top_p` unset.
+- See the policy for details and rationale: [ADR‑0004: Default LLM policy](docs/adr/0004-default-llm-policy.md).
 
 ### Capabilities
 List the enabled tools from a manifest without running the agent:
