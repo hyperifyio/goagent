@@ -15,15 +15,16 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Why goagent?](#why-goagent)
 - [Features](#features)
 - [Installation](#installation)
+- [Configuration](#configuration)
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
   - [Why you usually don’t need to change knobs](#why-you-usually-don’t-need-to-change-knobs)
   - [Capabilities](#capabilities)
-  - [Configuration](#configuration)
 - [Examples](#examples)
   - [Zero-config with GPT-5](#zero-config-with-gpt-5)
   - [Tool calls transcript](#tool-calls-transcript)
+  - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
   - [Exec tool](#exec-tool)
   - [Filesystem tools](#filesystem-tools)
 - [Security](#security)
@@ -32,18 +33,26 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Documentation](#documentation)
 - [Diagrams](#diagrams)
 - [Contributing](#contributing)
-- [CI quality gates](docs/operations/ci-quality-gates.md)
 - [Tooling](#tooling)
 - [Support](#support)
 - [Roadmap](#roadmap)
 - [Project status](#project-status)
 - [License and credits](#license-and-credits)
+- [More examples](#more-examples)
+- [CI quality gates](docs/operations/ci-quality-gates.md)
 
 ## Why goagent?
 - Minimal, portable, vendor‑agnostic: works with any OpenAI‑compatible endpoint
 - Deterministic and auditable: argv‑only tool execution, JSON stdin/stdout, strict timeouts
 - Safe by default: explicit allowlist of tools; no shell evaluation
 - Batteries included: small toolbelt for filesystem and process tasks
+
+## Features
+- OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
+- Tool manifest `tools.json` using JSON Schema parameters (see [Tools manifest reference](docs/reference/tools-manifest.md))
+- Per‑call timeouts; argv‑only execution with JSON stdin/stdout
+- Deterministic tool error mapping as JSON (e.g., `{ "error": "..." }`)
+- Minimal process environment for tools; audit logging with redaction
 
 ## Installation
 - **Requirements**: Go 1.24+, Linux/macOS/Windows. For development: `ripgrep` (rg) and `golangci-lint`. Network access to an OpenAI‑compatible API.
@@ -353,13 +362,6 @@ mkdir -p tmp_search_demo && printf 'alpha\nbeta\ngamma\n' > tmp_search_demo/samp
 jq -n '{path:"tmp_search_demo",pattern:"^ga",glob:"**/*.txt",caseInsensitive:false}' | ./tools/bin/fs_search | jq '.matches'
 rm -rf tmp_search_demo
 ```
-
-## Features
-- OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
-- Tool manifest `tools.json` using JSON Schema parameters (see [Tools manifest reference](docs/reference/tools-manifest.md))
-- Per‑call timeouts; argv‑only execution with JSON stdin/stdout
-- Deterministic tool error mapping as JSON (e.g., `{ "error": "..." }`)
-- Minimal process environment for tools; audit logging with redaction
 
 ## Security
 - Tools are an explicit allowlist from `tools.json`
