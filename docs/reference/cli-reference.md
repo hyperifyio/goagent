@@ -55,6 +55,30 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `1`: Operational error (HTTP failure, tool manifest issues, no final assistant content)
 - `2`: CLI misuse (e.g., missing `-prompt`)
 
+## Examples
+
+- Inline developer messages (repeatable) with an inline prompt:
+
+```bash
+./bin/agentcli -developer "Follow style guide X" -developer "Prefer JSON outputs" -prompt "Summarize the repo"
+```
+
+- Read system prompt from a file and user prompt from STDIN:
+
+```bash
+echo "What changed since last release?" | ./bin/agentcli -system-file ./system.txt -prompt-file -
+```
+
+- Mix developer files and inline developer messages; read one developer message from STDIN:
+
+```bash
+echo "Security MUST be documented" | ./bin/agentcli \
+  -developer-file ./dev/a.txt \
+  -developer-file - \
+  -developer "Add tests for every change" \
+  -prompt "Implement the CLI role flags"
+```
+
 ## Notes
 
 - Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted, `top_p` is included, and a one-line warning is printed to stderr.
