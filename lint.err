@@ -1,2 +1,2 @@
-make[1]: *** [Makefile:118: check-go-version] Error 2
-make: *** [Makefile:160: lint] Error 2
+/bin/bash: line 12: : command not found
+/bin/bash: line 13: : command not found
