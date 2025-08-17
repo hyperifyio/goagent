@@ -19,6 +19,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-timeout duration`: [DEPRECATED] Global timeout; prefer `-http-timeout` and `-tool-timeout` (default 30s)
 - `-temp float`: Sampling temperature (default 1.0; omitted for models that do not support it)
 - `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
+- `-prep-top-p float`: Pre-stage nucleus sampling probability mass (conflicts with `-temp`; when set, pre-stage omits temperature and sends `top_p`)
 - `-debug`: Dump request/response JSON to stderr
 - `-capabilities`: Print enabled tools and exit
 - `-print-config`: Print resolved config and exit

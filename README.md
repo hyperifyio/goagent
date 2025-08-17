@@ -163,6 +163,7 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
 -temp float            Sampling temperature (default 1.0)
 -top-p float           Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)
+-prep-top-p float      Nucleus sampling probability mass for pre-stage (conflicts with -temp; omits temperature when set)
 -debug                 Dump request/response JSON to stderr
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit

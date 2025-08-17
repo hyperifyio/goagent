@@ -238,6 +238,94 @@ func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
 	}
 }
 
+// Pre-stage one-knob: when -prep-top-p is provided, the prep request must include top_p
+// and omit temperature. We exercise the minimal runPreStage helper.
+func TestPrepOneKnob_TopPOmitsTemperature(t *testing.T) {
+    var seenTemp *float64
+    var seenTopP *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("decode: %v", err)
+        }
+        seenTemp = req.Temperature
+        seenTopP = req.TopP
+        // Return minimal assistant content
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 2 * time.Second, httpRetries: 0}
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    cfg.prepTopP = 0.9
+    var errBuf bytes.Buffer
+    if err := runPreStage(cfg, msgs, &errBuf); err != nil {
+        t.Fatalf("runPreStage error: %v", err)
+    }
+    if seenTemp != nil {
+        t.Fatalf("prep: expected temperature omitted when -prep-top-p is set")
+    }
+    if seenTopP == nil || *seenTopP != 0.9 {
+        if seenTopP == nil { t.Fatalf("prep: expected top_p present") }
+        t.Fatalf("prep: expected top_p=0.9, got %v", *seenTopP)
+    }
+}
+
+// Pre-stage should include temperature when -prep-top-p is not set and model supports it.
+func TestPrepIncludesTemperatureWhenSupported(t *testing.T) {
+    var seenTemp *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        seenTemp = req.Temperature
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+    cfg.temperature = 1.0
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    var errBuf bytes.Buffer
+    if err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if seenTemp == nil || *seenTemp != 1.0 {
+        t.Fatalf("prep: expected temperature=1.0 included; got %v", func() any { if seenTemp==nil { return nil }; return *seenTemp }())
+    }
+}
+
+// Pre-stage should omit temperature for unsupported models even when not using -prep-top-p,
+// and the client must recover on 400 mentioning temperature by retrying without temperature.
+func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {
+    var calls int
+    var seenTemps []bool
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        calls++
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        seenTemps = append(seenTemps, req.Temperature != nil)
+        if calls == 1 {
+            // Simulate 400 mentioning unsupported temperature to trigger param recovery
+            w.WriteHeader(http.StatusBadRequest)
+            _, _ = w.Write([]byte(`{"error":{"message":"parameter 'temperature' is unsupported for this model"}}`))
+            return
+        }
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    // Use a model that declares SupportsTemperature==true, but we will include temp initially
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+    cfg.temperature = 0.7
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    var errBuf bytes.Buffer
+    if err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if calls != 2 {
+        t.Fatalf("prep: expected exactly one recovery retry; calls=%d", calls)
+    }
+    if !(seenTemps[0] && !seenTemps[1]) {
+        t.Fatalf("prep: expected temp present on first attempt and omitted on retry; got %v", seenTemps)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/289
 // When -top-p is provided, temperature must be omitted and a one-line warning printed.
 func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {

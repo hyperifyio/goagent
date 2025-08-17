@@ -34,6 +34,7 @@ type cliConfig struct {
 	httpBackoff  time.Duration // base backoff between retries
 	temperature  float64
 	topP         float64
+    prepTopP     float64
 	debug        bool
 	capabilities bool
 	printConfig  bool
@@ -167,6 +168,8 @@ func parseFlags() (cliConfig, int) {
 
 	// Nucleus sampling (one-knob with temperature). Not yet sent to API; used to gate temperature.
 	flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
+    // Pre-stage nucleus sampling (one-knob with temperature for pre-stage)
+    flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (conflicts with temperature)")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
@@ -569,6 +572,40 @@ func dumpJSONIfDebug(w io.Writer, label string, v any, debug bool) {
 		return
 	}
 	safeFprintf(w, "\n--- %s ---\n%s\n", label, string(b))
+}
+
+// runPreStage performs a minimal pre-processing call that exercises one-knob logic
+// and client behavior (including parameter-recovery on 400). It returns the
+// messages unchanged to preserve current behavior; subsequent checklist items will
+// refine and merge pre-stage outputs. The function uses cfg.prepHTTPTimeout.
+func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) error {
+    // Construct request mirroring main loop sampling rules but using -prep-top-p
+    req := oai.ChatCompletionsRequest{
+        Model:    cfg.model,
+        Messages: messages,
+    }
+    if cfg.prepTopP > 0 {
+        topP := cfg.prepTopP
+        req.TopP = &topP
+        // Do not include temperature per one-knob rule
+    } else {
+        if oai.SupportsTemperature(cfg.model) {
+            req.Temperature = &cfg.temperature
+        }
+    }
+    // Create a dedicated client honoring pre-stage timeout and normal retry policy
+    httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
+    dumpJSONIfDebug(stderr, "prep.request", req, cfg.debug)
+    ctx, cancel := context.WithTimeout(context.Background(), cfg.prepHTTPTimeout)
+    defer cancel()
+    resp, err := httpClient.CreateChatCompletion(ctx, req)
+    if err != nil {
+        // Mirror main loop error style concisely; future item will add WARN+fallback behavior
+        safeFprintf(stderr, "error: prep call failed: %v\n", err)
+        return err
+    }
+    dumpJSONIfDebug(stderr, "prep.response", resp, cfg.debug)
+    return nil
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
