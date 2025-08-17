@@ -164,7 +164,7 @@ lint:
 	@$(MAKE) check-go-version
 	@set -euo pipefail; \
 		LINTBIN="$(GOBIN)/golangci-lint$(EXE)"; \
-	# Fail fast if an existing linter is too old relative to MIN
+    # Fail fast if an existing linter is too old relative to MIN \
 	$(MAKE) -s lint-precheck; \
 	NEED_INSTALL=0; \
 	if [ ! -x "$$LINTBIN" ]; then \
