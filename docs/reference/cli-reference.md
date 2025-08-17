@@ -21,6 +21,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
 - `-prep-top-p float`: Pre-stage nucleus sampling probability mass (conflicts with `-temp`; when set, pre-stage omits temperature and sends `top_p`)
 - `-debug`: Dump request/response JSON to stderr
+- `-prep-tools-allow-external`: Allow pre-stage to execute external tools from `-tools` (default false). When not set, pre-stage is limited to built-in read-only tools and ignores `-tools`.
 - `-capabilities`: Print enabled tools and exit
 - `-print-config`: Print resolved config and exit
 - `--version | -version`: Print version and exit

@@ -38,6 +38,8 @@ type cliConfig struct {
 	debug        bool
 	capabilities bool
 	printConfig  bool
+    // Pre-stage tool policy
+    prepToolsAllowExternal bool // when false, pre-stage uses built-in read-only tools and ignores -tools
 	// Sources for effective timeouts: "flag" | "env" | "default"
 	httpTimeoutSource   string
     prepHTTPTimeoutSource string
@@ -172,7 +174,8 @@ func parseFlags() (cliConfig, int) {
     flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (conflicts with temperature)")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
-	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+    flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+    flag.BoolVar(&cfg.prepToolsAllowExternal, "prep-tools-allow-external", false, "Allow pre-stage to execute external tools from -tools; when false, pre-stage is limited to built-in read-only tools")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -632,18 +635,32 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     }
     dumpJSONIfDebug(stderr, "prep.response", resp, cfg.debug)
 
-    // If there are no tool calls or no tools manifest provided, return messages unchanged
-    if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 || strings.TrimSpace(cfg.toolsPath) == "" {
+    // If there are no tool calls, return messages unchanged
+    if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
         return messages, nil
     }
 
-    // Load tools manifest to build a registry for executing tool calls
+    // Append the assistant message carrying tool_calls
+    assistantMsg := resp.Choices[0].Message
+    out := append(append([]oai.Message{}, messages...), assistantMsg)
+
+    // Decide pre-stage tool execution policy: built-in read-only by default
+    if !cfg.prepToolsAllowExternal {
+        // Ignore -tools and execute only built-in read-only adapters
+        out = appendPreStageBuiltinToolOutputs(out, assistantMsg, cfg)
+        return out, nil
+    }
+
+    // External tools allowed: require a manifest and enforce availability
+    if strings.TrimSpace(cfg.toolsPath) == "" {
+        // No manifest; nothing to execute
+        return out, nil
+    }
     registry, _, lerr := tools.LoadManifest(cfg.toolsPath)
     if lerr != nil {
         safeFprintf(stderr, "error: failed to load tools manifest for pre-stage: %v\n", lerr)
         return nil, lerr
     }
-    // Validate that configured tools are available on this system (same as runAgent)
     for name, spec := range registry {
         if len(spec.Command) == 0 {
             safeFprintf(stderr, "error: configured tool %q has no command\n", name)
@@ -654,10 +671,6 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
             return nil, lookErr
         }
     }
-
-    // Append the assistant message carrying tool_calls, then append tool outputs concurrently
-    assistantMsg := resp.Choices[0].Message
-    out := append(append([]oai.Message{}, messages...), assistantMsg)
     out = appendToolCallOutputs(out, assistantMsg, registry, cfg)
     return out, nil
 }
@@ -739,7 +752,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
-	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
+    b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
+    b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
 	b.WriteString("  --version | -version\n    Print version and exit\n")

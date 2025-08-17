@@ -210,6 +210,7 @@ func TestWorkedExample_ToolCalls_TemperatureOne_Sequencing(t *testing.T) {
 	cmd := exec.Command(agentBin,
 		"-prompt", "write and read a file",
 		"-tools", manifestPath,
+        "-prep-tools-allow-external",
 		"-base-url", srv.URL,
 		"-model", "test",
 		"-max-steps", "4",

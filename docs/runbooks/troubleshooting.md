@@ -161,6 +161,11 @@ make tidy build build-tools
 ```
 
 ## Invalid tool message sequencing
+- ## Pre-stage built-in tools
+- Behavior: during pre-stage, external tools from `-tools` are ignored by default. Only built-in read-only adapters are available: `fs.read_file`, `fs.list_dir`, `fs.stat`, `env.get`, `os.info`.
+- Symptom: a pre-stage `tool_calls` entry like `echo` or `exec` results in a tool message `{"error":"unknown tool: ..."}`.
+- Fix: either rely on built-ins, or explicitly enable external tools for pre-stage with `-prep-tools-allow-external` (use with caution).
+
 - Symptom: the CLI exits with an error like:
 - `error: invalid message sequence at index N: found role:"tool" without a prior assistant message containing tool_calls; each tool message must respond to an assistant tool call id`
 - or: `error: invalid message sequence at index N: role:"tool" has tool_call_id "..." that does not match any id from the most recent assistant tool_calls`

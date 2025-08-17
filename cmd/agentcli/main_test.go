@@ -1,21 +1,22 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"testing"
-	"time"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "net/http/httptest"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "runtime"
+    "strings"
+    "testing"
+    "time"
 
-	"github.com/hyperifyio/goagent/internal/oai"
-	"github.com/hyperifyio/goagent/internal/tools"
+    "github.com/hyperifyio/goagent/internal/oai"
+    "github.com/hyperifyio/goagent/internal/tools"
 )
 
 // https://github.com/hyperifyio/goagent/issues/97
@@ -402,7 +403,7 @@ func main(){b,_:=io.ReadAll(os.Stdin); var m map[string]any; _=json.Unmarshal(b,
     defer srv.Close()
 
     // Measure elapsed around runPreStage and ensure it's < sequential time (~1200ms)
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manifestPath}
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manifestPath, prepToolsAllowExternal: true}
     msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
     var errBuf bytes.Buffer
     start := time.Now()
@@ -414,6 +415,54 @@ func main(){b,_:=io.ReadAll(os.Stdin); var m map[string]any; _=json.Unmarshal(b,
     for _, m := range outMsgs { if m.Role == oai.RoleTool { toolCount++ } }
     if toolCount != 2 { t.Fatalf("expected 2 tool messages, got %d", toolCount) }
     if elapsed >= 1100*time.Millisecond { t.Fatalf("pre-stage tool calls not parallel; elapsed=%v", elapsed) }
+}
+
+// Pre-stage built-ins: disallow external execs by default and allow read-only adapters.
+func TestPrep_Builtins_ReadOnlyAndNoExecByDefault(t *testing.T) {
+    // Fake server returning a tool_calls for two tools: fs.read_file and a disallowed external tool "echo"
+    dir := t.TempDir()
+    // Create a file to read
+    target := filepath.Join(dir, "note.txt")
+    if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil { t.Fatalf("write: %v", err) }
+
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        // Return assistant with tool_calls to fs.read_file and echo
+        payload := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
+                {ID:"a", Type:"function", Function:oai.ToolCallFunction{Name:"fs.read_file", Arguments: fmt.Sprintf(`{"path":"%s"}`, strings.TrimPrefix(target, dir+string(os.PathSeparator)))}},
+                {ID:"b", Type:"function", Function:oai.ToolCallFunction{Name:"echo", Arguments:`{"text":"hi"}`}},
+            }},
+        }} }
+        _ = json.NewEncoder(w).Encode(payload)
+    }))
+    defer srv.Close()
+
+    // Run with CWD at dir so repo-relative path enforcement applies
+    cwd, _ := os.Getwd()
+    defer func() { _ = os.Chdir(cwd) }()
+    if err := os.Chdir(dir); err != nil { t.Fatalf("chdir: %v", err) }
+
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: time.Second, httpRetries: 0}
+    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
+    var errBuf bytes.Buffer
+    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
+    // Expect two tool messages appended; fs.read_file returns content, echo returns error unknown tool
+    var gotRead, gotEchoErr bool
+    for _, m := range outMsgs {
+        if m.Role == oai.RoleTool && m.Name == "fs.read_file" {
+            if !strings.Contains(m.Content, "\"content\":\"hello\"") { t.Fatalf("fs.read_file content missing; got %s", m.Content) }
+            gotRead = true
+        }
+        if m.Role == oai.RoleTool && m.Name == "echo" {
+            if !strings.Contains(m.Content, "unknown tool") { t.Fatalf("echo should be unknown under built-ins; got %s", m.Content) }
+            gotEchoErr = true
+        }
+    }
+    if !gotRead || !gotEchoErr { t.Fatalf("expected fs.read_file success and echo unknown error; gotRead=%v gotEchoErr=%v", gotRead, gotEchoErr) }
 }
 
 // https://github.com/hyperifyio/goagent/issues/289
