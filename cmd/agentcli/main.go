@@ -408,6 +408,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
             // Length backoff: one-time in-step retry doubling the completion cap (min 256)
             if strings.TrimSpace(choice.FinishReason) == "length" && !retriedForLength {
+                prev := completionCap
                 // Compute next cap: max(256, completionCap*2)
                 if completionCap <= 0 {
                     completionCap = 256
@@ -420,10 +421,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                     completionCap = next
                 }
                 // Clamp to remaining context window before resending
-                {
-                    window := oai.ContextWindowForModel(cfg.model)
-                    completionCap = oai.ClampCompletionCap(messages, completionCap, window)
-                }
+                window := oai.ContextWindowForModel(cfg.model)
+                estimated := oai.EstimateTokens(messages)
+                completionCap = oai.ClampCompletionCap(messages, completionCap, window)
+                // Emit audit entry describing the backoff decision
+                oai.LogLengthBackoff(cfg.model, prev, completionCap, window, estimated)
                 retriedForLength = true
                 // Re-send within the same agent step without appending any messages yet
                 continue

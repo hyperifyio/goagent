@@ -397,6 +397,34 @@ func logHTTPTiming(attempt int, endpoint string, status int, start time.Time, dn
 	}
 }
 
+// LogLengthBackoff emits a structured NDJSON audit entry describing a
+// length_backoff event triggered by finish_reason=="length". Callers should
+// pass the model identifier, the previous and new completion caps, the
+// effective model context window, and the estimated prompt token count.
+func LogLengthBackoff(model string, prevCap, newCap, window, estimatedPromptTokens int) {
+    type audit struct {
+        TS                     string `json:"ts"`
+        Event                  string `json:"event"`
+        Model                  string `json:"model"`
+        PrevCap                int    `json:"prev_cap"`
+        NewCap                 int    `json:"new_cap"`
+        Window                 int    `json:"window"`
+        EstimatedPromptTokens  int    `json:"estimated_prompt_tokens"`
+    }
+    entry := audit{
+        TS:                    time.Now().UTC().Format(time.RFC3339Nano),
+        Event:                 "length_backoff",
+        Model:                 model,
+        PrevCap:               prevCap,
+        NewCap:                newCap,
+        Window:                window,
+        EstimatedPromptTokens: estimatedPromptTokens,
+    }
+    if err := appendAuditLog(entry); err != nil {
+        _ = err
+    }
+}
+
 // emitChatMetaAudit writes a one-line NDJSON entry describing request-level
 // observability fields such as the effective temperature and whether the
 // temperature parameter is included in the payload for the target model.

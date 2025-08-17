@@ -1324,6 +1324,99 @@ func TestLengthBackoff_ClampDoesNotExceedWindow(t *testing.T) {
     }
 }
 
+// https://github.com/hyperifyio/goagent/issues/318
+// On length backoff, an NDJSON audit line with event=="length_backoff" must be
+// written under the repository root's .goagent/audit with expected fields.
+func TestLengthBackoff_AuditEmitted(t *testing.T) {
+    // Clean audit dir at repo root
+    root := findRepoRoot(t)
+    _ = os.RemoveAll(filepath.Join(root, ".goagent"))
+
+    // Minimal two-attempt server to trigger length backoff
+    var calls int
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        calls++
+        if calls == 1 {
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+            return
+        }
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+
+    // Locate today's audit file under repo root and read it
+    auditDir := filepath.Join(root, ".goagent", "audit")
+    logFile := waitForAuditFile(t, auditDir, 2*time.Second)
+    data, err := os.ReadFile(logFile)
+    if err != nil {
+        t.Fatalf("read audit: %v", err)
+    }
+    s := string(data)
+    if !strings.Contains(s, "\"event\":\"length_backoff\"") {
+        t.Fatalf("missing length_backoff event; got:\n%s", truncate(s, 1000))
+    }
+    // Basic field presence checks
+    if !strings.Contains(s, "\"model\":\"") || !strings.Contains(s, "\"prev_cap\":") || !strings.Contains(s, "\"new_cap\":") || !strings.Contains(s, "\"window\":") || !strings.Contains(s, "\"estimated_prompt_tokens\":") {
+        t.Fatalf("missing expected fields in length_backoff audit; got:\n%s", truncate(s, 1000))
+    }
+}
+
+// findRepoRoot walks upward from CWD to locate the directory containing go.mod.
+func findRepoRoot(t *testing.T) string {
+    t.Helper()
+    start, err := os.Getwd()
+    if err != nil {
+        t.Fatalf("getwd: %v", err)
+    }
+    dir := start
+    for {
+        if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+            return dir
+        }
+        parent := filepath.Dir(dir)
+        if parent == dir {
+            t.Fatalf("go.mod not found from %s upward", start)
+        }
+        dir = parent
+    }
+}
+
+// waitForAuditFile polls the audit directory until a file appears or timeout elapses.
+func waitForAuditFile(t *testing.T, auditDir string, timeout time.Duration) string {
+    t.Helper()
+    deadline := time.Now().Add(timeout)
+    for time.Now().Before(deadline) {
+        entries, err := os.ReadDir(auditDir)
+        if err == nil {
+            for _, e := range entries {
+                if !e.IsDir() {
+                    return filepath.Join(auditDir, e.Name())
+                }
+            }
+        }
+        time.Sleep(10 * time.Millisecond)
+    }
+    t.Fatalf("audit log not created in %s", auditDir)
+    return ""
+}
+
+func truncate(s string, n int) string {
+    if len(s) <= n {
+        return s
+    }
+    return s[:n]
+}
+
 // https://github.com/hyperifyio/goagent/issues/300
 // CLI flags must be order-insensitive. This test permutes common flags and
 // asserts parsed values are identical regardless of position. We only compare
