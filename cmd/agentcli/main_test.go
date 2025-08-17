@@ -424,6 +424,50 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/252
+// Regression test: a stray role:"tool" without a prior assistant tool_calls
+// must be caught by the pre-flight validator and the request must not be sent.
+func TestPreflightValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
+    // Server that fails the test if contacted
+    called := false
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        called = true
+        t.Fatal("server should not be called when pre-flight fails")
+    }))
+    defer srv.Close()
+
+    // Craft an initial transcript containing a stray tool message
+    msgs := []oai.Message{
+        {Role: oai.RoleUser, Content: "hi"},
+        {Role: oai.RoleTool, Name: "echo", ToolCallID: "1", Content: "{\"echo\":\"hi\"}"},
+    }
+
+    cfg := cliConfig{
+        prompt:       "ignored",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "m",
+        maxSteps:     1,
+        httpTimeout:  100 * time.Millisecond,
+        toolTimeout:  100 * time.Millisecond,
+        temperature:  0,
+        initMessages: msgs,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit due to pre-flight validation error; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    if called {
+        t.Fatalf("HTTP server was contacted despite pre-flight validation failure")
+    }
+    // Error should mention stray tool without prior assistant tool_calls
+    if !strings.Contains(errBuf.String(), "without a prior assistant message containing tool_calls") {
+        t.Fatalf("unexpected error message: %q", errBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/233
 func TestRunAgent_HTTPTimeoutError_MessageIncludesDetails(t *testing.T) {
 	// Fake slow server: sleeps beyond client timeout then returns a valid response
