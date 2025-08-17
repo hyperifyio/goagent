@@ -41,3 +41,14 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 
 - Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted, `top_p` is included, and a one-line warning is printed to stderr.
 - Tools are executed via argv only with JSON stdin/stdout and strict timeouts; no shell is used.
+
+## Prompt profiles
+
+The following profiles map to sampling behaviors for convenience. Temperature is omitted when the target model does not support it.
+
+| Profile | Effect |
+|---|---|
+| deterministic | temperature = 0.1 |
+| general | temperature = 1.0 |
+| creative | temperature = 1.0 |
+| reasoning | temperature = 1.0 |
