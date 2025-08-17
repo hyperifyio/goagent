@@ -134,6 +134,7 @@ Run the agent:
 Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a one‑line final answer.
 
 ## Usage
+Flags are order-insensitive. You can place `-prompt` and other flags in any order; precedence remains flag > environment > default.
 ### Common flags
 ```text
 -prompt string         User prompt (required)
