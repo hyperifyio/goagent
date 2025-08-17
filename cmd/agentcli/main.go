@@ -419,6 +419,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                     }
                     completionCap = next
                 }
+                // Clamp to remaining context window before resending
+                {
+                    window := oai.ContextWindowForModel(cfg.model)
+                    completionCap = oai.ClampCompletionCap(messages, completionCap, window)
+                }
                 retriedForLength = true
                 // Re-send within the same agent step without appending any messages yet
                 continue

@@ -1243,6 +1243,87 @@ func TestLengthBackoff_OneRetrySetsMaxTokens256(t *testing.T) {
     }
 }
 
+// https://github.com/hyperifyio/goagent/issues/318
+// On length backoff, the completion cap must be clamped to the remaining
+// context so that max_tokens does not exceed window - estimated_prompt - margin.
+func TestLengthBackoff_ClampDoesNotExceedWindow(t *testing.T) {
+    // Build a prompt large enough that remaining context < 256 for oss-gpt-20b (8192 window).
+    // We will set model to oss-gpt-20b so ContextWindowForModel returns 8192.
+    // Choose a prompt size that forces remaining context < 256 for window=8192.
+    // Roughly EstimateTokens ~= ceil(len/4) + overhead; len=40000 -> ~10000 tokens.
+    large := strings.Repeat("x", 40000)
+
+    // Capture bodies to inspect max_tokens of the retry
+    var bodies [][]byte
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        b, err := io.ReadAll(r.Body)
+        if err != nil {
+            t.Fatalf("read body: %v", err)
+        }
+        bodies = append(bodies, append([]byte(nil), b...))
+        // First call yields finish_reason==length to trigger the retry
+        if len(bodies) == 1 {
+            resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}}
+            if err := json.NewEncoder(w).Encode(resp); err != nil {
+                t.Fatalf("encode resp1: %v", err)
+            }
+            return
+        }
+        // Second call returns stop to finish
+        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}}
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode resp2: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       large,
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "oss-gpt-20b",
+        maxSteps:     1,
+        httpTimeout:  2 * time.Second,
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+        debug:        false,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+    if len(bodies) != 2 {
+        t.Fatalf("expected two requests, got %d", len(bodies))
+    }
+    // First body must omit max_tokens
+    if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
+        t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
+    }
+    // Second body must include max_tokens and it must be less than or equal to remaining.
+    // Compute an upper bound by parsing the JSON to extract max_tokens.
+    var payload map[string]any
+    if err := json.Unmarshal(bodies[1], &payload); err != nil {
+        t.Fatalf("unmarshal second body: %v", err)
+    }
+    v, ok := payload["max_tokens"].(float64)
+    if !ok {
+        t.Fatalf("second body missing max_tokens; body=%s", string(bodies[1]))
+    }
+    gotCap := int(v)
+    if gotCap <= 0 {
+        t.Fatalf("clamped cap must be > 0; got %d", gotCap)
+    }
+    // Sanity: clamped value must be strictly less than 256 for our large prompt.
+    if gotCap >= 256 {
+        t.Fatalf("clamp failed: expected retry cap < 256 due to large prompt; got %d", gotCap)
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/300
 // CLI flags must be order-insensitive. This test permutes common flags and
 // asserts parsed values are identical regardless of position. We only compare
