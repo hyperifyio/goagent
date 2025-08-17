@@ -59,6 +59,9 @@ type ChatCompletionsRequest struct {
 	// top_p or temperature is set, but never both.
 	TopP        *float64 `json:"top_p,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"`
+    // MaxTokens limits the number of tokens generated for the completion.
+    // Omitted when zero to preserve backward compatibility.
+    MaxTokens int `json:"max_tokens,omitempty"`
 }
 
 // includesTemperature reports whether the request currently has a temperature set.
