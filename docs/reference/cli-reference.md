@@ -31,6 +31,8 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-http-retries int`: Pre-stage HTTP retries (env `OAI_PREP_HTTP_RETRIES`; inherits `-http-retries` if unset)
 - `-prep-http-retry-backoff duration`: Pre-stage HTTP retry backoff (env `OAI_PREP_HTTP_RETRY_BACKOFF`; inherits `-http-retry-backoff` if unset)
 - `-prep-cache-bust`: Skip pre-stage cache and force recompute
+- `-prep-dry-run`: Run pre-stage only, print refined Harmony messages to stdout, and exit 0
+- `-print-messages`: Pretty-print the final merged message array to stderr before the main call
 - `-prep-enabled`: Enable pre-stage processing (default true). When false, pre-stage is skipped and the agent proceeds directly with the original `{system,user}` messages.
 - `-debug`: Dump request/response JSON to stderr
 - `-verbose`: Also print non-final assistant channels (critic/confidence) to stderr

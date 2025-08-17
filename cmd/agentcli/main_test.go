@@ -2335,6 +2335,36 @@ func TestHelpToken_PositionIndependence(t *testing.T) {
 	}
 }
 
+// FEATURE_CHECKLIST L21: -prep-dry-run should run pre-stage only (or skip if disabled),
+// print refined messages to stdout, and exit 0.
+func TestPrepDryRun_PrintsMessages(t *testing.T) {
+    args := []string{"-prompt", "hello", "-prep-enabled=false", "-prep-dry-run"}
+    var out, errBuf strings.Builder
+    code := cliMain(args, &out, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit code=%d; want 0; stderr=%s", code, errBuf.String())
+    }
+    s := strings.TrimSpace(out.String())
+    if !strings.HasPrefix(s, "[") || !strings.Contains(s, "\"role\"") {
+        t.Fatalf("unexpected -prep-dry-run output: %s", s)
+    }
+}
+
+// FEATURE_CHECKLIST L21: -print-messages should pretty-print the final merged
+// message array to stderr before the main call.
+func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {
+    // Disable pre-stage to avoid network and set max-steps=0 to bypass HTTP.
+    args := []string{"-prompt", "p", "-print-messages", "-max-steps", "0", "-prep-enabled=false"}
+    var out, errBuf strings.Builder
+    code := cliMain(args, &out, &errBuf)
+    if code != 1 && code != 0 { // may exit 1 due to max-steps==0
+        t.Fatalf("unexpected exit: %d; stderr=%s", code, errBuf.String())
+    }
+    if !strings.Contains(errBuf.String(), "[") || !strings.Contains(errBuf.String(), "\"role\"") {
+        t.Fatalf("stderr missing messages JSON; got=%q", errBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/244
 // Duration flags accept plain seconds (e.g., 300) and Go duration strings.
 func TestDurationFlags_FlexibleParsing(t *testing.T) {

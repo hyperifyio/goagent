@@ -77,6 +77,9 @@ type cliConfig struct {
     prepAPIKeySource       string // "flag" | "env:OAI_PREP_API_KEY|env:OAI_API_KEY|env:OPENAI_API_KEY" | "inherit|empty"
     prepHTTPRetriesSource  string // "flag" | "env" | "inherit"
     prepHTTPBackoffSource  string // "flag" | "env" | "inherit"
+    // Message viewing modes
+    prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
+    printMessages bool // When true, pretty-print final merged messages to stderr before main call
 	// initMessages allows tests to inject a custom starting transcript to
 	// exercise pre-flight validation paths (e.g., stray tool message). When
 	// empty, the default [system,user] seed is used.
@@ -249,6 +252,9 @@ func parseFlags() (cliConfig, int) {
     // Enabled by default; user can disable to skip pre-stage entirely. Track if explicitly set.
     cfg.prepEnabled = true
     flag.CommandLine.Var(&boolFlexFlag{dst: &cfg.prepEnabled, set: &cfg.prepEnabledSet}, "prep-enabled", "Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)")
+    // Message viewing flags
+    flag.BoolVar(&cfg.prepDryRun, "prep-dry-run", false, "Run pre-stage only, print refined Harmony messages to stdout, and exit 0")
+    flag.BoolVar(&cfg.printMessages, "print-messages", false, "Pretty-print the final merged message array to stderr before the main call")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
     ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -473,6 +479,9 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
 	if cfg.capabilities {
 		return printCapabilities(cfg, stdout, stderr)
 	}
+    if cfg.prepDryRun {
+        return runPrepDryRun(cfg, stdout, stderr)
+    }
 	return runAgent(cfg, stdout, stderr)
 }
 
@@ -596,6 +605,13 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
         return nil
     }(); err != nil {
         // no-op
+    }
+
+    // Optional: pretty-print the final merged messages prior to the main call
+    if cfg.printMessages {
+        if b, err := json.MarshalIndent(messages, "", "  "); err == nil {
+            safeFprintln(stderr, string(b))
+        }
     }
 
     var step int
@@ -749,6 +765,59 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
         safeFprintln(stderr, "error: run ended without final assistant content")
     }
     return 1
+}
+
+// runPrepDryRun executes only the pre-stage processing (respecting -prep-enabled),
+// prints the refined Harmony messages as pretty JSON to stdout, and exits with code 0 on success.
+// On failure (e.g., pre-stage HTTP error), it prints a concise error to stderr and exits non-zero.
+func runPrepDryRun(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
+    // Build seed messages honoring the same precedence as in runAgent
+    var messages []oai.Message
+    if len(cfg.initMessages) > 0 {
+        messages = cfg.initMessages
+    } else {
+        sys, sysErr := resolveMaybeFile(cfg.systemPrompt, cfg.systemFile)
+        if sysErr != nil {
+            safeFprintf(stderr, "error: %v\n", sysErr)
+            return 2
+        }
+        prm, prmErr := resolveMaybeFile(cfg.prompt, cfg.promptFile)
+        if prmErr != nil {
+            safeFprintf(stderr, "error: %v\n", prmErr)
+            return 2
+        }
+        devs, devErr := resolveDeveloperMessages(cfg.developerPrompts, cfg.developerFiles)
+        if devErr != nil {
+            safeFprintf(stderr, "error: %v\n", devErr)
+            return 2
+        }
+        var seed []oai.Message
+        seed = append(seed, oai.Message{Role: oai.RoleSystem, Content: sys})
+        for _, d := range devs {
+            if s := strings.TrimSpace(d); s != "" {
+                seed = append(seed, oai.Message{Role: oai.RoleDeveloper, Content: s})
+            }
+        }
+        seed = append(seed, oai.Message{Role: oai.RoleUser, Content: prm})
+        messages = seed
+    }
+    // Execute pre-stage unless disabled; on failure, exit non-zero
+    if cfg.prepEnabled && len(cfg.initMessages) == 0 {
+        if out, err := runPreStage(cfg, messages, stderr); err == nil {
+            messages = out
+        } else {
+            safeFprintf(stderr, "error: pre-stage failed: %v\n", err)
+            return 1
+        }
+    }
+    // Pretty-print refined messages to stdout
+    if b, err := json.MarshalIndent(messages, "", "  "); err == nil {
+        safeFprintln(stdout, string(b))
+        return 0
+    }
+    // Fallback
+    safeFprintln(stdout, "[]")
+    return 0
 }
 
 // appendToolCallOutputs executes assistant-requested tool calls and appends their
@@ -1185,6 +1254,8 @@ func printUsage(w io.Writer) {
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
     b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
     b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
+    b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
+    b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
     b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
     b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")

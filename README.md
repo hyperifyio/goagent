@@ -171,6 +171,8 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -prep-api-key string    Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)
 -prep-http-retries int  Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)
 -prep-http-retry-backoff duration Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)
+-prep-dry-run           Run pre-stage only, print refined Harmony messages to stdout, and exit 0
+-print-messages         Pretty-print the final merged message array to stderr before the main call
 -http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx). Uses jittered exponential backoff. (default 2)
 -http-retry-backoff duration Base backoff between HTTP retry attempts (exponential with jitter). (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
@@ -249,6 +251,17 @@ See `examples/tool_calls.md` for a self-contained, test-driven worked example th
 Run the example test:
 ```bash
 go test ./examples -run TestWorkedExample_ToolCalls_TemperatureOne_Sequencing -v
+```
+
+### View refined messages (pre-stage and final)
+Inspect message arrays deterministically without running the full loop:
+
+```bash
+# Pre-stage only: print refined Harmony messages and exit
+./bin/agentcli -prompt "Say ok" -prep-dry-run | jq .
+
+# Before the main call: pretty-print merged messages to stderr, then proceed
+./bin/agentcli -prompt "Say ok" -print-messages 2> >(jq .)
 ```
 
 ### Exec tool
