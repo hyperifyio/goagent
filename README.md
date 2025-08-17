@@ -162,6 +162,7 @@ Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/
 -debug                 Dump request/response JSON to stderr
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit
+--version | -version   Print version and exit
 ```
 Run `./bin/agentcli -h` to see the built‑in help.
 

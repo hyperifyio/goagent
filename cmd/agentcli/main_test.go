@@ -236,6 +236,22 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 	}
 }
 
+// https://github.com/hyperifyio/goagent/issues/262
+func TestVersion_PrintsAndExitsZero(t *testing.T) {
+    var outBuf, errBuf bytes.Buffer
+    code := cliMain([]string{"--version"}, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit code = %d; want 0", code)
+    }
+    got := outBuf.String()
+    if !strings.Contains(got, "agentcli version") {
+        t.Fatalf("stdout missing version header; got: %q", got)
+    }
+    if errBuf.Len() != 0 {
+        t.Fatalf("stderr should be empty; got: %q", errBuf.String())
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/252
 func TestMissingPrompt_PrintsErrorUsageAndExitsTwo(t *testing.T) {
     // Simulate running with no -prompt and no special flags

@@ -196,6 +196,11 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
         printUsage(stdout)
         return 0
     }
+    // Handle version flags prior to parsing/validation
+    if versionRequested(args) {
+        printVersion(stdout)
+        return 0
+    }
 
     // Temporarily set os.Args so parseFlags() (which reads os.Args) sees our args
     origArgs := os.Args
@@ -469,6 +474,16 @@ func helpRequested(args []string) bool {
 	return false
 }
 
+// versionRequested returns true if any canonical version token is present.
+func versionRequested(args []string) bool {
+    for _, a := range args {
+        if a == "--version" || a == "-version" {
+            return true
+        }
+    }
+    return false
+}
+
 // printUsage writes a comprehensive usage guide to w.
 func printUsage(w io.Writer) {
 	var b strings.Builder
@@ -489,6 +504,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
+    b.WriteString("  --version | -version\n    Print version and exit\n")
 	b.WriteString("\nExamples:\n")
 	b.WriteString("  # Quick start (after make build build-tools)\n")
 	b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
@@ -496,7 +512,33 @@ func printUsage(w io.Writer) {
 	b.WriteString("  ./bin/agentcli -capabilities -tools ./tools.json\n\n")
 	b.WriteString("  # Show help\n")
 	b.WriteString("  agentcli --help\n")
+    b.WriteString("\n  # Show version\n")
+    b.WriteString("  agentcli --version\n")
 	safeFprintln(w, strings.TrimRight(b.String(), "\n"))
+}
+
+// Build-time variables set via -ldflags; defaults are useful for dev builds.
+var (
+    version   = "v0.0.0-dev"
+    commit    = "unknown"
+    buildDate = "unknown"
+)
+
+// printVersion writes a concise single-line version string to stdout.
+func printVersion(w io.Writer) {
+    // Example: agentcli version v1.2.3 (commit abcdef1, built 2025-08-17)
+    safeFprintln(w, fmt.Sprintf("agentcli version %s (commit %s, built %s)", version, shortCommit(commit), buildDate))
+}
+
+func shortCommit(c string) string {
+    c = strings.TrimSpace(c)
+    if len(c) > 7 {
+        return c[:7]
+    }
+    if c == "" {
+        return "unknown"
+    }
+    return c
 }
 
 // printResolvedConfig writes a JSON object describing resolved configuration
