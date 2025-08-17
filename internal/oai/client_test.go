@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -357,4 +358,120 @@ func TestRetryAfter_HTTPDate(t *testing.T) {
 	if d, ok := retryAfterDuration(date, now); !ok || d < 1900*time.Millisecond || d > 2100*time.Millisecond {
 		t.Fatalf("unexpected duration: %v ok=%v", d, ok)
 	}
+}
+
+// https://github.com/hyperifyio/goagent/issues/216
+func TestBackoffWithJitter_GrowthAndBounds(t *testing.T) {
+    base := 100 * time.Millisecond
+    jf := 0.5 // +/-50%
+    r := mathrand.New(mathrand.NewSource(1))
+    d0 := backoffWithJitter(base, 0, jf, r)
+    if d0 < 50*time.Millisecond || d0 > 150*time.Millisecond {
+        t.Fatalf("attempt0 out of bounds: %v", d0)
+    }
+    d1 := backoffWithJitter(base, 1, jf, r)
+    // attempt 1 base is 200ms; with jitter bounds are [100ms, 300ms]
+    if d1 < 100*time.Millisecond || d1 > 300*time.Millisecond {
+        t.Fatalf("attempt1 out of bounds: %v", d1)
+    }
+    // ensure min growth relative to min bound
+    if d1 <= 75*time.Millisecond { // strictly greater than a conservative lower threshold
+        t.Fatalf("expected growth, d1=%v", d1)
+    }
+    // cap check at high attempts should not exceed 2s +/- jitter
+    dN := backoffWithJitter(base, 10, jf, r)
+    if dN < 1*time.Second || dN > 3*time.Second {
+        t.Fatalf("cap bounds unexpected: %v", dN)
+    }
+}
+
+// Verify jittered backoff is used for 429 without Retry-After.
+func TestCreateChatCompletion_Retry429_UsesJitteredBackoff(t *testing.T) {
+    attempts := 0
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        attempts++
+        if attempts == 1 {
+            w.WriteHeader(http.StatusTooManyRequests)
+            _, _ = w.Write([]byte(`{"error":"rate limited"}`))
+            return
+        }
+        var req ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("bad json: %v", err)
+        }
+        _ = json.NewEncoder(w).Encode(ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}})
+    }))
+    defer ts.Close()
+
+    // Intercept sleeps
+    var slept []time.Duration
+    oldSleep := sleepFunc
+    sleepFunc = func(d time.Duration) { slept = append(slept, d) }
+    defer func() { sleepFunc = oldSleep }()
+
+    // Deterministic jitter
+    r := mathrand.New(mathrand.NewSource(42))
+    c := NewClientWithRetry(ts.URL, "", 1*time.Second, RetryPolicy{MaxRetries: 1, Backoff: 100 * time.Millisecond, JitterFraction: 0.5, Rand: r})
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    out, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+    if out.Choices[0].Message.Content != "ok" {
+        t.Fatalf("unexpected content: %+v", out)
+    }
+    if attempts != 2 {
+        t.Fatalf("expected 2 attempts, got %d", attempts)
+    }
+    if len(slept) != 1 {
+        t.Fatalf("expected one sleep, got %d", len(slept))
+    }
+    if slept[0] < 50*time.Millisecond || slept[0] > 150*time.Millisecond {
+        t.Fatalf("sleep not jittered within bounds: %v", slept[0])
+    }
+}
+
+// Verify jittered backoff is used for client timeouts on first attempt.
+func TestCreateChatCompletion_RetryTimeout_UsesJitteredBackoff(t *testing.T) {
+    attempts := 0
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        attempts++
+        if attempts == 1 {
+            time.Sleep(120 * time.Millisecond)
+        }
+        var req ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("bad json: %v", err)
+        }
+        _ = json.NewEncoder(w).Encode(ChatCompletionsResponse{Choices: []ChatCompletionsResponseChoice{{Message: Message{Role: RoleAssistant, Content: "ok"}}}})
+    }))
+    defer ts.Close()
+
+    var slept []time.Duration
+    oldSleep := sleepFunc
+    sleepFunc = func(d time.Duration) { slept = append(slept, d) }
+    defer func() { sleepFunc = oldSleep }()
+
+    r := mathrand.New(mathrand.NewSource(7))
+    c := NewClientWithRetry(ts.URL, "", 100*time.Millisecond, RetryPolicy{MaxRetries: 1, Backoff: 100 * time.Millisecond, JitterFraction: 0.25, Rand: r})
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    out, err := c.CreateChatCompletion(ctx, ChatCompletionsRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+    if out.Choices[0].Message.Content != "ok" {
+        t.Fatalf("unexpected content: %+v", out)
+    }
+    if attempts < 2 {
+        t.Fatalf("expected retry, attempts=%d", attempts)
+    }
+    if len(slept) != 1 {
+        t.Fatalf("expected one sleep, got %d", len(slept))
+    }
+    // base=100ms, jitter 25% => [75ms,125ms]
+    if slept[0] < 75*time.Millisecond || slept[0] > 125*time.Millisecond {
+        t.Fatalf("sleep not within jitter bounds: %v", slept[0])
+    }
 }

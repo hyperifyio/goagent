@@ -147,8 +147,8 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
                        A hard ceiling of 15 is enforced; exceeding the cap
                        terminates with: "needs human review".
 -http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
--http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
--http-retry-backoff duration Base backoff between HTTP retry attempts (exponential) (default 300ms)
+-http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx). Uses jittered exponential backoff. (default 2)
+-http-retry-backoff duration Base backoff between HTTP retry attempts (exponential with jitter). (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)
 -timeout duration      [DEPRECATED] Global timeout; prefer -http-timeout and -tool-timeout
 -temp float            Sampling temperature (default 1.0)

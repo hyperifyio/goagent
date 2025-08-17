@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	mathrand "math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -28,10 +29,13 @@ type Client struct {
 // RetryPolicy controls HTTP retry behavior for transient failures.
 // MaxRetries specifies the number of retries after the initial attempt.
 // Backoff specifies the base delay between attempts; exponential backoff is applied.
-// Jitter is not applied in this minimal implementation to keep tests deterministic.
+// JitterFraction specifies the +/- fractional jitter applied to each computed backoff.
+// When Rand is non-nil, it is used to sample jitter for deterministic tests.
 type RetryPolicy struct {
 	MaxRetries int
 	Backoff    time.Duration
+    JitterFraction float64
+    Rand           *mathrand.Rand
 }
 
 // NewClient creates a client without retries (single attempt only).
@@ -136,11 +140,11 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			logHTTPAttempt(attempt+1, attempts, 0, 0, endpoint, derr.Error())
 			// Emit timing audit for error case
 			logHTTPTiming(attempt+1, endpoint, 0, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, derr), userHintForCause(ctx, derr))
-			if attempt < attempts-1 && isRetryableError(derr) {
-				// compute backoff for audit then sleep
-				back := backoffDuration(c.retry.Backoff, attempt)
+            if attempt < attempts-1 && isRetryableError(derr) {
+                // compute backoff (with jitter) for audit then sleep
+                back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 				logHTTPAttempt(attempt+1, attempts, 0, back.Milliseconds(), endpoint, derr.Error())
-				sleepFor(back)
+                sleepFunc(back)
 				continue
 			}
 			// Upgrade error with base URL, configured timeout, and actionable hint
@@ -166,10 +170,10 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			logHTTPAttempt(attempt+1, attempts, resp.StatusCode, 0, endpoint, readErr.Error())
 			// Emit timing audit including read duration up to error
 			logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, readErr), userHintForCause(ctx, readErr))
-			if attempt < attempts-1 && isRetryableError(readErr) {
-				back := backoffDuration(c.retry.Backoff, attempt)
+            if attempt < attempts-1 && isRetryableError(readErr) {
+                back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 				logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, readErr.Error())
-				sleepFor(back)
+                sleepFunc(back)
 				continue
 			}
 			return zero, fmt.Errorf("read response body: %w", readErr)
@@ -200,16 +204,16 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				}
 			}
 			// Retry on 429 and 5xx; otherwise return immediately
-			if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
+            if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
 				// Respect Retry-After when present; otherwise use exponential backoff
 				if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
 					// Log with Retry-After derived backoff
 					logHTTPAttempt(attempt+1, attempts, resp.StatusCode, ra.Milliseconds(), endpoint, "")
-					sleepFor(ra)
+                    sleepFunc(ra)
 				} else {
-					back := backoffDuration(c.retry.Backoff, attempt)
+                    back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 					logHTTPAttempt(attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, "")
-					sleepFor(back)
+                    sleepFunc(back)
 				}
 				// Emit timing audit for non-2xx attempt
 				logHTTPTiming(attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
@@ -277,6 +281,33 @@ func backoffDuration(base time.Duration, attempt int) time.Duration {
 	return d
 }
 
+// backoffWithJitter returns an exponential backoff adjusted by +/- jitter fraction.
+// When jitterFraction <= 0, this falls back to backoffDuration. When r is nil,
+// a time-seeded RNG is used for production randomness.
+func backoffWithJitter(base time.Duration, attempt int, jitterFraction float64, r *mathrand.Rand) time.Duration {
+    d := backoffDuration(base, attempt)
+    if jitterFraction <= 0 {
+        return d
+    }
+    if jitterFraction > 0.9 { // prevent extreme factors
+        jitterFraction = 0.9
+    }
+    if r == nil {
+        // Seed with current time for production; tests can pass a custom Rand
+        r = mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
+    }
+    // factor in [1 - f, 1 + f]
+    minF := 1.0 - jitterFraction
+    maxF := 1.0 + jitterFraction
+    factor := minF + r.Float64()*(maxF-minF)
+    // Guard against rounding to zero
+    jittered := time.Duration(float64(d) * factor)
+    if jittered < time.Millisecond {
+        return time.Millisecond
+    }
+    return jittered
+}
+
 // retryAfterDuration parses the Retry-After header which may be seconds or HTTP-date.
 // Returns (duration, true) when valid; otherwise (0, false).
 func retryAfterDuration(h string, now time.Time) (time.Duration, bool) {
@@ -300,6 +331,9 @@ func retryAfterDuration(h string, now time.Time) (time.Duration, bool) {
 }
 
 // sleepFor sleeps for the provided duration; extracted for testability.
+// sleepFunc allows tests to intercept sleeps deterministically.
+var sleepFunc = sleepFor
+
 func sleepFor(d time.Duration) {
 	if d <= 0 {
 		return
