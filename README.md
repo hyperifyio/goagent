@@ -174,6 +174,8 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -top-p float           Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)
 -prep-top-p float      Nucleus sampling probability mass for pre-stage (conflicts with -temp; omits temperature when set)
 -debug                 Dump request/response JSON to stderr
+-verbose               Also print non-final assistant channels (critic/confidence) to stderr
+-quiet                 Suppress non-final output; print only final text to stdout
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit
 --version | -version   Print version and exit

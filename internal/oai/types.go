@@ -20,6 +20,10 @@ type Message struct {
 	Content    string `json:"content,omitempty"`
 	Name       string `json:"name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
+    // Channel allows assistants to tag messages with a semantic channel such as
+    // "final", "critic", or "confidence". Unknown or empty channels are
+    // treated as normal assistant messages by the CLI unless routed explicitly.
+    Channel    string `json:"channel,omitempty"`
 	// The OpenAI-compatible schema also allows "tool_calls" on assistant messages.
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }

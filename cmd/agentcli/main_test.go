@@ -658,6 +658,55 @@ func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
 	}
 }
 
+// Channel printing harmonization: default prints only final to stdout; -verbose prints critic/confidence to stderr; -quiet still prints final only
+func TestChannelPrinting_DefaultVerboseQuiet(t *testing.T) {
+    mkServer := func() *httptest.Server {
+        steps := 0
+        return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            var req oai.ChatCompletionsRequest
+            _ = json.NewDecoder(r.Body).Decode(&req)
+            steps++
+            switch steps {
+            case 1:
+                // Return a non-final channel message with content
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
+                }}})
+            default:
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
+                }}})
+            }
+        }))
+    }
+
+    run := func(args ...string) (string, string, int) {
+        srv := mkServer()
+        defer srv.Close()
+        var outBuf, errBuf bytes.Buffer
+        code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m"}, args...), &outBuf, &errBuf)
+        return outBuf.String(), errBuf.String(), code
+    }
+
+    // Default: only final to stdout, no critic on stderr
+    out, errS, code := run()
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final only; got %q", strings.TrimSpace(out)) }
+    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under default; got %q", errS) }
+
+    // Verbose: critic to stderr, final to stdout
+    out, errS, code = run("-verbose")
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if !strings.Contains(errS, "c1") { t.Fatalf("stderr should include critic under -verbose; got %q", errS) }
+    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out)) }
+
+    // Quiet: still prints final to stdout, no critic to stderr
+    out, errS, code = run("-quiet")
+    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
+    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out)) }
+    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
+}
+
 // https://github.com/hyperifyio/goagent/issues/285
 // Precedence: flag -temp > env LLM_TEMPERATURE > default 1.0
 func TestTemperaturePrecedence_FlagThenEnvThenDefault(t *testing.T) {

@@ -36,6 +36,8 @@ type cliConfig struct {
 	topP         float64
     prepTopP     float64
 	debug        bool
+    verbose      bool
+    quiet        bool
 	capabilities bool
 	printConfig  bool
     // Pre-stage tool policy
@@ -178,6 +180,8 @@ func parseFlags() (cliConfig, int) {
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
     flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
+    flag.BoolVar(&cfg.verbose, "verbose", false, "Also print non-final assistant channels (critic/confidence) to stderr")
+    flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
     flag.BoolVar(&cfg.prepToolsAllowExternal, "prep-tools-allow-external", false, "Allow pre-stage to execute external tools from -tools; when false, pre-stage is limited to built-in read-only tools")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
@@ -336,7 +340,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
     // Emit effective timeout sources under -debug (after normalization)
-	if cfg.debug {
+    if cfg.debug {
         safeFprintf(stderr, "effective timeouts: http-timeout=%s source=%s; prep-http-timeout=%s source=%s; tool-timeout=%s source=%s; timeout=%s source=%s\n",
 			cfg.httpTimeout.String(), cfg.httpTimeoutSource,
             cfg.prepHTTPTimeout.String(), cfg.prepHTTPTimeoutSource,
@@ -460,6 +464,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                 return 1
             }
 
+            // Request debug dump (no human-readable output precedes requests)
             dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
 
             // Per-call context
@@ -475,8 +480,6 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                 safeFprintf(stderr, "error: chat call failed: %v (http-timeout source=%s)\n", err, src)
                 return 1
             }
-            dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
-
             if len(resp.Choices) == 0 {
                 safeFprintln(stderr, "error: chat response has no choices")
                 return 1
@@ -510,6 +513,13 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
             }
 
             msg := choice.Message
+            // Under -verbose, if the assistant returns a non-final channel, print to stderr immediately.
+            if cfg.verbose && msg.Role == oai.RoleAssistant {
+                ch := strings.TrimSpace(msg.Channel)
+                if ch != "final" && strings.TrimSpace(msg.Content) != "" {
+                    safeFprintln(stderr, strings.TrimSpace(msg.Content))
+                }
+            }
 
             // If the model returned tool calls and we have a registry, first append
             // the assistant message that carries tool_calls to preserve correct
@@ -522,13 +532,32 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                 break
             }
 
-            // If the model returned final assistant content, print and exit 0
+            // If the model returned assistant content, handle channel-aware routing
             if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {
-                safeFprintln(stdout, strings.TrimSpace(msg.Content))
-                return 0
+                // Respect channel-aware printing: only print channel=="final" to stdout by default.
+                ch := strings.TrimSpace(msg.Channel)
+                if ch == "final" || ch == "" {
+                    if !cfg.quiet {
+                        safeFprintln(stdout, strings.TrimSpace(msg.Content))
+                    } else {
+                        // quiet still prints the final text (requirement); so print regardless of quiet.
+                        safeFprintln(stdout, strings.TrimSpace(msg.Content))
+                    }
+                    // Dump debug response JSON after human-readable output, then exit
+                    dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
+                    return 0
+                } else {
+                    // Non-final assistant message with content: do not print to stdout by default.
+                    // (already printed above under -verbose)
+                    // Append and continue loop to get the actual final
+                    dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
+                    messages = append(messages, msg)
+                    break
+                }
             }
 
             // Otherwise, append message and continue (some models return assistant with empty content and no tools)
+            dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
             messages = append(messages, msg)
             break
         }
@@ -667,6 +696,19 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     }
     dumpJSONIfDebug(stderr, "prep.response", resp, cfg.debug)
 
+    // Under -verbose, surface non-final assistant channels from pre-stage as human-readable stderr lines
+    if cfg.verbose {
+        if len(resp.Choices) > 0 {
+            m := resp.Choices[0].Message
+            if m.Role == oai.RoleAssistant {
+                ch := strings.TrimSpace(m.Channel)
+                if ch != "final" && strings.TrimSpace(m.Content) != "" {
+                    safeFprintln(stderr, strings.TrimSpace(m.Content))
+                }
+            }
+        }
+    }
+
     // If there are no tool calls, return messages unchanged
     if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
         return messages, nil
@@ -785,6 +827,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
     b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
+    b.WriteString("  -verbose\n    Also print non-final assistant channels (critic/confidence) to stderr\n")
+    b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
     b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
