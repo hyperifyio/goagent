@@ -49,6 +49,10 @@ type cliConfig struct {
     quiet        bool
     // Pre-stage cache controls
     prepCacheBust bool // when true, bypass pre-stage cache for this run
+    // Pre-stage master switch
+    prepEnabled bool // when false, completely skip pre-stage
+    // Tracks whether -prep-enabled was explicitly provided by the user
+    prepEnabledSet bool
 	capabilities bool
 	printConfig  bool
     // Pre-stage tool policy
@@ -72,6 +76,26 @@ type float64FlexFlag struct {
 	dst *float64
 	set *bool
 }
+// boolFlexFlag wires a bool destination and records if it was set via flag.
+type boolFlexFlag struct {
+    dst *bool
+    set *bool
+}
+
+func (b *boolFlexFlag) String() string {
+    if b == nil || b.dst == nil { return "false" }
+    if *b.dst { return "true" }
+    return "false" 
+}
+
+func (b *boolFlexFlag) Set(s string) error {
+    v, err := strconv.ParseBool(strings.TrimSpace(s))
+    if err != nil { return err }
+    if b.dst != nil { *b.dst = v }
+    if b.set != nil { *b.set = true }
+    return nil
+}
+
 
 func (f *float64FlexFlag) String() string {
 	if f == nil || f.dst == nil {
@@ -204,6 +228,9 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
     flag.BoolVar(&cfg.prepToolsAllowExternal, "prep-tools-allow-external", false, "Allow pre-stage to execute external tools from -tools; when false, pre-stage is limited to built-in read-only tools")
     flag.BoolVar(&cfg.prepCacheBust, "prep-cache-bust", false, "Skip pre-stage cache and force recompute")
+    // Enabled by default; user can disable to skip pre-stage entirely. Track if explicitly set.
+    cfg.prepEnabled = true
+    flag.CommandLine.Var(&boolFlexFlag{dst: &cfg.prepEnabled, set: &cfg.prepEnabledSet}, "prep-enabled", "Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
     ignoreError(flag.CommandLine.Parse(os.Args[1:]))
@@ -366,6 +393,10 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
 // runAgent executes the non-interactive agent loop and returns a process exit code.
 // nolint:gocyclo // Orchestrates the agent loop; complexity is acceptable and covered by tests.
 func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
+    // Default pre-stage enabled when not explicitly set (covers tests constructing cfg directly)
+    if !cfg.prepEnabledSet {
+        cfg.prepEnabled = true
+    }
 	// Normalize timeouts for backward compatibility when cfg constructed directly in tests
 	if cfg.httpTimeout <= 0 {
 		if cfg.timeout > 0 {
@@ -464,20 +495,21 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
     // Pre-stage: perform a preparatory chat call and append any pre-stage tool outputs
     // to the transcript before entering the main loop. Behavior is additive only.
     if err := func() error {
-        // Only run pre-stage when not using injected initMessages (tests may target specific flows)
-        if len(cfg.initMessages) > 0 {
+        // Skip entirely when disabled or when tests inject initMessages
+        if !cfg.prepEnabled || len(cfg.initMessages) > 0 {
             return nil
         }
         // Execute pre-stage and update messages if any tool outputs were produced
         out, err := runPreStage(cfg, messages, stderr)
         if err != nil {
-            // On error, keep existing messages; later checklist items will implement fail-open
+            // Fail-open: log one concise WARN and proceed with original messages
+            safeFprintf(stderr, "WARN: pre-stage failed; skipping (reason: %s)\n", oneLine(err.Error()))
             return nil
         }
         messages = out
         return nil
     }(); err != nil {
-        // no-op; pre-stage best-effort for now
+        // no-op
     }
 
     var step int
@@ -1055,7 +1087,8 @@ func printUsage(w io.Writer) {
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
     b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
     b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
-	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
+    b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
+    b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
 	b.WriteString("  --version | -version\n    Print version and exit\n")
 	b.WriteString("\nExamples:\n")
@@ -1191,6 +1224,7 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 
     // Pre-stage block
     payload["prep"] = map[string]any{
+        "enabled":            cfg.prepEnabled,
         "model":               prepModel,
         "modelSource":         prepModelSource,
         "baseURL":             prepBase,

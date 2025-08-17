@@ -26,6 +26,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-top-p float`: Pre-stage nucleus sampling probability mass (conflicts with `-temp`; when set, pre-stage omits temperature and sends `top_p`)
 - `-prep-profile string`: Pre-stage prompt profile (`deterministic|general|creative|reasoning`); sets temperature when supported (conflicts with `-prep-top-p`)
 - `-prep-cache-bust`: Skip pre-stage cache and force recompute
+- `-prep-enabled`: Enable pre-stage processing (default true). When false, pre-stage is skipped and the agent proceeds directly with the original `{system,user}` messages.
 - `-debug`: Dump request/response JSON to stderr
 - `-verbose`: Also print non-final assistant channels (critic/confidence) to stderr
 - `-quiet`: Suppress non-final output; print only final text to stdout

@@ -448,6 +448,88 @@ func TestPrepCache_TTLExpiry(t *testing.T) {
     }
 }
 
+// Fail-open: when pre-stage returns an error, agent logs a WARN once and proceeds.
+func TestPrepFailOpen_WarnsAndProceeds(t *testing.T) {
+    // Server that always errors (simulate network error)
+    cl := &http.Client{}
+    _ = cl // silence unused in case
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Close connection abruptly to simulate failure
+        hj, ok := w.(http.Hijacker)
+        if !ok {
+            http.Error(w, "no hijack", http.StatusInternalServerError)
+            return
+        }
+        conn, _, _ := hj.Hijack()
+        _ = conn.Close()
+    }))
+    defer srv.Close()
+
+    // Configure CLI to call failing pre-stage, then main call uses a working server
+    // For main call, we need a different server that returns a final message
+    mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+    }))
+    defer mainSrv.Close()
+
+    cfg := cliConfig{
+        prompt:          "u",
+        systemPrompt:    "s",
+        baseURL:         mainSrv.URL, // used for main call
+        model:           "m",
+        prepHTTPTimeout: 200 * time.Millisecond,
+        httpRetries:     0,
+        maxSteps:        1,
+        prepEnabled:     true,
+    }
+    // Force pre-stage to use failing server via env override for prep base URL
+    t.Setenv("OAI_PREP_BASE_URL", srv.URL)
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
+    }
+    if !strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
+        t.Fatalf("expected WARN about pre-stage failure; got: %q", errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
+    }
+}
+
+// Disabling pre-stage should skip it entirely and not log WARN.
+func TestPrepEnabled_False_SkipsPreStage(t *testing.T) {
+    // Pre-stage would point to a non-routable address if used; but we disable it
+    t.Setenv("OAI_PREP_BASE_URL", "http://127.0.0.1:1")
+    // Main server returns final content
+    mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+    }))
+    defer mainSrv.Close()
+
+    cfg := cliConfig{
+        prompt:       "u",
+        systemPrompt: "s",
+        baseURL:      mainSrv.URL,
+        model:        "m",
+        prepEnabled:  false, // disable pre-stage
+        prepEnabledSet: true,
+        maxSteps:     1,
+    }
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
+        t.Fatalf("did not expect WARN when pre-stage is disabled; got: %q", errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
+    }
+}
+
 // testFindRepoRoot is a helper for tests to locate the repo root using the prod helper.
 func testFindRepoRoot(t *testing.T) string { t.Helper(); return findRepoRoot() }
 
@@ -1092,6 +1174,8 @@ func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
 		"\"httpTimeoutSource\": \"env\"",
         "\"prepHTTPTimeout\": ",
         "\"prepHTTPTimeoutSource\": ",
+        "\"prep\": ",
+        "\"enabled\": ",
 		"\"toolTimeout\": ",
 		"\"timeout\": ",
 		"\"timeoutSource\": ",

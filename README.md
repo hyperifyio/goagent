@@ -174,6 +174,7 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -top-p float           Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)
 -prep-top-p float      Nucleus sampling probability mass for pre-stage (conflicts with -temp; omits temperature when set)
 -prep-profile string   Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)
+-prep-enabled          Enable pre-stage (default true). When false, skip pre-stage and proceed directly to main call.
 -debug                 Dump request/response JSON to stderr
 -verbose               Also print non-final assistant channels (critic/confidence) to stderr
 -quiet                 Suppress non-final output; print only final text to stdout
