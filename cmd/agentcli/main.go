@@ -263,7 +263,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
 	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	for step := 0; step < cfg.maxSteps; step++ {
-		req := oai.ChatCompletionsRequest{
+        req := oai.ChatCompletionsRequest{
 			Model:    cfg.model,
 			Messages: messages,
 		}
@@ -276,7 +276,13 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			req.ToolChoice = "auto"
 		}
 
-		dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
+        // Pre-flight validate message sequence to avoid API 400s for stray tool messages
+        if err := oai.ValidateMessageSequence(req.Messages); err != nil {
+            safeFprintf(stderr, "error: %v\n", err)
+            return 1
+        }
+
+        dumpJSONIfDebug(stderr, fmt.Sprintf("chat.request step=%d", step+1), req, cfg.debug)
 
 		// Per-call context
 		callCtx, cancel := context.WithTimeout(context.Background(), cfg.httpTimeout)
