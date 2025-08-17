@@ -337,9 +337,12 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
 
-	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
+    // Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	warnedOneKnob := false
 	for step := 0; step < cfg.maxSteps; step++ {
+        // completionCap governs optional MaxTokens on the request. It defaults to 0
+        // (omitted) and will be adjusted by length backoff logic in later slices.
+        completionCap := 0
 		req := oai.ChatCompletionsRequest{
 			Model:    cfg.model,
 			Messages: messages,
@@ -363,6 +366,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			req.Tools = oaiTools
 			req.ToolChoice = "auto"
 		}
+
+        // Include MaxTokens only when a positive completionCap is set.
+        if completionCap > 0 {
+            req.MaxTokens = completionCap
+        }
 
 		// Pre-flight validate message sequence to avoid API 400s for stray tool messages
 		if err := oai.ValidateMessageSequence(req.Messages); err != nil {

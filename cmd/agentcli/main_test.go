@@ -1125,6 +1125,52 @@ func TestHTTPTimeout_NotClampedByGlobal(t *testing.T) {
 	})
 }
 
+// https://github.com/hyperifyio/goagent/issues/318
+// When completionCap defaults to 0, request must omit max_tokens entirely.
+func TestRequest_OmitsMaxTokensWhenCapZero(t *testing.T) {
+    var captured []byte
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        b, err := io.ReadAll(r.Body)
+        if err != nil {
+            t.Fatalf("read body: %v", err)
+        }
+        captured = append([]byte(nil), b...)
+        // Respond with a minimal valid assistant message to terminate
+        resp := oai.ChatCompletionsResponse{
+            Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+            }},
+        }
+        if err := json.NewEncoder(w).Encode(resp); err != nil {
+            t.Fatalf("encode resp: %v", err)
+        }
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{
+        prompt:       "x",
+        systemPrompt: "sys",
+        baseURL:      srv.URL,
+        model:        "m",
+        maxSteps:     1,
+        httpTimeout:  2 * time.Second,
+        toolTimeout:  1 * time.Second,
+        temperature:  0,
+    }
+
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if len(captured) == 0 {
+        t.Fatalf("no request captured")
+    }
+    if strings.Contains(string(captured), "\"max_tokens\"") {
+        t.Fatalf("request must omit max_tokens when completionCap=0; got body: %s", string(captured))
+    }
+}
+
 // https://github.com/hyperifyio/goagent/issues/300
 // CLI flags must be order-insensitive. This test permutes common flags and
 // asserts parsed values are identical regardless of position. We only compare
