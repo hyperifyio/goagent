@@ -259,7 +259,7 @@ func TestPrepOneKnob_TopPOmitsTemperature(t *testing.T) {
     msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
     cfg.prepTopP = 0.9
     var errBuf bytes.Buffer
-    if err := runPreStage(cfg, msgs, &errBuf); err != nil {
+    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
         t.Fatalf("runPreStage error: %v", err)
     }
     if seenTemp != nil {
@@ -286,7 +286,7 @@ func TestPrepIncludesTemperatureWhenSupported(t *testing.T) {
     cfg.temperature = 1.0
     msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
     var errBuf bytes.Buffer
-    if err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
     if seenTemp == nil || *seenTemp != 1.0 {
         t.Fatalf("prep: expected temperature=1.0 included; got %v", func() any { if seenTemp==nil { return nil }; return *seenTemp }())
     }
@@ -317,7 +317,7 @@ func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {
     cfg.temperature = 0.7
     msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
     var errBuf bytes.Buffer
-    if err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
     if calls != 2 {
         t.Fatalf("prep: expected exactly one recovery retry; calls=%d", calls)
     }
@@ -344,7 +344,7 @@ func TestPrepValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
 
     cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 200 * time.Millisecond, httpRetries: 0}
     var errBuf bytes.Buffer
-    err := runPreStage(cfg, msgs, &errBuf)
+    _, err := runPreStage(cfg, msgs, &errBuf)
     if err == nil {
         t.Fatalf("expected error due to pre-stage validation failure; stderr=%q", errBuf.String())
     }
@@ -354,6 +354,66 @@ func TestPrepValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
     if !strings.Contains(errBuf.String(), "prep invalid message sequence") {
         t.Fatalf("stderr should mention prep invalid message sequence; got: %q", errBuf.String())
     }
+}
+
+// Parallel tool-calls in pre-stage: when the pre-stage response returns multiple
+// tool_calls and a tools manifest is provided, the helper must execute tools
+// concurrently and append exactly one tool message per id.
+func TestPrep_ParallelToolCalls_ExecutesConcurrently(t *testing.T) {
+    // Build a sleeper tool that respects sleepMs
+    dir := t.TempDir()
+    helper := filepath.Join(dir, "sleeper.go")
+    if err := os.WriteFile(helper, []byte(`package main
+import ("encoding/json"; "io"; "os"; "time"; "fmt")
+func main(){b,_:=io.ReadAll(os.Stdin); var m map[string]any; _=json.Unmarshal(b,&m); ms:=0; if v,ok:=m["sleepMs"].(float64); ok { ms=int(v) }; if ms>0 { time.Sleep(time.Duration(ms)*time.Millisecond) }; _=json.NewEncoder(os.Stdout).Encode(map[string]any{"sleptMs":ms}); fmt.Print("")}
+`), 0o644); err != nil { t.Fatalf("write tool: %v", err) }
+    bin := filepath.Join(dir, "sleeper")
+    if runtime.GOOS == "windows" { bin += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil { t.Fatalf("build tool: %v: %s", err, string(out)) }
+
+    // Write a tools.json manifest referencing the sleeper
+    manifestPath := filepath.Join(dir, "tools.json")
+    m := map[string]any{
+        "tools": []map[string]any{{
+            "name": "sleeper",
+            "description": "sleep tool",
+            "schema": map[string]any{"type":"object","properties":map[string]any{"sleepMs":map[string]any{"type":"integer"}}},
+            "command": []string{bin},
+            "timeoutSec": 3,
+        }},
+    }
+    b, err := json.Marshal(m)
+    if err != nil { t.Fatalf("marshal manifest: %v", err) }
+    if err := os.WriteFile(manifestPath, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    // Fake server returns a single response with two tool_calls
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
+                {ID:"a", Type:"function", Function:oai.ToolCallFunction{Name:"sleeper", Arguments:"{\"sleepMs\":600}"}},
+                {ID:"b", Type:"function", Function:oai.ToolCallFunction{Name:"sleeper", Arguments:"{\"sleepMs\":600}"}},
+            }},
+        }}}
+        _ = json.NewEncoder(w).Encode(resp)
+    }))
+    defer srv.Close()
+
+    // Measure elapsed around runPreStage and ensure it's < sequential time (~1200ms)
+    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manifestPath}
+    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
+    var errBuf bytes.Buffer
+    start := time.Now()
+    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+    elapsed := time.Since(start)
+    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
+    // Expect original messages + assistant tool_calls + two tool outputs
+    var toolCount int
+    for _, m := range outMsgs { if m.Role == oai.RoleTool { toolCount++ } }
+    if toolCount != 2 { t.Fatalf("expected 2 tool messages, got %d", toolCount) }
+    if elapsed >= 1100*time.Millisecond { t.Fatalf("pre-stage tool calls not parallel; elapsed=%v", elapsed) }
 }
 
 // https://github.com/hyperifyio/goagent/issues/289

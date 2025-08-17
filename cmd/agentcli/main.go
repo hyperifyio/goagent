@@ -379,6 +379,25 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
     if effectiveMaxSteps > 15 {
         effectiveMaxSteps = 15
     }
+    // Pre-stage: perform a preparatory chat call and append any pre-stage tool outputs
+    // to the transcript before entering the main loop. Behavior is additive only.
+    if err := func() error {
+        // Only run pre-stage when not using injected initMessages (tests may target specific flows)
+        if len(cfg.initMessages) > 0 {
+            return nil
+        }
+        // Execute pre-stage and update messages if any tool outputs were produced
+        out, err := runPreStage(cfg, messages, stderr)
+        if err != nil {
+            // On error, keep existing messages; later checklist items will implement fail-open
+            return nil
+        }
+        messages = out
+        return nil
+    }(); err != nil {
+        // no-op; pre-stage best-effort for now
+    }
+
     var step int
     for step = 0; step < effectiveMaxSteps; step++ {
         // completionCap governs optional MaxTokens on the request. It defaults to 0
@@ -574,11 +593,13 @@ func dumpJSONIfDebug(w io.Writer, label string, v any, debug bool) {
 	safeFprintf(w, "\n--- %s ---\n%s\n", label, string(b))
 }
 
-// runPreStage performs a minimal pre-processing call that exercises one-knob logic
-// and client behavior (including parameter-recovery on 400). It returns the
-// messages unchanged to preserve current behavior; subsequent checklist items will
-// refine and merge pre-stage outputs. The function uses cfg.prepHTTPTimeout.
-func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) error {
+// runPreStage performs a pre-processing call that exercises one-knob logic
+// and client behavior (including parameter-recovery on 400). If the response
+// includes tool_calls and a tools manifest is available, it executes those
+// tool calls concurrently (mirroring main loop behavior) and appends exactly
+// one tool message per id to the returned transcript. The function uses
+// cfg.prepHTTPTimeout for its HTTP budget.
+func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai.Message, error) {
     // Construct request mirroring main loop sampling rules but using -prep-top-p
     req := oai.ChatCompletionsRequest{
         Model:    cfg.model,
@@ -587,7 +608,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) error 
     // Pre-flight validate message sequence to avoid API 400s for stray tool messages
     if err := oai.ValidateMessageSequence(req.Messages); err != nil {
         safeFprintf(stderr, "error: prep invalid message sequence: %v\n", err)
-        return err
+        return nil, err
     }
     if cfg.prepTopP > 0 {
         topP := cfg.prepTopP
@@ -607,10 +628,38 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) error 
     if err != nil {
         // Mirror main loop error style concisely; future item will add WARN+fallback behavior
         safeFprintf(stderr, "error: prep call failed: %v\n", err)
-        return err
+        return nil, err
     }
     dumpJSONIfDebug(stderr, "prep.response", resp, cfg.debug)
-    return nil
+
+    // If there are no tool calls or no tools manifest provided, return messages unchanged
+    if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 || strings.TrimSpace(cfg.toolsPath) == "" {
+        return messages, nil
+    }
+
+    // Load tools manifest to build a registry for executing tool calls
+    registry, _, lerr := tools.LoadManifest(cfg.toolsPath)
+    if lerr != nil {
+        safeFprintf(stderr, "error: failed to load tools manifest for pre-stage: %v\n", lerr)
+        return nil, lerr
+    }
+    // Validate that configured tools are available on this system (same as runAgent)
+    for name, spec := range registry {
+        if len(spec.Command) == 0 {
+            safeFprintf(stderr, "error: configured tool %q has no command\n", name)
+            return nil, fmt.Errorf("tool %s has no command", name)
+        }
+        if _, lookErr := exec.LookPath(spec.Command[0]); lookErr != nil {
+            safeFprintf(stderr, "error: configured tool %q is unavailable: %v (program %q)\n", name, lookErr, spec.Command[0])
+            return nil, lookErr
+        }
+    }
+
+    // Append the assistant message carrying tool_calls, then append tool outputs concurrently
+    assistantMsg := resp.Choices[0].Message
+    out := append(append([]oai.Message{}, messages...), assistantMsg)
+    out = appendToolCallOutputs(out, assistantMsg, registry, cfg)
+    return out, nil
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
