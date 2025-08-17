@@ -23,3 +23,25 @@ func ContextWindowForModel(model string) int {
 	}
 	return DefaultContextWindow
 }
+
+// ClampCompletionCap bounds a desired completion cap to the remaining context
+// window after accounting for the estimated tokens of the prompt messages. It
+// ensures a minimum of 1 token and subtracts a small safety margin.
+//
+// The clamp rule is: max(1, window - EstimateTokens(messages) - 32), then
+// bounded above by the requested cap.
+func ClampCompletionCap(messages []Message, requestedCap int, window int) int {
+    // Remaining space after considering prompt tokens and a small margin.
+    remaining := window - EstimateTokens(messages) - 32
+    if remaining < 1 {
+        remaining = 1
+    }
+    if requestedCap <= 0 {
+        // If caller provides non-positive cap, treat as wanting the maximum safe amount.
+        return remaining
+    }
+    if requestedCap > remaining {
+        return remaining
+    }
+    return requestedCap
+}
