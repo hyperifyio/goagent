@@ -53,3 +53,7 @@ sequenceDiagram
 Rollout Notes
 - Update README and reference docs to state temperature=1.0 default and one-knob rule, and to document observability fields.
 - Add unit/integration tests for parameter-recovery, one-knob enforcement, and length backoff as incremental slices.
+
+Addendum (2025-08-17)
+
+This addendum clarifies that the project standardizes on a default `temperature=1.0` for API parity and GPT-5 compatibility. Models that do not accept a temperature parameter will receive no `temperature` in the payload; behavior in those cases remains provider-default. The one-knob rule remains in effect: when users specify `top_p`, the agent omits `temperature`; when `top_p` is not provided, the agent sends `temperature` (default 1.0) and leaves `top_p` unset. The docs index now links to this ADR to surface the policy.

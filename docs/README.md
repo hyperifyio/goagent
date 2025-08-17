@@ -8,6 +8,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0002-unrestricted-toolbelt.md](adr/0002-unrestricted-toolbelt.md)
 - ADR-0003: Toolchain & Lint Policy (Go + golangci-lint) — pin Go via go.mod and a known-good golangci-lint; CI and local workflows align.
   - Link: [docs/adr/0003-toolchain-and-lint-policy.md](adr/0003-toolchain-and-lint-policy.md)
+- ADR-0004: Default LLM Call Policy — default temperature 1.0, capability-based omission, one-knob rule, and observability fields.
+  - Link: [docs/adr/0004-default-llm-policy.md](adr/0004-default-llm-policy.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)
