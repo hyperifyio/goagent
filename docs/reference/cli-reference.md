@@ -12,6 +12,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-model string`: Model ID (env `OAI_MODEL`, default `oss-gpt-20b`)
 - `-max-steps int`: Maximum reasoning/tool steps (default 8)
 - `-http-timeout duration`: HTTP timeout for chat completions (env `OAI_HTTP_TIMEOUT`; falls back to `-timeout` if unset)
+- `-prep-http-timeout duration`: HTTP timeout for pre-stage (env `OAI_PREP_HTTP_TIMEOUT`; falls back to `-http-timeout` if unset)
 - `-http-retries int`: Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
 - `-http-retry-backoff duration`: Base backoff between HTTP retry attempts (exponential) (default 300ms)
 - `-tool-timeout duration`: Per-tool timeout (falls back to `-timeout` if unset)
@@ -29,6 +30,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `OAI_MODEL`: Default model ID
 - `OAI_API_KEY`: API key (canonical; CLI also accepts `OPENAI_API_KEY` as a fallback)
 - `OAI_HTTP_TIMEOUT`: HTTP timeout for chat requests (e.g., `90s`)
+- `OAI_PREP_HTTP_TIMEOUT`: HTTP timeout for pre-stage requests (e.g., `90s`); overrides inheritance from `-http-timeout`
 - `LLM_TEMPERATURE`: Temperature override when `-temp` is not provided (flag takes precedence)
 
 ## Exit codes

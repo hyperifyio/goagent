@@ -85,6 +85,7 @@ Environment variables:
 - `OAI_MODEL` — model ID (default `oss-gpt-20b`). Helper scripts will also read `LLM_MODEL` if present.
 - `OAI_API_KEY` — API key when required. The CLI also accepts `OPENAI_API_KEY` for compatibility.
 - `OAI_HTTP_TIMEOUT` — HTTP timeout for chat requests (e.g., `90s`). Mirrors `-http-timeout`.
+  `OAI_PREP_HTTP_TIMEOUT` — HTTP timeout for pre-stage; overrides inheritance from `-http-timeout`.
 
 ## Quick start
 Install the CLI and point it to a reachable OpenAI‑compatible API (local or hosted):
@@ -155,6 +156,7 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
                        A hard ceiling of 15 is enforced; exceeding the cap
                        terminates with: "needs human review".
 -http-timeout duration HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; default falls back to -timeout)
+-prep-http-timeout duration HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; default falls back to -http-timeout)
 -http-retries int      Number of retries for transient HTTP failures (timeouts, 429, 5xx). Uses jittered exponential backoff. (default 2)
 -http-retry-backoff duration Base backoff between HTTP retry attempts (exponential with jitter). (default 300ms)
 -tool-timeout duration Per-tool timeout (default falls back to -timeout)

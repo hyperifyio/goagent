@@ -101,7 +101,7 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
 	defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
 
-	// Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s
+    // Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s, prep inherits http
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 	os.Args = []string{"agentcli.test", "-prompt", "x"}
@@ -109,14 +109,17 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
 	}
-	if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second {
+    if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second {
 		t.Fatalf("expected httpTimeout=timeout=30s, got http=%v timeout=%v", cfg.httpTimeout, cfg.timeout)
 	}
 	if cfg.toolTimeout != cfg.timeout {
 		t.Fatalf("expected toolTimeout=timeout, got %v vs %v", cfg.toolTimeout, cfg.timeout)
 	}
+    if cfg.prepHTTPTimeout != cfg.httpTimeout {
+        t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
+    }
 
-	// Case 2: env OAI_HTTP_TIMEOUT overrides legacy
+    // Case 2: env OAI_HTTP_TIMEOUT overrides legacy and prep inherits http
 	if err := os.Setenv("OAI_HTTP_TIMEOUT", "2m"); err != nil {
 		t.Fatalf("set env: %v", err)
 	}
@@ -125,12 +128,15 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
 	}
-	if cfg.httpTimeout != 2*time.Minute {
+    if cfg.httpTimeout != 2*time.Minute {
 		t.Fatalf("expected httpTimeout=2m from env, got %v", cfg.httpTimeout)
 	}
 	if cfg.toolTimeout != 30*time.Second {
 		t.Fatalf("expected toolTimeout=30s default, got %v", cfg.toolTimeout)
 	}
+    if cfg.prepHTTPTimeout != cfg.httpTimeout {
+        t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
+    }
 
 	// Case 3: flags override env and legacy
 	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "1s"}
@@ -141,6 +147,46 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	if cfg.httpTimeout != 5*time.Second || cfg.toolTimeout != 7*time.Second {
 		t.Fatalf("expected http=5s tool=7s, got http=%v tool=%v", cfg.httpTimeout, cfg.toolTimeout)
 	}
+}
+
+// Verify precedence for -prep-http-timeout: flag > env OAI_PREP_HTTP_TIMEOUT > -http-timeout > default
+func TestPrepHTTPTimeout_Precedence(t *testing.T) {
+    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+    restore := func(k, v string, ok bool) {
+        if ok {
+            if err := os.Setenv(k, v); err != nil { t.Fatalf("restore %s: %v", k, err) }
+        } else {
+            if err := os.Unsetenv(k); err != nil { t.Fatalf("unset %s: %v", k, err) }
+        }
+    }
+    prepEnvVal, prepEnvOK := save("OAI_PREP_HTTP_TIMEOUT")
+    httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
+    defer restore("OAI_PREP_HTTP_TIMEOUT", prepEnvVal, prepEnvOK)
+    defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
+
+    // Case A: inherit from http-timeout when no flag/env
+    orig := os.Args
+    defer func() { os.Args = orig }()
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
+    cfg, code := parseFlags()
+    if code != 0 { t.Fatalf("parse exit: %d", code) }
+    if cfg.prepHTTPTimeout != 5*time.Second { t.Fatalf("inheritance failed: prep=%v want 5s", cfg.prepHTTPTimeout) }
+    if cfg.prepHTTPTimeoutSource != "inherit" { t.Fatalf("prep source=%s want inherit", cfg.prepHTTPTimeoutSource) }
+
+    // Case B: env OAI_PREP_HTTP_TIMEOUT overrides http-timeout
+    if err := os.Setenv("OAI_PREP_HTTP_TIMEOUT", "7s"); err != nil { t.Fatalf("set env: %v", err) }
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
+    cfg, code = parseFlags()
+    if code != 0 { t.Fatalf("parse exit: %d", code) }
+    if cfg.prepHTTPTimeout != 7*time.Second { t.Fatalf("prep from env got %v want 7s", cfg.prepHTTPTimeout) }
+    if cfg.prepHTTPTimeoutSource != "env" { t.Fatalf("prep source=%s want env", cfg.prepHTTPTimeoutSource) }
+
+    // Case C: flag -prep-http-timeout overrides env
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "9s"}
+    cfg, code = parseFlags()
+    if code != 0 { t.Fatalf("parse exit: %d", code) }
+    if cfg.prepHTTPTimeout != 9*time.Second { t.Fatalf("prep from flag got %v want 9s", cfg.prepHTTPTimeout) }
+    if cfg.prepHTTPTimeoutSource != "flag" { t.Fatalf("prep source=%s want flag", cfg.prepHTTPTimeoutSource) }
 }
 
 // https://github.com/hyperifyio/goagent/issues/251
@@ -485,11 +531,13 @@ func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
 	}
 	// Validate JSON contains fields and sources
 	got := outBuf.String()
-	for _, substr := range []string{
+    for _, substr := range []string{
 		"\"model\": \"m\"",
 		"\"baseURL\": \"http://example\"",
 		"\"httpTimeout\": \"100ms\"",
 		"\"httpTimeoutSource\": \"env\"",
+        "\"prepHTTPTimeout\": ",
+        "\"prepHTTPTimeoutSource\": ",
 		"\"toolTimeout\": ",
 		"\"timeout\": ",
 		"\"timeoutSource\": ",
@@ -850,7 +898,7 @@ func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
 	// Use flags so sources are "flag"
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
-	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
+    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "4s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
 	cfg, code := parseFlags()
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
@@ -863,7 +911,7 @@ func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
 		t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
 	}
 	got := errBuf.String()
-	if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
+    if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; prep-http-timeout=4s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
 		t.Fatalf("missing effective timeouts line; got:\n%s", got)
 	}
 }

@@ -28,6 +28,7 @@ type cliConfig struct {
 	maxSteps     int
 	timeout      time.Duration // deprecated global timeout; kept for backward compatibility
 	httpTimeout  time.Duration // resolved HTTP timeout (final value after env/flags/global)
+    prepHTTPTimeout time.Duration // resolved pre-stage HTTP timeout (inherits from http-timeout)
 	toolTimeout  time.Duration // resolved per-tool timeout (final value after flags/global)
 	httpRetries  int           // number of retries for HTTP
 	httpBackoff  time.Duration // base backoff between retries
@@ -38,6 +39,7 @@ type cliConfig struct {
 	printConfig  bool
 	// Sources for effective timeouts: "flag" | "env" | "default"
 	httpTimeoutSource   string
+    prepHTTPTimeoutSource string
 	toolTimeoutSource   string
 	globalTimeoutSource string
 	// initMessages allows tests to inject a custom starting transcript to
@@ -145,10 +147,13 @@ func parseFlags() (cliConfig, int) {
 	var globalSet bool
 	flag.Var(durationFlexFlag{dst: &cfg.timeout, set: &globalSet}, "timeout", "[DEPRECATED] Global timeout; use -http-timeout and -tool-timeout")
 	// New split timeouts (default to 0; accept plain seconds or Go duration strings)
-	cfg.httpTimeout = 0
+    cfg.httpTimeout = 0
+    cfg.prepHTTPTimeout = 0
 	cfg.toolTimeout = 0
-	var httpSet, toolSet bool
+    var httpSet, toolSet bool
+    var prepHTTPSet bool
 	flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+    flag.Var(durationFlexFlag{dst: &cfg.prepHTTPTimeout, set: &prepHTTPSet}, "prep-http-timeout", "HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.toolTimeout, set: &toolSet}, "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
 	// Use a flexible float flag to detect whether -temp was explicitly set
 	var tempSet bool
@@ -179,7 +184,7 @@ func parseFlags() (cliConfig, int) {
 		// Config file precedence placeholder: no-op (no config file mechanism yet)
 	}
 
-	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
 	httpEnvUsed := false
 	if cfg.httpTimeout <= 0 {
@@ -198,6 +203,24 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
+    // Pre-stage HTTP timeout: precedence flag > env OAI_PREP_HTTP_TIMEOUT > http-timeout > default
+    prepEnvUsed := false
+    if cfg.prepHTTPTimeout <= 0 {
+        if v := strings.TrimSpace(os.Getenv("OAI_PREP_HTTP_TIMEOUT")); v != "" {
+            if d, err := parseDurationFlexible(v); err == nil && d > 0 {
+                cfg.prepHTTPTimeout = d
+                prepEnvUsed = true
+            }
+        }
+    }
+    if cfg.prepHTTPTimeout <= 0 {
+        if cfg.httpTimeout > 0 {
+            cfg.prepHTTPTimeout = cfg.httpTimeout
+        } else {
+            cfg.prepHTTPTimeout = 90 * time.Second
+        }
+    }
+
 	// Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
 	if cfg.toolTimeout <= 0 {
 		if cfg.timeout > 0 {
@@ -215,6 +238,14 @@ func parseFlags() (cliConfig, int) {
 	} else {
 		cfg.httpTimeoutSource = "default"
 	}
+    if prepHTTPSet {
+        cfg.prepHTTPTimeoutSource = "flag"
+    } else if prepEnvUsed {
+        cfg.prepHTTPTimeoutSource = "env"
+    } else {
+        // inherits http-timeout or default
+        cfg.prepHTTPTimeoutSource = "inherit"
+    }
 	if toolSet {
 		cfg.toolTimeoutSource = "flag"
 	} else {
@@ -283,10 +314,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			cfg.httpTimeout = 90 * time.Second
 		}
 	}
-	// Emit effective timeout sources under -debug (after normalization)
+    // Emit effective timeout sources under -debug (after normalization)
 	if cfg.debug {
-		safeFprintf(stderr, "effective timeouts: http-timeout=%s source=%s; tool-timeout=%s source=%s; timeout=%s source=%s\n",
+        safeFprintf(stderr, "effective timeouts: http-timeout=%s source=%s; prep-http-timeout=%s source=%s; tool-timeout=%s source=%s; timeout=%s source=%s\n",
 			cfg.httpTimeout.String(), cfg.httpTimeoutSource,
+            cfg.prepHTTPTimeout.String(), cfg.prepHTTPTimeoutSource,
 			cfg.toolTimeout.String(), cfg.toolTimeoutSource,
 			cfg.timeout.String(), cfg.globalTimeoutSource,
 		)
@@ -612,6 +644,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -max-steps int\n    Maximum reasoning/tool steps (default 8)\n")
 	b.WriteString("  -timeout duration\n    [DEPRECATED] Global timeout; use -http-timeout and -tool-timeout (default 30s)\n")
 	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
+    b.WriteString("  -prep-http-timeout duration\n    HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
@@ -673,10 +706,13 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 			cfg.toolTimeout = 30 * time.Second
 		}
 	}
-	// Default sources when unset
+    // Default sources when unset
 	if strings.TrimSpace(cfg.httpTimeoutSource) == "" {
 		cfg.httpTimeoutSource = "default"
 	}
+    if strings.TrimSpace(cfg.prepHTTPTimeoutSource) == "" {
+        cfg.prepHTTPTimeoutSource = "inherit"
+    }
 	if strings.TrimSpace(cfg.toolTimeoutSource) == "" {
 		cfg.toolTimeoutSource = "default"
 	}
@@ -685,11 +721,13 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	}
 
 	// Build a minimal, stable JSON payload
-	payload := map[string]string{
+    payload := map[string]string{
 		"model":             cfg.model,
 		"baseURL":           cfg.baseURL,
 		"httpTimeout":       cfg.httpTimeout.String(),
 		"httpTimeoutSource": cfg.httpTimeoutSource,
+        "prepHTTPTimeout":       cfg.prepHTTPTimeout.String(),
+        "prepHTTPTimeoutSource": cfg.prepHTTPTimeoutSource,
 		"toolTimeout":       cfg.toolTimeout.String(),
 		"toolTimeoutSource": cfg.toolTimeoutSource,
 		"timeout":           cfg.timeout.String(),
