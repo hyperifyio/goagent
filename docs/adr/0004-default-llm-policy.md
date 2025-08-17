@@ -10,6 +10,7 @@ Decision
 - Default temperature is 1.0. This matches common provider defaults and avoids under-sampling by default.
 - Capability-based omission: when a model or provider does not support temperature (or signals it via error), omit the parameter from the payload.
 - One-knob-at-a-time: if the user sets top_p explicitly, do not send temperature in the same request.
+- GPT-5 controls: when supported by the selected model, allow users to set `verbosity` (low|medium|high) and `reasoning_effort` without affecting the sampling default; these controls are independent of temperature.
 - Observability: record fields temperature_effective (final value used after clamps/omissions) and temperature_in_payload (bool) in structured logs.
 - Guardrails: keep the agent loop bounded with a default max steps of 8 (hard wall may be higher internally) and enforce correct tool-call sequencing.
 - Lightweight recoveries:
@@ -19,6 +20,7 @@ Decision
 Consequences
 - Requests default to temperature=1.0 unless explicitly incompatible or top_p is set.
 - Some models will receive no temperature parameter. Behavior remains provider-default in those cases.
+- Some providers/models may restrict or ignore sampling knobs. The agent omits unsupported fields and clamps values within provider-accepted ranges when applicable.
 - Logs are clearer for debugging sampling choices and automatic recoveries.
 - Tests and docs must align to a single canonical default and sequencing rules.
 
