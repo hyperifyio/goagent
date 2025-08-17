@@ -301,12 +301,16 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		choice := resp.Choices[0]
 		msg := choice.Message
 
-		// If the model returned tool calls and we have a registry, execute them sequentially.
-		if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
-			messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
-			// Continue loop for another assistant response using appended tool outputs
-			continue
-		}
+        // If the model returned tool calls and we have a registry, first append
+        // the assistant message that carries tool_calls to preserve correct
+        // sequencing (assistant -> tool messages -> assistant). Then append the
+        // corresponding tool messages and continue the loop for the next turn.
+        if len(msg.ToolCalls) > 0 && len(toolRegistry) > 0 {
+            messages = append(messages, msg)
+            messages = appendToolCallOutputs(messages, msg, toolRegistry, cfg)
+            // Continue loop for another assistant response using appended tool outputs
+            continue
+        }
 
 		// If the model returned final assistant content, print and exit 0
 		if msg.Role == oai.RoleAssistant && strings.TrimSpace(msg.Content) != "" {

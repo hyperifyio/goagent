@@ -369,6 +369,18 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 				t.Fatalf("encode step1: %v", err)
 			}
 		case 2:
+			// Verify assistant tool_calls message is present before tool messages
+			assistantSeen := false
+			for _, m := range req.Messages {
+				if m.Role == oai.RoleAssistant && len(m.ToolCalls) > 0 {
+					assistantSeen = true
+					break
+				}
+			}
+			if !assistantSeen {
+				t.Fatalf("assistant message with tool_calls not present before tool messages")
+			}
+
 			resp := oai.ChatCompletionsResponse{
 				ID:      "cmpl-2",
 				Object:  "chat.completion",
