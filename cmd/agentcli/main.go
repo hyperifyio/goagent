@@ -85,6 +85,12 @@ type cliConfig struct {
     // Save/load refined messages
     saveMessagesPath string // When set, write the final merged Harmony messages to this JSON path and continue
     loadMessagesPath string // When set, bypass pre-stage and prompt; load messages JSON verbatim (validator-checked)
+    // Custom channel routing: map specific assistant channels to stdout|stderr|omit
+    channelRoutes map[string]string
+    // Raw repeatable flag values for -channel-route parsing (e.g., "critic=stdout")
+    channelRoutePairs []string
+    // parseError carries a human-readable parse error for early exit situations
+    parseError string
 	// initMessages allows tests to inject a custom starting transcript to
 	// exercise pre-flight validation paths (e.g., stray tool message). When
 	// empty, the default [system,user] seed is used.
@@ -261,6 +267,8 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.prepDryRun, "prep-dry-run", false, "Run pre-stage only, print refined Harmony messages to stdout, and exit 0")
     flag.BoolVar(&cfg.printMessages, "print-messages", false, "Pretty-print the final merged message array to stderr before the main call")
     flag.BoolVar(&cfg.streamFinal, "stream-final", false, "If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose")
+    // Custom channel routing (repeatable): -channel-route name=stdout|stderr|omit
+    flag.Var((*stringSliceFlag)(&cfg.channelRoutePairs), "channel-route", "Route assistant channels (final|critic|confidence) to stdout|stderr|omit; repeatable, e.g., -channel-route critic=stdout")
     // Save/load refined messages
     flag.StringVar(&cfg.saveMessagesPath, "save-messages", "", "Write the final merged Harmony messages to the given JSON file and continue")
     flag.StringVar(&cfg.loadMessagesPath, "load-messages", "", "Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)")
@@ -442,6 +450,37 @@ func parseFlags() (cliConfig, int) {
             return cfg, 2
         }
     }
+    // Parse channel-route pairs and validate
+    if len(cfg.channelRoutePairs) > 0 {
+        cfg.channelRoutes = make(map[string]string)
+        for _, pair := range cfg.channelRoutePairs {
+            p := strings.TrimSpace(pair)
+            if p == "" { continue }
+            eq := strings.IndexByte(p, '=')
+            if eq <= 0 || eq >= len(p)-1 {
+                cfg.parseError = "error: invalid -channel-route value (expected name=stdout|stderr|omit)"
+                return cfg, 2
+            }
+            name := strings.TrimSpace(p[:eq])
+            dest := strings.TrimSpace(p[eq+1:])
+            switch name {
+            case "final", "critic", "confidence":
+                // ok
+            default:
+                cfg.parseError = fmt.Sprintf("error: invalid -channel-route channel %q (allowed: final, critic, confidence)", name)
+                return cfg, 2
+            }
+            switch dest {
+            case "stdout", "stderr", "omit":
+                // ok
+            default:
+                cfg.parseError = fmt.Sprintf("error: invalid -channel-route destination %q (allowed: stdout, stderr, omit)", dest)
+                return cfg, 2
+            }
+            cfg.channelRoutes[name] = dest
+        }
+    }
+
     // Conflict checks for save/load flags
     if strings.TrimSpace(cfg.saveMessagesPath) != "" && strings.TrimSpace(cfg.loadMessagesPath) != "" {
         return cfg, 2
@@ -485,13 +524,17 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
 	os.Args = append([]string{origArgs[0]}, args...)
 	defer func() { os.Args = origArgs }()
 
-	cfg, exitOn := parseFlags()
-	if exitOn != 0 {
-		safeFprintln(stderr, "error: -prompt is required")
-		// Also print usage synopsis for guidance on missing required flag
-		printUsage(stderr)
-		return exitOn
-	}
+    cfg, exitOn := parseFlags()
+    if exitOn != 0 {
+        if strings.TrimSpace(cfg.parseError) != "" {
+            safeFprintln(stderr, cfg.parseError)
+        } else {
+            safeFprintln(stderr, "error: -prompt is required")
+        }
+        // Also print usage synopsis for guidance
+        printUsage(stderr)
+        return exitOn
+    }
     if cfg.printConfig {
         return printResolvedConfig(cfg, stdout)
     }
@@ -713,7 +756,8 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
             // Attempt streaming first when enabled; on unsupported, fall back
             if cfg.streamFinal {
                 var streamedFinal strings.Builder
-                var bufferedNonFinal []string
+                type buffered struct{ channel, content string }
+                var bufferedNonFinal []buffered
                 streamErr := httpClient.StreamChat(callCtx, req, func(chunk oai.StreamChunk) error {
                     // Accumulate only final channel content to stdout progressively; buffer others
                     for _, ch := range chunk.Choices {
@@ -723,7 +767,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                             safeFprintf(stdout, "%s", delta.Content)
                             streamedFinal.WriteString(delta.Content)
                         } else {
-                            bufferedNonFinal = append(bufferedNonFinal, delta.Content)
+                            bufferedNonFinal = append(bufferedNonFinal, buffered{channel: strings.TrimSpace(delta.Channel), content: delta.Content})
                         }
                     }
                     return nil
@@ -733,7 +777,17 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                     // Stream finished successfully. Emit newline to finalize stdout.
                     safeFprintln(stdout, "")
                     if cfg.verbose {
-                        for _, s := range bufferedNonFinal { safeFprintln(stderr, strings.TrimSpace(s)) }
+                        for _, b := range bufferedNonFinal {
+                            route := resolveChannelRoute(cfg, b.channel, true /*nonFinal*/)
+                            switch route {
+                            case "stdout":
+                                safeFprintln(stdout, strings.TrimSpace(b.content))
+                            case "stderr":
+                                safeFprintln(stderr, strings.TrimSpace(b.content))
+                            case "omit":
+                                // skip
+                            }
+                        }
                     }
                     return 0
                 }
@@ -790,11 +844,19 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
             }
 
             msg := choice.Message
-            // Under -verbose, if the assistant returns a non-final channel, print to stderr immediately.
+            // Under -verbose, if the assistant returns a non-final channel, print immediately respecting routing.
             if cfg.verbose && msg.Role == oai.RoleAssistant {
                 ch := strings.TrimSpace(msg.Channel)
                 if ch != "final" && strings.TrimSpace(msg.Content) != "" {
-                    safeFprintln(stderr, strings.TrimSpace(msg.Content))
+                    route := resolveChannelRoute(cfg, ch, true /*nonFinal*/)
+                    switch route {
+                    case "stdout":
+                        safeFprintln(stdout, strings.TrimSpace(msg.Content))
+                    case "stderr":
+                        safeFprintln(stderr, strings.TrimSpace(msg.Content))
+                    case "omit":
+                        // skip
+                    }
                 }
             }
 
@@ -814,11 +876,15 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
                 // Respect channel-aware printing: only print channel=="final" to stdout by default.
                 ch := strings.TrimSpace(msg.Channel)
                 if ch == "final" || ch == "" {
-                    if !cfg.quiet {
+                    // Determine destination per routing; default final->stdout
+                    dest := resolveChannelRoute(cfg, "final", false /*nonFinal*/)
+                    switch dest {
+                    case "stdout":
                         safeFprintln(stdout, strings.TrimSpace(msg.Content))
-                    } else {
-                        // quiet still prints the final text (requirement); so print regardless of quiet.
-                        safeFprintln(stdout, strings.TrimSpace(msg.Content))
+                    case "stderr":
+                        safeFprintln(stderr, strings.TrimSpace(msg.Content))
+                    case "omit":
+                        // do not print
                     }
                     // Dump debug response JSON after human-readable output, then exit
                     dumpJSONIfDebug(stderr, fmt.Sprintf("chat.response step=%d", step+1), resp, cfg.debug)
@@ -1340,6 +1406,7 @@ func printUsage(w io.Writer) {
     b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
     b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
     b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")
+    b.WriteString("  -channel-route name=stdout|stderr|omit\n    Override default channel routing (final→stdout, critic/confidence→stderr); repeatable\n")
     b.WriteString("  -save-messages string\n    Write the final merged Harmony messages to the given JSON file and continue\n")
     b.WriteString("  -load-messages string\n    Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)\n")
     b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
@@ -1606,6 +1673,27 @@ func safeFprintf(w io.Writer, format string, a ...any) {
 	if _, err := fmt.Fprintf(w, format, a...); err != nil {
 		return
 	}
+}
+
+// resolveChannelRoute returns the destination for a given assistant channel.
+// Defaults: final→stdout; non-final (critic/confidence)→stderr. Unknown/empty
+// channels default to final behavior. When an override is provided via
+// -channel-route, it takes precedence.
+func resolveChannelRoute(cfg cliConfig, channel string, nonFinal bool) string {
+    ch := strings.TrimSpace(channel)
+    if ch == "" {
+        ch = "final"
+    }
+    if cfg.channelRoutes != nil {
+        if dest, ok := cfg.channelRoutes[ch]; ok {
+            return dest
+        }
+    }
+    if ch == "final" {
+        return "stdout"
+    }
+    // Default non-final route
+    return "stderr"
 }
 
 // stringSliceFlag implements flag.Value to collect repeatable string flags into a slice.

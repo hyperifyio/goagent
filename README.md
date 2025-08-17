@@ -184,6 +184,8 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -prep-enabled          Enable pre-stage (default true). When false, skip pre-stage and proceed directly to main call.
 -debug                 Dump request/response JSON to stderr
 -verbose               Also print non-final assistant channels (critic/confidence) to stderr
+-channel-route name=stdout|stderr|omit
+                       Override default channel routing (final→stdout, critic/confidence→stderr); repeatable
 -quiet                 Suppress non-final output; print only final text to stdout
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit

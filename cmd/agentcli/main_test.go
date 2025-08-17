@@ -913,6 +913,74 @@ func TestChannelPrinting_DefaultVerboseQuiet(t *testing.T) {
     if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
 }
 
+// FEATURE_CHECKLIST L24: Custom channel routing via -channel-route name=stdout|stderr|omit
+func TestChannelRoute_FlagParsingAndRouting(t *testing.T) {
+    // Invalid channel name
+    {
+        var outBuf, errBuf bytes.Buffer
+        code := cliMain([]string{"-prompt", "x", "-channel-route", "unknown=stdout"}, &outBuf, &errBuf)
+        if code == 0 {
+            t.Fatalf("expected non-zero exit for invalid channel; stderr=%s", errBuf.String())
+        }
+        if !strings.Contains(errBuf.String(), "invalid -channel-route channel") {
+            t.Fatalf("expected invalid channel error; got %q", errBuf.String())
+        }
+    }
+
+    // Invalid destination
+    {
+        var outBuf, errBuf bytes.Buffer
+        code := cliMain([]string{"-prompt", "x", "-channel-route", "critic=somewhere"}, &outBuf, &errBuf)
+        if code == 0 {
+            t.Fatalf("expected non-zero exit for invalid destination; stderr=%s", errBuf.String())
+        }
+        if !strings.Contains(errBuf.String(), "invalid -channel-route destination") {
+            t.Fatalf("expected invalid destination error; got %q", errBuf.String())
+        }
+    }
+
+    // Routing behavior: route critic to stdout, final to stderr, and omit confidence
+    {
+        steps := 0
+        srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            steps++
+            switch steps {
+            case 1:
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
+                }}})
+            case 2:
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "confidence", Content: "p=0.9"},
+                }}})
+            default:
+                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
+                }}})
+            }
+        }))
+        defer srv.Close()
+
+        var outBuf, errBuf bytes.Buffer
+        code := cliMain([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-channel-route", "critic=stdout", "-channel-route", "final=stderr", "-channel-route", "confidence=omit", "-verbose"}, &outBuf, &errBuf)
+        if code != 0 {
+            t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+        }
+        // critic goes to stdout under routing
+        if !strings.Contains(outBuf.String(), "c1") {
+            t.Fatalf("stdout should include critic due to routing; got %q", outBuf.String())
+        }
+        // final goes to stderr under routing
+        if !strings.Contains(errBuf.String(), "done") {
+            t.Fatalf("stderr should include final due to routing; got %q", errBuf.String())
+        }
+        // confidence omitted entirely
+        if strings.Contains(outBuf.String(), "p=0.9") || strings.Contains(errBuf.String(), "p=0.9") {
+            t.Fatalf("confidence should be omitted by routing")
+        }
+    }
+}
+
 // FEATURE_CHECKLIST L22: Streaming for assistant[final]. If server supports streaming,
 // stream only assistant{channel:"final"} to stdout; buffer other channels for -verbose.
 // -quiet still prints just the streamed final.

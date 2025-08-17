@@ -34,6 +34,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-dry-run`: Run pre-stage only, print refined Harmony messages to stdout, and exit 0
 - `-print-messages`: Pretty-print the final merged message array to stderr before the main call
 - `-stream-final`: If server supports streaming, stream only `assistant{channel:"final"}` to stdout; buffer other channels for `-verbose`
+- `-channel-route name=stdout|stderr|omit`: Override default channel routing (`final→stdout`, `critic/confidence→stderr`); repeatable
 - `-save-messages string`: Write the final merged Harmony messages to the given JSON file and continue
 - `-load-messages string`: Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)
 - `-prep-enabled`: Enable pre-stage processing (default true). When false, pre-stage is skipped and the agent proceeds directly with the original `{system,user}` messages.
