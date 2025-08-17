@@ -184,43 +184,43 @@ func parseFlags() (cliConfig, int) {
 }
 
 func main() {
-    os.Exit(cliMain(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(cliMain(os.Args[1:], os.Stdout, os.Stderr))
 }
 
 // cliMain is a testable entrypoint for the CLI. It accepts argv (excluding program name)
 // and writers for stdout/stderr, returns the intended process exit code, and performs
 // no global side effects beyond temporarily setting os.Args for flag parsing.
 func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
-    // Handle help flags prior to any parsing/validation or side effects
-    if helpRequested(args) {
-        printUsage(stdout)
-        return 0
-    }
-    // Handle version flags prior to parsing/validation
-    if versionRequested(args) {
-        printVersion(stdout)
-        return 0
-    }
+	// Handle help flags prior to any parsing/validation or side effects
+	if helpRequested(args) {
+		printUsage(stdout)
+		return 0
+	}
+	// Handle version flags prior to parsing/validation
+	if versionRequested(args) {
+		printVersion(stdout)
+		return 0
+	}
 
-    // Temporarily set os.Args so parseFlags() (which reads os.Args) sees our args
-    origArgs := os.Args
-    os.Args = append([]string{origArgs[0]}, args...)
-    defer func() { os.Args = origArgs }()
+	// Temporarily set os.Args so parseFlags() (which reads os.Args) sees our args
+	origArgs := os.Args
+	os.Args = append([]string{origArgs[0]}, args...)
+	defer func() { os.Args = origArgs }()
 
-    cfg, exitOn := parseFlags()
-    if exitOn != 0 {
-        safeFprintln(stderr, "error: -prompt is required")
-        // Also print usage synopsis for guidance on missing required flag
-        printUsage(stderr)
-        return exitOn
-    }
-    if cfg.printConfig {
-        return printResolvedConfig(cfg, stdout)
-    }
-    if cfg.capabilities {
-        return printCapabilities(cfg, stdout, stderr)
-    }
-    return runAgent(cfg, stdout, stderr)
+	cfg, exitOn := parseFlags()
+	if exitOn != 0 {
+		safeFprintln(stderr, "error: -prompt is required")
+		// Also print usage synopsis for guidance on missing required flag
+		printUsage(stderr)
+		return exitOn
+	}
+	if cfg.printConfig {
+		return printResolvedConfig(cfg, stdout)
+	}
+	if cfg.capabilities {
+		return printCapabilities(cfg, stdout, stderr)
+	}
+	return runAgent(cfg, stdout, stderr)
 }
 
 // runAgent executes the non-interactive agent loop and returns a process exit code.
@@ -476,12 +476,12 @@ func helpRequested(args []string) bool {
 
 // versionRequested returns true if any canonical version token is present.
 func versionRequested(args []string) bool {
-    for _, a := range args {
-        if a == "--version" || a == "-version" {
-            return true
-        }
-    }
-    return false
+	for _, a := range args {
+		if a == "--version" || a == "-version" {
+			return true
+		}
+	}
+	return false
 }
 
 // printUsage writes a comprehensive usage guide to w.
@@ -504,7 +504,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
-    b.WriteString("  --version | -version\n    Print version and exit\n")
+	b.WriteString("  --version | -version\n    Print version and exit\n")
 	b.WriteString("\nExamples:\n")
 	b.WriteString("  # Quick start (after make build build-tools)\n")
 	b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
@@ -512,33 +512,33 @@ func printUsage(w io.Writer) {
 	b.WriteString("  ./bin/agentcli -capabilities -tools ./tools.json\n\n")
 	b.WriteString("  # Show help\n")
 	b.WriteString("  agentcli --help\n")
-    b.WriteString("\n  # Show version\n")
-    b.WriteString("  agentcli --version\n")
+	b.WriteString("\n  # Show version\n")
+	b.WriteString("  agentcli --version\n")
 	safeFprintln(w, strings.TrimRight(b.String(), "\n"))
 }
 
 // Build-time variables set via -ldflags; defaults are useful for dev builds.
 var (
-    version   = "v0.0.0-dev"
-    commit    = "unknown"
-    buildDate = "unknown"
+	version   = "v0.0.0-dev"
+	commit    = "unknown"
+	buildDate = "unknown"
 )
 
 // printVersion writes a concise single-line version string to stdout.
 func printVersion(w io.Writer) {
-    // Example: agentcli version v1.2.3 (commit abcdef1, built 2025-08-17)
-    safeFprintln(w, fmt.Sprintf("agentcli version %s (commit %s, built %s)", version, shortCommit(commit), buildDate))
+	// Example: agentcli version v1.2.3 (commit abcdef1, built 2025-08-17)
+	safeFprintln(w, fmt.Sprintf("agentcli version %s (commit %s, built %s)", version, shortCommit(commit), buildDate))
 }
 
 func shortCommit(c string) string {
-    c = strings.TrimSpace(c)
-    if len(c) > 7 {
-        return c[:7]
-    }
-    if c == "" {
-        return "unknown"
-    }
-    return c
+	c = strings.TrimSpace(c)
+	if len(c) > 7 {
+		return c[:7]
+	}
+	if c == "" {
+		return "unknown"
+	}
+	return c
 }
 
 // printResolvedConfig writes a JSON object describing resolved configuration

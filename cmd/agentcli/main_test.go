@@ -238,38 +238,38 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 
 // https://github.com/hyperifyio/goagent/issues/262
 func TestVersion_PrintsAndExitsZero(t *testing.T) {
-    var outBuf, errBuf bytes.Buffer
-    code := cliMain([]string{"--version"}, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit code = %d; want 0", code)
-    }
-    got := outBuf.String()
-    if !strings.Contains(got, "agentcli version") {
-        t.Fatalf("stdout missing version header; got: %q", got)
-    }
-    if errBuf.Len() != 0 {
-        t.Fatalf("stderr should be empty; got: %q", errBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := cliMain([]string{"--version"}, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d; want 0", code)
+	}
+	got := outBuf.String()
+	if !strings.Contains(got, "agentcli version") {
+		t.Fatalf("stdout missing version header; got: %q", got)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("stderr should be empty; got: %q", errBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/252
 func TestMissingPrompt_PrintsErrorUsageAndExitsTwo(t *testing.T) {
-    // Simulate running with no -prompt and no special flags
-    var outBuf, errBuf bytes.Buffer
-    code := cliMain([]string{}, &outBuf, &errBuf)
-    if code != 2 {
-        t.Fatalf("exit code = %d; want 2", code)
-    }
-    gotErr := errBuf.String()
-    if !strings.Contains(gotErr, "error: -prompt is required") {
-        t.Fatalf("stderr missing error line; got:\n%s", gotErr)
-    }
-    if !strings.Contains(gotErr, "Usage:") || !strings.Contains(gotErr, "-prompt") {
-        t.Fatalf("stderr missing usage synopsis; got:\n%s", gotErr)
-    }
-    if outBuf.Len() != 0 {
-        t.Fatalf("stdout should be empty; got: %q", outBuf.String())
-    }
+	// Simulate running with no -prompt and no special flags
+	var outBuf, errBuf bytes.Buffer
+	code := cliMain([]string{}, &outBuf, &errBuf)
+	if code != 2 {
+		t.Fatalf("exit code = %d; want 2", code)
+	}
+	gotErr := errBuf.String()
+	if !strings.Contains(gotErr, "error: -prompt is required") {
+		t.Fatalf("stderr missing error line; got:\n%s", gotErr)
+	}
+	if !strings.Contains(gotErr, "Usage:") || !strings.Contains(gotErr, "-prompt") {
+		t.Fatalf("stderr missing usage synopsis; got:\n%s", gotErr)
+	}
+	if outBuf.Len() != 0 {
+		t.Fatalf("stdout should be empty; got: %q", outBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/246
