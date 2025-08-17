@@ -1566,3 +1566,147 @@ func TestDurationFlags_FlexibleParsing(t *testing.T) {
 		}
 	})
 }
+
+// https://github.com/hyperifyio/goagent/issues/318
+// Edge case: when finish_reason!="length", there must be no retry.
+func TestLengthBackoff_NoRetryWhenFinishReasonNotLength(t *testing.T) {
+    var calls int
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        calls++
+        // Always return a final assistant message with stop
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "stop",
+            Message:      oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+        }}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+    if calls != 1 {
+        t.Fatalf("expected exactly one HTTP call when not length; got %d", calls)
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/318
+// Edge case: only one in-step retry even if the second response is also "length".
+func TestLengthBackoff_OnlyOneRetryWhenSecondIsAlsoLength(t *testing.T) {
+    var bodies [][]byte
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        b, err := io.ReadAll(r.Body)
+        if err != nil {
+            t.Fatalf("read body: %v", err)
+        }
+        bodies = append(bodies, append([]byte(nil), b...))
+        switch len(bodies) {
+        case 1:
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+        case 2:
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+        default:
+            // If a third in-step retry occurs, fail deterministically
+            t.Fatalf("unexpected extra in-step retry; total bodies=%d", len(bodies))
+        }
+    }))
+    defer srv.Close()
+
+    // Limit to a single agent step so no additional step-level requests are made.
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit since no final content; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+    }
+    if len(bodies) != 2 {
+        t.Fatalf("expected exactly two requests (initial + one retry), got %d", len(bodies))
+    }
+}
+
+// https://github.com/hyperifyio/goagent/issues/318
+// Edge case: tool_call flow is unaffected by length backoff logic.
+// When the model returns tool_calls, no max_tokens should be injected and
+// the conversation should proceed with two HTTP calls (tool step + final).
+func TestLengthBackoff_DoesNotInterfereWithToolCalls(t *testing.T) {
+    // Build a helper tool that echoes JSON and succeeds quickly
+    dir := t.TempDir()
+    helper := filepath.Join(dir, "echo.go")
+    if err := os.WriteFile(helper, []byte(`package main
+import ("io"; "os"; "fmt")
+func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
+`), 0o644); err != nil {
+        t.Fatalf("write tool: %v", err)
+    }
+    bin := filepath.Join(dir, "echo")
+    if runtime.GOOS == "windows" { bin += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+        t.Fatalf("build tool: %v: %s", err, string(out))
+    }
+
+    // Capture two sequential requests and ensure no max_tokens present in either
+    var bodies [][]byte
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        b, err := io.ReadAll(r.Body)
+        if err != nil {
+            t.Fatalf("read body: %v", err)
+        }
+        bodies = append(bodies, append([]byte(nil), b...))
+        switch len(bodies) {
+        case 1:
+            // Return a tool_calls response
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                FinishReason: "tool_calls",
+                Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{
+                    ID: "1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: `{"x":1}`},
+                }}},
+            }}})
+        case 2:
+            // Final content
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                FinishReason: "stop",
+                Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
+            }}})
+        default:
+            t.Fatalf("unexpected extra HTTP request; bodies=%d", len(bodies))
+        }
+    }))
+    defer srv.Close()
+
+    // Register tool manifest through in-memory registry path
+    manifestPath := filepath.Join(dir, "tools.json")
+    m := map[string]any{
+        "tools": []map[string]any{{
+            "name": "echo",
+            "description": "echo",
+            "schema": map[string]any{"type": "object"},
+            "command": []string{bin},
+            "timeoutSec": 5,
+        }},
+    }
+    data, err := json.Marshal(m)
+    if err != nil { t.Fatalf("marshal manifest: %v", err) }
+    if err := os.WriteFile(manifestPath, data, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    cfg := cliConfig{prompt: "x", toolsPath: manifestPath, systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 2 * time.Second, temperature: 0}
+    var outBuf, errBuf bytes.Buffer
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if strings.TrimSpace(outBuf.String()) != "done" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+    if len(bodies) != 2 {
+        t.Fatalf("expected exactly two HTTP calls (tool step + final), got %d", len(bodies))
+    }
+    // Neither request should include max_tokens
+    if strings.Contains(string(bodies[0]), "\"max_tokens\"") || strings.Contains(string(bodies[1]), "\"max_tokens\"") {
+        t.Fatalf("max_tokens must be omitted for tool_call flow; got bodies: %s | %s", string(bodies[0]), string(bodies[1]))
+    }
+}
