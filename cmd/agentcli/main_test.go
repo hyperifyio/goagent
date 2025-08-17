@@ -1034,69 +1034,69 @@ func TestHTTPTimeout_NotClampedByGlobal(t *testing.T) {
 // asserts parsed values are identical regardless of position. We only compare
 // a stable subset of fields to avoid env/default interference.
 func TestFlagOrderIndependence_Table(t *testing.T) {
-    type view struct {
-        prompt    string
-        toolsPath string
-        debug     bool
-        model     string
-    }
+	type view struct {
+		prompt    string
+		toolsPath string
+		debug     bool
+		model     string
+	}
 
-    // Helper to parse given argv and extract a comparison view
-    parse := func(argv []string) (view, int) {
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = argv
-        cfg, code := parseFlags()
-        return view{prompt: cfg.prompt, toolsPath: cfg.toolsPath, debug: cfg.debug, model: cfg.model}, code
-    }
+	// Helper to parse given argv and extract a comparison view
+	parse := func(argv []string) (view, int) {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = argv
+		cfg, code := parseFlags()
+		return view{prompt: cfg.prompt, toolsPath: cfg.toolsPath, debug: cfg.debug, model: cfg.model}, code
+	}
 
-    // Baseline args containing a few representative flags
-    base := []string{"agentcli.test", "-prompt", "hello", "-tools", "/tmp/tools.json", "-debug", "-model", "m"}
-    perms := [][]string{
-        base,
-        {"agentcli.test", "-debug", "-model", "m", "-tools", "/tmp/tools.json", "-prompt", "hello"},
-        {"agentcli.test", "-tools", "/tmp/tools.json", "-prompt", "hello", "-model", "m", "-debug"},
-        {"agentcli.test", "-model", "m", "-prompt", "hello", "-debug", "-tools", "/tmp/tools.json"},
-    }
+	// Baseline args containing a few representative flags
+	base := []string{"agentcli.test", "-prompt", "hello", "-tools", "/tmp/tools.json", "-debug", "-model", "m"}
+	perms := [][]string{
+		base,
+		{"agentcli.test", "-debug", "-model", "m", "-tools", "/tmp/tools.json", "-prompt", "hello"},
+		{"agentcli.test", "-tools", "/tmp/tools.json", "-prompt", "hello", "-model", "m", "-debug"},
+		{"agentcli.test", "-model", "m", "-prompt", "hello", "-debug", "-tools", "/tmp/tools.json"},
+	}
 
-    var want view
-    for i, args := range perms {
-        got, code := parse(args)
-        if code != 0 {
-            t.Fatalf("perm %d parse exit=%d for args=%v", i, code, args)
-        }
-        if i == 0 {
-            want = got
-            continue
-        }
-        if got != want {
-            t.Fatalf("mismatch on permutation %d: got=%+v want=%+v (args=%v)", i, got, want, args)
-        }
-    }
+	var want view
+	for i, args := range perms {
+		got, code := parse(args)
+		if code != 0 {
+			t.Fatalf("perm %d parse exit=%d for args=%v", i, code, args)
+		}
+		if i == 0 {
+			want = got
+			continue
+		}
+		if got != want {
+			t.Fatalf("mismatch on permutation %d: got=%+v want=%+v (args=%v)", i, got, want, args)
+		}
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/300
 // Help must exit 0 regardless of where the token appears among other flags.
 func TestHelpToken_PositionIndependence(t *testing.T) {
-    cases := [][]string{
-        {"-h", "-debug"},
-        {"-debug", "-h"},
-        {"-tools", "/tmp/tools.json", "help", "-model", "m"},
-        {"-model", "m", "--help", "-prompt", "x"},
-    }
-    for i, rest := range cases {
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain(rest, &outBuf, &errBuf)
-        if code != 0 {
-            t.Fatalf("case %d: exit=%d; want 0", i, code)
-        }
-        if !strings.Contains(outBuf.String(), "Usage:") {
-            t.Fatalf("case %d: expected Usage in stdout; got: %q", i, outBuf.String())
-        }
-        if errBuf.Len() != 0 {
-            t.Fatalf("case %d: stderr should be empty; got: %q", i, errBuf.String())
-        }
-    }
+	cases := [][]string{
+		{"-h", "-debug"},
+		{"-debug", "-h"},
+		{"-tools", "/tmp/tools.json", "help", "-model", "m"},
+		{"-model", "m", "--help", "-prompt", "x"},
+	}
+	for i, rest := range cases {
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain(rest, &outBuf, &errBuf)
+		if code != 0 {
+			t.Fatalf("case %d: exit=%d; want 0", i, code)
+		}
+		if !strings.Contains(outBuf.String(), "Usage:") {
+			t.Fatalf("case %d: expected Usage in stdout; got: %q", i, outBuf.String())
+		}
+		if errBuf.Len() != 0 {
+			t.Fatalf("case %d: stderr should be empty; got: %q", i, errBuf.String())
+		}
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/244
