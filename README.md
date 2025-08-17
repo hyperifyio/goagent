@@ -5,37 +5,26 @@
 [![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-goagent is a compact, vendor‑agnostic CLI for running non‑interactive “tool‑using” agents against any OpenAI‑compatible Chat Completions API. It executes a minimal, auditable allowlist of local tools (argv only; no shell) and prints the model’s final answer. Use it with hosted APIs or local endpoints such as `http://localhost:1234/v1` when you need portable prototypes with strict, deterministic tool execution.
+goagent is a compact, vendor‑agnostic CLI for running non‑interactive, tool‑using agents against any OpenAI‑compatible Chat Completions API. It executes a minimal, auditable allowlist of local tools (argv only; no shell) and prints the model’s final answer. Use it with hosted APIs or local endpoints such as `http://localhost:1234/v1` when you need portable prototypes with strict, deterministic tool execution.
 
 ## Table of contents
-- [Documentation index](docs/README.md)
-- [Tools manifest reference](docs/reference/tools-manifest.md)
-- [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Why goagent?](#why-goagent)
+- [Features](#features)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
   - [Capabilities](#capabilities)
+  - [Configuration](#configuration)
 - [Examples](#examples)
+  - [Tool calls transcript](#tool-calls-transcript)
   - [Exec tool](#exec-tool)
-  - [Tool calls](#tool-calls)
-  - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
-  - [fs_read_file](#fs_read_file)
-  - [fs_append_file](#fs_append_file)
-  - [fs_write_file](#fs_write_file)
-  - [fs_mkdirp](#fs_mkdirp)
-  - [fs_rm](#fs_rm)
-  - [fs_move](#fs_move)
-  - [fs_listdir](#fs_listdir)
-  - [fs_apply_patch](#fs_apply_patch)
-  - [fs_edit_range](#fs_edit_range)
-  - [fs_stat](#fs_stat)
-- [Features](#features)
+  - [Filesystem tools](#filesystem-tools)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
-- [Diagrams](#diagrams)
 - [Tests](#tests)
+- [Documentation](#documentation)
+- [Diagrams](#diagrams)
 - [Contributing](#contributing)
 - [CI quality gates](docs/operations/ci-quality-gates.md)
 - [Tooling](#tooling)
@@ -45,7 +34,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive “too
 - [License and credits](#license-and-credits)
 
 ## Why goagent?
-- Minimal, portable, and vendor‑agnostic (works with any OpenAI‑compatible endpoint)
+- Minimal, portable, vendor‑agnostic: works with any OpenAI‑compatible endpoint
 - Deterministic and auditable: argv‑only tool execution, JSON stdin/stdout, strict timeouts
 - Safe by default: explicit allowlist of tools; no shell evaluation
 - Batteries included: small toolbelt for filesystem and process tasks
@@ -82,7 +71,8 @@ make install-golangci
 ./bin/golangci-lint version
 ```
 
-Optional environment (flags take precedence):
+## Configuration
+Environment variables (flags take precedence):
 - `OAI_BASE_URL` default `https://api.openai.com/v1` (scripts fall back from `LLM_BASE_URL` if unset)
 - `OAI_MODEL` default `oss-gpt-20b` (scripts fall back from `LLM_MODEL` if unset)
 - `OAI_API_KEY` only if your endpoint requires it (canonical; CLI also accepts `OPENAI_API_KEY` as a compatibility fallback)
@@ -173,9 +163,8 @@ List the enabled tools from a manifest without running the agent:
 ```
 
 ## Examples
-### Exec tool
-### Tool calls
-Minimal JSON transcript showing correct tool-call sequencing:
+### Tool calls transcript
+Minimal JSON transcript showing correct tool‑call sequencing:
 ```json
 [
   {"role":"user","content":"What's the local time in Helsinki?"},
@@ -216,6 +205,7 @@ Run the example test:
 go test ./examples -run TestWorkedExample_ToolCalls_TemperatureOne_Sequencing -v
 ```
 
+### Exec tool
 Build the exec tool and run a simple command (Unix):
 ```bash
 make build-tools
@@ -228,7 +218,10 @@ echo '{"cmd":"/bin/sleep","args":["2"],"timeoutSec":1}' | ./tools/bin/exec
 # => non-zero exit, stderr contains "timeout"
 ```
 
-### fs_read_file
+### Filesystem tools
+The following examples assume `make build-tools` has produced binaries into `tools/bin/*`.
+
+#### fs_read_file
 ```bash
 make build-tools
 printf 'hello world' > tmp_readme_demo.txt
@@ -236,7 +229,7 @@ echo '{"path":"tmp_readme_demo.txt"}' | ./tools/bin/fs_read_file | jq .
 rm -f tmp_readme_demo.txt
 ```
 
-### fs_append_file
+#### fs_append_file
 ```bash
 make build-tools
 echo -n 'hello ' | base64 > b64a.txt
@@ -246,7 +239,7 @@ echo '{"path":"tmp_append_demo.txt","contentBase64":"'"$(cat b64b.txt)"'"}' | ./
 cat tmp_append_demo.txt; rm -f tmp_append_demo.txt b64a.txt b64b.txt
 ```
 
-### fs_write_file
+#### fs_write_file
 ```bash
 make build-tools
 echo -n 'hello world' | base64 > b64.txt
@@ -254,7 +247,7 @@ echo '{"path":"tmp_write_demo.txt","contentBase64":"'"$(cat b64.txt)"'"}' | ./to
 cat tmp_write_demo.txt; rm -f tmp_write_demo.txt b64.txt
 ```
 
-### fs_mkdirp
+#### fs_mkdirp
 ```bash
 make build-tools
 echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/bin/fs_mkdirp | jq .
@@ -263,7 +256,7 @@ echo '{"path":"tmp_mkdirp_demo/a/b/c","modeOctal":"0755"}' | ./tools/bin/fs_mkdi
 rm -rf tmp_mkdirp_demo
 ```
 
-### fs_rm
+#### fs_rm
 ```bash
 make build-tools
 printf 'temp' > tmp_rm_demo.txt
@@ -273,7 +266,7 @@ echo '{"path":"tmp_rm_dir","recursive":true}' | ./tools/bin/fs_rm | jq .
 rm -rf tmp_rm_dir
 ```
 
-### fs_move
+#### fs_move
 ```bash
 make build-tools
 printf 'payload' > tmp_move_src.txt
@@ -283,7 +276,7 @@ echo '{"from":"tmp_move_src.txt","to":"tmp_move_dst.txt","overwrite":true}' | ./
 rm -f tmp_move_src.txt tmp_move_dst.txt
 ```
 
-### fs_listdir
+#### fs_listdir
 ```bash
 make build-tools
 mkdir -p tmp_listdir_demo/a b && touch tmp_listdir_demo/.hidden tmp_listdir_demo/a/afile tmp_listdir_demo/bfile
@@ -292,7 +285,7 @@ jq -n '{path:"tmp_listdir_demo",recursive:true,globs:["**/*"],includeHidden:fals
 rm -rf tmp_listdir_demo
 ```
 
-### fs_apply_patch
+#### fs_apply_patch
 ```bash
 make build-tools
 cat > /tmp/demo.diff <<'EOF'
@@ -308,7 +301,7 @@ world
 ' | diff -u - tmp_patch_demo.txt && echo OK
 ```
 
-### fs_edit_range
+#### fs_edit_range
 ```bash
 make build-tools
 printf 'abcdef' > tmp_edit_demo.txt
@@ -318,12 +311,20 @@ cat tmp_edit_demo.txt # => abXYef
 rm -f tmp_edit_demo.txt b64.txt
 ```
 
-### fs_stat
+#### fs_stat
 ```bash
 make build-tools
 printf 'hello world' > tmp_stat_demo.txt
 echo '{"path":"tmp_stat_demo.txt","hash":"sha256"}' | ./tools/bin/fs_stat | jq .
 rm -f tmp_stat_demo.txt
+```
+
+#### fs_search
+```bash
+make build-tools
+mkdir -p tmp_search_demo && printf 'alpha\nbeta\ngamma\n' > tmp_search_demo/sample.txt
+jq -n '{path:"tmp_search_demo",pattern:"^ga",glob:"**/*.txt",caseInsensitive:false}' | ./tools/bin/fs_search | jq '.matches'
+rm -rf tmp_search_demo
 ```
 
 ## Features
@@ -349,6 +350,12 @@ See the full threat model in `docs/security/threat-model.md`.
 
 ## Troubleshooting
 Common issues and deterministic fixes are documented with copy‑paste commands in `docs/runbooks/troubleshooting.md`.
+
+## Documentation
+Start with the [Documentation index](docs/README.md) for design docs, ADRs, and references:
+- [Tools manifest reference](docs/reference/tools-manifest.md)
+- [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
+- [Security: Threat model](docs/security/threat-model.md)
 
 ## Diagrams
 - Agent loop: `docs/diagrams/agentcli-seq.md`
