@@ -20,6 +20,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-temp float`: Sampling temperature (default 1.0; omitted for models that do not support it)
 - `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
 - `-prep-top-p float`: Pre-stage nucleus sampling probability mass (conflicts with `-temp`; when set, pre-stage omits temperature and sends `top_p`)
+- `-prep-profile string`: Pre-stage prompt profile (`deterministic|general|creative|reasoning`); sets temperature when supported (conflicts with `-prep-top-p`)
 - `-prep-cache-bust`: Skip pre-stage cache and force recompute
 - `-debug`: Dump request/response JSON to stderr
 - `-verbose`: Also print non-final assistant channels (critic/confidence) to stderr
@@ -55,7 +56,7 @@ The following profiles map to sampling behaviors for convenience. Temperature is
 
 | Profile | Effect |
 |---|---|
-| deterministic | temperature = 0.1 |
+| deterministic | temperature = 0.1 (pre-stage via `-prep-profile deterministic`) |
 | general | temperature = 1.0 |
 | creative | temperature = 1.0 |
 | reasoning | temperature = 1.0 |

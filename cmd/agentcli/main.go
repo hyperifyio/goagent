@@ -37,6 +37,8 @@ type cliConfig struct {
 	temperature  float64
 	topP         float64
     prepTopP     float64
+    // Pre-stage prompt profile controlling effective temperature when supported
+    prepProfile  oai.PromptProfile
 	debug        bool
     verbose      bool
     quiet        bool
@@ -181,6 +183,9 @@ func parseFlags() (cliConfig, int) {
 	flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
     // Pre-stage nucleus sampling (one-knob with temperature for pre-stage)
     flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (conflicts with temperature)")
+    // Pre-stage profile selector (deterministic|general|creative|reasoning)
+    var prepProfileRaw string
+    flag.StringVar(&prepProfileRaw, "prep-profile", "", "Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)")
 	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
 	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
     flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
@@ -190,7 +195,10 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.prepCacheBust, "prep-cache-bust", false, "Skip pre-stage cache and force recompute")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
-	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
+    ignoreError(flag.CommandLine.Parse(os.Args[1:]))
+    if strings.TrimSpace(prepProfileRaw) != "" {
+        cfg.prepProfile = oai.PromptProfile(strings.TrimSpace(prepProfileRaw))
+    }
 
 	// Resolve temperature precedence: flag > env (LLM_TEMPERATURE) > config file (not implemented) > default 1.0
     if tempSet {
@@ -677,6 +685,11 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         tp := cfg.prepTopP
         effectiveTopP = &tp
         // temperature omitted
+    } else if strings.TrimSpace(string(cfg.prepProfile)) != "" {
+        // Apply profile-derived temperature when supported
+        if t, ok := oai.MapProfileToTemperature(prepModel, cfg.prepProfile); ok {
+            effectiveTemp = &t
+        }
     } else if oai.SupportsTemperature(prepModel) {
         t := cfg.temperature
         effectiveTemp = &t
@@ -984,7 +997,8 @@ func printUsage(w io.Writer) {
     b.WriteString("  -prep-http-timeout duration\n    HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
-	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
+    b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
+    b.WriteString("  -prep-profile string\n    Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)\n")
     b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
     b.WriteString("  -verbose\n    Also print non-final assistant channels (critic/confidence) to stderr\n")
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")

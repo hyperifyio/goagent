@@ -293,6 +293,55 @@ func TestPrepIncludesTemperatureWhenSupported(t *testing.T) {
     }
 }
 
+// When -prep-profile deterministic is set and temperature is supported, pre-stage
+// should include temperature=0.1 unless -prep-top-p is also provided.
+func TestPrepProfileDeterministic_SetsTemperature(t *testing.T) {
+    var seenTemp *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        seenTemp = req.Temperature
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+    cfg.prepProfile = oai.ProfileDeterministic
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    var errBuf bytes.Buffer
+    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if seenTemp == nil || *seenTemp != 0.1 {
+        t.Fatalf("prep-profile deterministic: expected temperature=0.1; got %v", func() any { if seenTemp==nil { return nil }; return *seenTemp }())
+    }
+}
+
+// If -prep-top-p is set, it wins over -prep-profile by one-knob rule, omitting temperature.
+func TestPrepProfile_IgnoredWhenTopPSet(t *testing.T) {
+    var seenTemp *float64
+    var seenTopP *float64
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        _ = json.NewDecoder(r.Body).Decode(&req)
+        seenTemp = req.Temperature
+        seenTopP = req.TopP
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+    cfg.prepProfile = oai.ProfileDeterministic
+    cfg.prepTopP = 0.8
+    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+    var errBuf bytes.Buffer
+    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
+    if seenTemp != nil {
+        t.Fatalf("expected temperature omitted when -prep-top-p is set, got %v", *seenTemp)
+    }
+    if seenTopP == nil || *seenTopP != 0.8 {
+        t.Fatalf("expected top_p=0.8 present; got %v", func() any { if seenTopP==nil { return nil }; return *seenTopP }())
+    }
+}
+
 // Pre-stage should omit temperature for unsupported models even when not using -prep-top-p,
 // and the client must recover on 400 mentioning temperature by retrying without temperature.
 func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {

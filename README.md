@@ -173,6 +173,7 @@ Flags are order-insensitive. You can place `-prompt` and other flags in any orde
 -temp float            Sampling temperature (default 1.0)
 -top-p float           Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)
 -prep-top-p float      Nucleus sampling probability mass for pre-stage (conflicts with -temp; omits temperature when set)
+-prep-profile string   Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)
 -debug                 Dump request/response JSON to stderr
 -verbose               Also print non-final assistant channels (critic/confidence) to stderr
 -quiet                 Suppress non-final output; print only final text to stdout
@@ -185,6 +186,7 @@ Run `./bin/agentcli -h` to see the built‑in help.
 ### Why you usually don’t need to change knobs
 - The default `-temp 1.0` is standardized for broad provider/model parity and GPT‑5 compatibility.
 - The one‑knob rule applies: if you set `-top-p`, the agent omits `temperature`; otherwise it sends `temperature` (default 1.0) and leaves `top_p` unset.
+- The one‑knob rule applies for both stages: if you set `-top-p` (or `-prep-top-p`), the agent omits `temperature` for that stage; otherwise it sends `temperature` (default 1.0) when supported. Pre-stage profiles are available via `-prep-profile`, e.g. `deterministic` sets temperature to 0.1 when supported.
 - See the policy for details and rationale: [ADR‑0004: Default LLM policy](docs/adr/0004-default-llm-policy.md).
 
 ### Capabilities
