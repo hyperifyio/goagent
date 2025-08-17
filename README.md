@@ -1,11 +1,15 @@
-# goagent — Minimal non‑interactive agent CLI for OpenAI‑compatible APIs
+# goagent — Minimal, safe, non‑interactive agent CLI
 
 [![CI (lint+test+build)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/hyperifyio/goagent)](https://github.com/hyperifyio/goagent/blob/main/go.mod)
 [![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-goagent is a compact, vendor‑agnostic CLI for running non‑interactive, tool‑using agents against any OpenAI‑compatible Chat Completions API. It executes a minimal, auditable allowlist of local tools (argv only; no shell) and prints the model’s final answer. Use it with hosted APIs or local endpoints such as `http://localhost:1234/v1` when you need portable prototypes with strict, deterministic tool execution.
+goagent is a compact, vendor‑agnostic command‑line tool for running non‑interactive, tool‑using agents against any OpenAI‑compatible Chat Completions API.
+
+- **What it does**: Executes a small, auditable allowlist of local tools (argv only; no shell), streams JSON in/out, and prints the model’s final answer.
+- **Why use it**: Deterministic, portable, and safe by default. Works with hosted providers and local endpoints like `http://localhost:1234/v1`.
+- **Who it’s for**: Engineers who want a minimal agent runner with clear guarantees and zero vendor lock‑in.
 
 ## Table of contents
 - [Why goagent?](#why-goagent)
@@ -42,7 +46,7 @@ goagent is a compact, vendor‑agnostic CLI for running non‑interactive, tool�
 - Batteries included: small toolbelt for filesystem and process tasks
 
 ## Installation
-- Requirements: Go 1.24+, Linux/macOS/Windows. For local lint/path checks: `ripgrep` (rg) and `golangci-lint`. Network access to an OpenAI‑compatible API.
+- **Requirements**: Go 1.24+, Linux/macOS/Windows. For development: `ripgrep` (rg) and `golangci-lint`. Network access to an OpenAI‑compatible API.
 
 Choose one:
 
@@ -74,14 +78,16 @@ make install-golangci
 ```
 
 ## Configuration
-Environment variables (flags take precedence):
-- `OAI_BASE_URL` default `https://api.openai.com/v1` (scripts fall back from `LLM_BASE_URL` if unset)
-- `OAI_MODEL` default `oss-gpt-20b` (scripts fall back from `LLM_MODEL` if unset)
-- `OAI_API_KEY` only if your endpoint requires it (canonical; CLI also accepts `OPENAI_API_KEY` as a compatibility fallback)
-- `OAI_HTTP_TIMEOUT` HTTP timeout for chat requests (duration string, e.g. `90s`); can also be set via `-http-timeout`
+Configuration precedence is: **flags > environment > built‑in defaults**.
+
+Environment variables:
+- `OAI_BASE_URL` — API base (default `https://api.openai.com/v1`). Helper scripts will also read `LLM_BASE_URL` if present.
+- `OAI_MODEL` — model ID (default `oss-gpt-20b`). Helper scripts will also read `LLM_MODEL` if present.
+- `OAI_API_KEY` — API key when required. The CLI also accepts `OPENAI_API_KEY` for compatibility.
+- `OAI_HTTP_TIMEOUT` — HTTP timeout for chat requests (e.g., `90s`). Mirrors `-http-timeout`.
 
 ## Quick start
-Build or install the CLI and point it to a reachable OpenAI‑compatible API (local or hosted):
+Install the CLI and point it to a reachable OpenAI‑compatible API (local or hosted):
 ```bash
 export OAI_BASE_URL=http://localhost:1234/v1
 export OAI_MODEL=oss-gpt-20b
@@ -133,7 +139,7 @@ Run the agent:
   -debug
 ```
 
-Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a one‑line final answer.
+Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a concise final answer.
 
 ## Usage
 Flags are order-insensitive. You can place `-prompt` and other flags in any order; precedence remains flag > environment > default.
@@ -168,7 +174,7 @@ Run `./bin/agentcli -h` to see the built‑in help.
 - See the policy for details and rationale: [ADR‑0004: Default LLM policy](docs/adr/0004-default-llm-policy.md).
 
 ### Capabilities
-List the enabled tools from a manifest without running the agent:
+List enabled tools from a manifest without running the agent:
 ```bash
 ./bin/agentcli -tools ./tools.json -capabilities
 ```
@@ -403,7 +409,7 @@ make test-clean-logs
 Reproducible builds: the `Makefile` uses `-trimpath` and stripped `-ldflags` with VCS stamping disabled so two clean builds produce identical binaries. Verify locally by running two consecutive `make clean build build-tools` and comparing `sha256sum` outputs.
 
 ## Contributing
-We welcome contributions! See `CONTRIBUTING.md` for workflow, standards, and how to run quality gates locally. Please also read `CODE_OF_CONDUCT.md`.
+Contributions are welcome! See `CONTRIBUTING.md` for workflow, coding standards, and how to run quality gates locally. Please also read `CODE_OF_CONDUCT.md`.
 
 Useful local helpers during development:
 - `make check-tools-paths` — enforce canonical `tools/cmd/NAME` sources and `tools/bin/NAME` invocations (requires `rg`)
