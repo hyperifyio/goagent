@@ -39,10 +39,10 @@ type cliConfig struct {
 	httpTimeoutSource   string
 	toolTimeoutSource   string
 	globalTimeoutSource string
-    // initMessages allows tests to inject a custom starting transcript to
-    // exercise pre-flight validation paths (e.g., stray tool message). When
-    // empty, the default [system,user] seed is used.
-    initMessages []oai.Message
+	// initMessages allows tests to inject a custom starting transcript to
+	// exercise pre-flight validation paths (e.g., stray tool message). When
+	// empty, the default [system,user] seed is used.
+	initMessages []oai.Message
 }
 
 func getEnv(key, def string) string {
@@ -260,16 +260,16 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	// Configure HTTP client with retry policy
 	httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
 
-    var messages []oai.Message
-    if len(cfg.initMessages) > 0 {
-        // Use injected messages (tests only)
-        messages = cfg.initMessages
-    } else {
-        messages = []oai.Message{
-            {Role: oai.RoleSystem, Content: cfg.systemPrompt},
-            {Role: oai.RoleUser, Content: cfg.prompt},
-        }
-    }
+	var messages []oai.Message
+	if len(cfg.initMessages) > 0 {
+		// Use injected messages (tests only)
+		messages = cfg.initMessages
+	} else {
+		messages = []oai.Message{
+			{Role: oai.RoleSystem, Content: cfg.systemPrompt},
+			{Role: oai.RoleUser, Content: cfg.prompt},
+		}
+	}
 
 	// Loop with per-request timeouts so multi-step tool calls have full budget each time.
 	for step := 0; step < cfg.maxSteps; step++ {
