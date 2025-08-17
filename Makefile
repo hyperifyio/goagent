@@ -185,6 +185,24 @@ lint:
 	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) check-tools-paths; \
 	PATH="$(CURDIR)/bin:$$PATH" $(MAKE) verify-manifest-paths
 
+# Verify ordering inside the lint target via make dry-run
+# Ensures the first non-commented command is the sub-make invocation of check-go-version
+# and that a golangci-lint version invocation appears later.
+.PHONY: test-lint-order
+test-lint-order:
+	@set -euo pipefail; \
+	OUT="$$(make -n lint 2>/dev/null)"; \
+	FIRST_LINE="$$(printf '%s\n' "$$OUT" | sed -n '1p')"; \
+	if [ "$$FIRST_LINE" != "make check-go-version" ]; then \
+	  printf '%s\n' "test-lint-order: expected first line 'make check-go-version' but got: $$FIRST_LINE"; \
+	  exit 1; \
+	fi; \
+	if ! printf '%s\n' "$$OUT" | awk '/golangci-lint/{found=1} END{exit found?0:1}'; then \
+	  printf '%s\n' "test-lint-order: expected to find a golangci-lint invocation in dry-run output"; \
+	  exit 1; \
+	fi; \
+	printf '%s\n' "test-lint-order: OK"
+
 # Fail fast when golangci-lint is older than the minimum supported version
 # Usage: make lint-precheck
 lint-precheck:
