@@ -11,6 +11,11 @@ const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 	RoleTool      = "tool"
+    // RoleDeveloper is a Harmony role used to convey developer guidance
+    // that is distinct from system and user prompts. Messages with this
+    // role are prepended ahead of user messages and may be merged from
+    // multiple sources (CLI flags and pre-stage refinement).
+    RoleDeveloper = "developer"
 )
 
 // Message represents an OpenAI-compatible chat message.

@@ -5,8 +5,12 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 ## Flags
 
 - `-prompt string`: User prompt (required)
+- `-prompt-file string`: Path to file containing user prompt ('-' for STDIN; mutually exclusive with `-prompt`)
 - `-tools string`: Path to tools.json (optional)
 - `-system string`: System prompt (default "You are a helpful, precise assistant. Use tools when strictly helpful.")
+- `-system-file string`: Path to file containing system prompt ('-' for STDIN; mutually exclusive with `-system`)
+- `-developer string`: Developer message (repeatable)
+- `-developer-file string`: Path to file containing developer message (repeatable; '-' for STDIN)
 - `-base-url string`: OpenAI-compatible base URL (env `OAI_BASE_URL`, default `https://api.openai.com/v1`)
 - `-api-key string`: API key if required (env `OAI_API_KEY`; falls back to `OPENAI_API_KEY`)
 - `-model string`: Model ID (env `OAI_MODEL`, default `oss-gpt-20b`)

@@ -22,6 +22,11 @@ import (
 // cliConfig holds user-supplied configuration resolved from flags and env.
 type cliConfig struct {
 	prompt       string
+    // Role inputs: developer and files
+    developerPrompts []string
+    developerFiles   []string
+    systemFile       string
+    promptFile       string
 	toolsPath    string
 	systemPrompt string
 	baseURL      string
@@ -148,7 +153,13 @@ func parseFlags() (cliConfig, int) {
 	// API key resolves from env with fallback for compatibility
 	defaultKey := resolveAPIKeyFromEnv()
 
-	flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
+    flag.StringVar(&cfg.prompt, "prompt", "", "User prompt (required)")
+    // Role input flags
+    // -developer is repeatable; collect via custom sliceVar
+    flag.Var((*stringSliceFlag)(&cfg.developerPrompts), "developer", "Developer message (repeatable)")
+    flag.Var((*stringSliceFlag)(&cfg.developerFiles), "developer-file", "Path to file containing developer message (repeatable; '-' for STDIN)")
+    flag.StringVar(&cfg.systemFile, "system-file", "", "Path to file containing system prompt ('-' for STDIN; mutually exclusive with -system)")
+    flag.StringVar(&cfg.promptFile, "prompt-file", "", "Path to file containing user prompt ('-' for STDIN; mutually exclusive with -prompt)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
@@ -289,9 +300,20 @@ func parseFlags() (cliConfig, int) {
 		cfg.globalTimeoutSource = "default"
 	}
 
-    if !cfg.capabilities && !cfg.printConfig && strings.TrimSpace(cfg.prompt) == "" {
-		return cfg, 2 // CLI misuse
-	}
+    // Enforce mutual exclusion and required prompt presence (unless print-only modes)
+    if strings.TrimSpace(cfg.systemFile) != "" && strings.TrimSpace(cfg.systemPrompt) != "" && cfg.systemPrompt != defaultSystem {
+        // Both -system and -system-file provided (with -system not defaulted)
+        return cfg, 2
+    }
+    if strings.TrimSpace(cfg.promptFile) != "" && strings.TrimSpace(cfg.prompt) != "" {
+        return cfg, 2
+    }
+    if !cfg.capabilities && !cfg.printConfig {
+        // Resolve effective prompt presence considering -prompt-file
+        if strings.TrimSpace(cfg.prompt) == "" && strings.TrimSpace(cfg.promptFile) == "" {
+            return cfg, 2
+        }
+    }
     // Prep top_p source labeling for config dump
     if cfg.prepTopP > 0 {
         cfg.prepTopPSource = "flag"
@@ -332,9 +354,9 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
 		printUsage(stderr)
 		return exitOn
 	}
-	if cfg.printConfig {
-		return printResolvedConfig(cfg, stdout)
-	}
+    if cfg.printConfig {
+        return printResolvedConfig(cfg, stdout)
+    }
 	if cfg.capabilities {
 		return printCapabilities(cfg, stdout, stderr)
 	}
@@ -396,15 +418,40 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 	// Configure HTTP client with retry policy
 	httpClient := oai.NewClientWithRetry(cfg.baseURL, cfg.apiKey, cfg.httpTimeout, oai.RetryPolicy{MaxRetries: cfg.httpRetries, Backoff: cfg.httpBackoff})
 
-	var messages []oai.Message
-	if len(cfg.initMessages) > 0 {
+    var messages []oai.Message
+    if len(cfg.initMessages) > 0 {
 		// Use injected messages (tests only)
 		messages = cfg.initMessages
 	} else {
-		messages = []oai.Message{
-			{Role: oai.RoleSystem, Content: cfg.systemPrompt},
-			{Role: oai.RoleUser, Content: cfg.prompt},
-		}
+        // Resolve role contents from flags/files
+        sys, sysErr := resolveMaybeFile(cfg.systemPrompt, cfg.systemFile)
+        if sysErr != nil {
+            safeFprintf(stderr, "error: %v\n", sysErr)
+            return 2
+        }
+        prm, prmErr := resolveMaybeFile(cfg.prompt, cfg.promptFile)
+        if prmErr != nil {
+            safeFprintf(stderr, "error: %v\n", prmErr)
+            return 2
+        }
+        devs, devErr := resolveDeveloperMessages(cfg.developerPrompts, cfg.developerFiles)
+        if devErr != nil {
+            safeFprintf(stderr, "error: %v\n", devErr)
+            return 2
+        }
+        // Build messages honoring precedence:
+        // System: CLI -system (if provided) else -system-file else default
+        // Developer: CLI -developer / -developer-file (all, in provided order)
+        // User: CLI -prompt or -prompt-file
+        var seed []oai.Message
+        seed = append(seed, oai.Message{Role: oai.RoleSystem, Content: sys})
+        for _, d := range devs {
+            if s := strings.TrimSpace(d); s != "" {
+                seed = append(seed, oai.Message{Role: oai.RoleDeveloper, Content: s})
+            }
+        }
+        seed = append(seed, oai.Message{Role: oai.RoleUser, Content: prm})
+        messages = seed
 	}
 
     // Loop with per-request timeouts so multi-step tool calls have full budget each time.
@@ -987,7 +1034,11 @@ func printUsage(w io.Writer) {
 	b.WriteString("Flags (precedence: flag > env > default):\n")
 	b.WriteString("  -prompt string\n    User prompt (required)\n")
 	b.WriteString("  -tools string\n    Path to tools.json (optional)\n")
-	b.WriteString("  -system string\n    System prompt (default \"You are a helpful, precise assistant. Use tools when strictly helpful.\")\n")
+    b.WriteString("  -system string\n    System prompt (default \"You are a helpful, precise assistant. Use tools when strictly helpful.\")\n")
+    b.WriteString("  -system-file string\n    Path to file containing system prompt ('-' for STDIN; mutually exclusive with -system)\n")
+    b.WriteString("  -developer string\n    Developer message (repeatable)\n")
+    b.WriteString("  -developer-file string\n    Path to file containing developer message (repeatable; '-' for STDIN)\n")
+    b.WriteString("  -prompt-file string\n    Path to file containing user prompt ('-' for STDIN; mutually exclusive with -prompt)\n")
 	b.WriteString("  -base-url string\n    OpenAI-compatible base URL (env OAI_BASE_URL or default https://api.openai.com/v1)\n")
 	b.WriteString("  -api-key string\n    API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)\n")
 	b.WriteString("  -model string\n    Model ID (env OAI_MODEL or default oss-gpt-20b)\n")
@@ -1270,4 +1321,50 @@ func safeFprintf(w io.Writer, format string, a ...any) {
 	if _, err := fmt.Fprintf(w, format, a...); err != nil {
 		return
 	}
+}
+
+// stringSliceFlag implements flag.Value to collect repeatable string flags into a slice.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+    if s == nil { return "" }
+    return strings.Join(*s, ",")
+}
+
+func (s *stringSliceFlag) Set(v string) error {
+    *s = append(*s, v)
+    return nil
+}
+
+// resolveMaybeFile returns the effective content from either an inline string
+// or a file path when provided. When filePath is "-", it reads from STDIN.
+// If filePath is non-empty, it takes precedence over inline.
+func resolveMaybeFile(inline string, filePath string) (string, error) {
+    f := strings.TrimSpace(filePath)
+    if f == "" {
+        return inline, nil
+    }
+    if f == "-" {
+        b, err := io.ReadAll(os.Stdin)
+        if err != nil { return "", fmt.Errorf("read STDIN: %w", err) }
+        return string(b), nil
+    }
+    b, err := os.ReadFile(f)
+    if err != nil {
+        return "", fmt.Errorf("read file %s: %w", f, err)
+    }
+    return string(b), nil
+}
+
+// resolveDeveloperMessages aggregates developer messages from repeatable flags
+// and files. Files are read in the order provided; "-" reads from STDIN.
+func resolveDeveloperMessages(inlines []string, files []string) ([]string, error) {
+    var out []string
+    for _, f := range files {
+        s, err := resolveMaybeFile("", f)
+        if err != nil { return nil, err }
+        out = append(out, s)
+    }
+    out = append(out, inlines...)
+    return out, nil
 }
