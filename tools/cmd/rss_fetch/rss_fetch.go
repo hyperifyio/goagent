@@ -68,8 +68,8 @@ func run() error {
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
-			// surface close error best-effort
-			_, _ = os.Stderr.WriteString(fmt.Sprintf("{\"error\":\"close body: %v\"}", cerr))
+			// best-effort log; ignore secondary write error intentionally
+			_, _ = os.Stderr.WriteString(fmt.Sprintf("{\"error\":\"close body: %v\"}", cerr)) //nolint:errcheck
 		}
 	}()
 	if resp.StatusCode == http.StatusNotModified {
@@ -79,7 +79,7 @@ func run() error {
 	if resp.StatusCode >= 400 {
 		// Drain then error
 		if _, derr := io.Copy(io.Discard, resp.Body); derr != nil {
-			_, _ = os.Stderr.WriteString("{\"error\":\"drain body\"}")
+			_, _ = os.Stderr.WriteString("{\"error\":\"drain body\"}") //nolint:errcheck
 		}
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
