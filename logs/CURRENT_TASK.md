@@ -1,1 +1,1 @@
-Implement S01:image-model-flag-parse by adding -image-model flag with env precedence, updating help, tests, and print-config to include image.model.
+S02: print-config should include image.model; currently blocked because cmd/agentcli/main.go is missing; next step is to add a minimal cmd/agentcli with -print-config and cliConfig.imageModel.
