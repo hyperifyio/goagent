@@ -64,12 +64,12 @@ func run() error {
 	q.Set("url", in.URL)
 	availURL.RawQuery = q.Encode()
 
-	client := &http.Client{Timeout: 3 * time.Second}
-	start := time.Now()
-	resp, err := client.Get(availURL.String())
-	if err != nil {
-		return fmt.Errorf("http: %w", err)
-	}
+    client := &http.Client{Timeout: 3 * time.Second}
+    start := time.Now()
+    resp, err := getWithRetry(client, availURL.String())
+    if err != nil {
+        return fmt.Errorf("http: %w", err)
+    }
 	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 	var raw struct {
@@ -104,7 +104,7 @@ func run() error {
 		if err := ssrfGuard(saveURL); err != nil {
 			return err
 		}
-		resp2, herr := client.Get(saveURL.String())
+        resp2, herr := getWithRetry(client, saveURL.String())
 		if herr == nil {
 			if resp2.StatusCode >= 200 && resp2.StatusCode < 300 {
 				saved = true
@@ -182,6 +182,20 @@ func isPrivateIP(ip net.IP) bool {
 		return true
 	}
 	return false
+}
+
+// getWithRetry performs a GET with one retry on 5xx using a small backoff.
+func getWithRetry(client *http.Client, url string) (*http.Response, error) {
+    resp, err := client.Get(url)
+    if err != nil {
+        return nil, err
+    }
+    if resp.StatusCode >= 500 {
+        _ = resp.Body.Close() //nolint:errcheck
+        time.Sleep(150 * time.Millisecond)
+        return client.Get(url)
+    }
+    return resp, nil
 }
 
 // appendAudit writes an NDJSON line under .goagent/audit/YYYYMMDD.log at the repo root.
