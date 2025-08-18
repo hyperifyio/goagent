@@ -13,11 +13,7 @@ import (
 	testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
-type rcOutput struct {
-	Allowed       bool     `json:"allowed"`
-	CrawlDelayMS  int      `json:"crawl_delay_ms,omitempty"`
-	GroupRules    []string `json:"group_rules"`
-}
+// rcOutput intentionally omitted; tests validate via substring checks.
 
 // Allow local httptest origins during tests
 func TestMain(m *testing.M) {
@@ -28,17 +24,17 @@ func TestMain(m *testing.M) {
 }
 
 func runRobots(t *testing.T, bin string, input any) (string, string, error) {
-		data, err := json.Marshal(input)
-		if err != nil {
-			t.Fatalf("marshal: %v", err)
-		}
-		cmd := exec.Command(bin)
-		cmd.Stdin = bytes.NewReader(data)
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		err = cmd.Run()
-		return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), err
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	cmd := exec.Command(bin)
+	cmd.Stdin = bytes.NewReader(data)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), err
 }
 
 // UA-specific rules must take precedence over wildcard.
@@ -48,7 +44,9 @@ func TestRobotsCheck_UAPrecedence_DenySpecific(t *testing.T) {
 		w.Header().Set("Content-Type", "text/plain")
 		// RFC 9309: specific UA group applies when matched
 		// Specific denies /private, while wildcard allows all
-		_, _ = w.Write([]byte("User-agent: agentcli\nDisallow: /private\n\nUser-agent: *\nAllow: /\n"))
+		if _, err := w.Write([]byte("User-agent: agentcli\nDisallow: /private\n\nUser-agent: *\nAllow: /\n")); err != nil {
+			t.Fatalf("write: %v", err)
+		}
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -74,7 +72,9 @@ func TestRobotsCheck_CrawlDelay_Parsed(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("User-agent: agentcli\nCrawl-delay: 2\nAllow: /\n"))
+		if _, err := w.Write([]byte("User-agent: agentcli\nCrawl-delay: 2\nAllow: /\n")); err != nil {
+			t.Fatalf("write: %v", err)
+		}
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -100,7 +100,9 @@ func TestRobotsCheck_WildcardFallback_DenyAll(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("User-agent: *\nDisallow: /\n"))
+		if _, err := w.Write([]byte("User-agent: *\nDisallow: /\n")); err != nil {
+			t.Fatalf("write: %v", err)
+		}
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
