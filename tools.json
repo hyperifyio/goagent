@@ -354,5 +354,22 @@
       "command": ["./tools/bin/metadata_extract"],
       "timeoutSec": 10
     }
+    ,
+    {
+      "name": "pdf_extract",
+      "description": "Extract text from PDF pages; optional OCR via tesseract",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pdf_base64": {"type": "string"},
+          "pages": {"type": "array", "items": {"type": "integer"}}
+        },
+        "required": ["pdf_base64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/pdf_extract"],
+      "timeoutSec": 60,
+      "envPassthrough": ["ENABLE_OCR"]
+    }
   ]
 }
