@@ -555,6 +555,7 @@ See ADR‑0003 for the full policy and rationale: [docs/adr/0003-toolchain-and-l
 ## Support
 - Open an issue on the tracker: [Issues](https://github.com/hyperifyio/goagent/issues)
   - For security concerns, avoid posting secrets in logs. If a private report is needed, open an issue with minimal detail and a maintainer will reach out.
+ - Follow updates from the author on LinkedIn: [Jaakko Heusala](https://www.linkedin.com/in/jheusala/)
 
 ## Roadmap
 Planned improvements and open ideas are tracked in `FUTURE_CHECKLIST.md`. Larger architectural decisions are recorded under `docs/adr/` (see ADR‑0001 and ADR‑0002). Contributions to the roadmap are welcome via issues and PRs.
