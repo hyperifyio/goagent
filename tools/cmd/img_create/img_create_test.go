@@ -123,3 +123,59 @@ func TestHappyPath_SaveOnePNG(t *testing.T) {
         t.Fatalf("bytes mismatch: got %d want %d", len(got), len(want))
     }
 }
+
+func TestMissingSaveDir_WhenReturnB64False(t *testing.T) {
+    bin := buildTool(t)
+    // Default return_b64 is false; omit save to trigger validation error
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+    }, nil)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit")
+    }
+    if !strings.Contains(stderr, "save.dir is required when return_b64=false") {
+        t.Fatalf("expected save.dir error, got %q", stderr)
+    }
+}
+
+func TestInvalidSizePattern(t *testing.T) {
+    bin := buildTool(t)
+    // Provide an invalid size and set return_b64 to bypass save requirements
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt":     "tiny",
+        "size":       "big",
+        "return_b64": true,
+    }, nil)
+    if code == 0 {
+        t.Fatalf("expected non-zero exit")
+    }
+    if !strings.Contains(stderr, "size must match") {
+        t.Fatalf("expected size pattern error, got %q", stderr)
+    }
+}
+
+func TestAPI400_JSONErrorIsSurfaced(t *testing.T) {
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusBadRequest)
+        _ = json.NewEncoder(w).Encode(map[string]any{
+            "error": map[string]any{"message": "bad prompt"},
+        })
+    }))
+    defer srv.Close()
+
+    bin := buildTool(t)
+    outDir := testutil.MakeRepoRelTempDir(t, "imgcreate-out-")
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+        "save":   map[string]any{"dir": outDir, "basename": "img", "ext": "png"},
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": srv.URL,
+        "OAI_API_KEY":        "test-123",
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit")
+    }
+    if !strings.Contains(stderr, "bad prompt") {
+        t.Fatalf("expected API error message surfaced, got %q", stderr)
+    }
+}
