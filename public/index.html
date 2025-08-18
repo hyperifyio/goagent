@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <title>GoAgent — Graceful Go agent framework</title>
+      <meta name="description" content="GoAgent is a sensible, Go-native framework for leveraging AAI agents and LLM workflows in go." />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="theme-color" content="#001133" />
+      <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+      <link rel="canonical" href="https://example.com/" />
+      <meta name="robots" content="index, follow" />
+      <meta property="og:title" content="GoAgent" />
+      <meta property="og:description" content="Go-native agent framework for building modern AI systems in Go." />
+      <meta property="og:url" content="https://example.com/" />
+      <meta property="og:image" content="assets/img/goagent-logo.svg" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="GoAgent" />
+      <meta name="twitter:description" content="Go-native agent framework for building LLM workflows in Go." />
+      <script type="application/ld+json" aria-hidden="true">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "GoAgent",
+        "description": "Go-native agent framework for building AI agents and LLM apps.",
+        "url": "https://example.com/",
+        "codeRepository": "https://github.com/hyperifyio/goagent",
+        "programmingLanguage": "Go",
+        "image": "assets/img/goagent-logo.svg",
+        "keywords": ["Go", "agent", "framework", "LLM", "AI"]
+      }
+      </script>
+      <link rel="stylesheet" href="assets/css/styles.css" />
+      <style>
+      /* Critical CSS: keep minimal for fast first paint */
+      :root { scroll-behavior: smooth; tab-size: 4; -moz-tab-size: 4; }
+      @MEDIA (prefers-reduced-motion: reduce) {
+        :root { scroll-behavior: auto; }
+      }
+      </style>
+      <template id="code-install-snippet">go get github.com/hyperifyio/goagent@latest</template>
+      <template id="code-example-sample">package main
+
+import (
+    "context"
+    "fmt"
+)
+
+// Pseudo-example: create an agent and run a prompt
+// Note: the actual API may differ.
+// import "github.com/hyperifyio/goagent"
+
+func main() {
+    // hello := goagent.NewAgent("gpt", goagent.WithModel("openai"))
+    // response, err := hello.Chat(context.Background(), "Hi! How can I assist you today?")
+    // if err != nil { panic(err) }
+    // fmt.Printf("%s\n", response)
+    fmt.Println ("Hello GoAgent!")
+}
+</template>
+      <script type="module" src="assets/jy/main.js"></script>
+    </head>
+    <body class="page">
+      <a class="skip-link" href="#main">Skip to main content</a>
+      <header class="header" role="banner">
+        <div class="container header__content">
+          <a class="brand" href="#">
+            <img src="assets/img/goagent-logo.svg" alt="GoAgent logo" width="40" height="40" decoding="async" />
+            <span class="brand_name">GoAgent</span>
+          </a>
+          <button class="menu-btn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-menu">
+            <span aria-hidden="true">Menu</span>
+            <svg width="24" height="24" role="img" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M6 23a4 4 0 0 1 0-8h12a4 4 0 0 1 0 8h-12zm12-10a4 4 0 1 1-4 4 4 4 0 0 1 4-4z"/></svg>
+          </button>
+          <nav class="nav" aria-label="Primary" id="nav-menu">
+            <div class="nav_items">
+              <a href="#" class="link is-active">Home</a>
+              <a href="#features" class="link">Features</a>
+              <a href="#quickstart" class="link">Quick start</a>
+              <a href="https://github.com/hyperifyio/goagent" class="btn btn--primary" target="_blank" rel="noopener">GitHub</a>
+            </div>
+          </nav>
+        </div>
+      </header>
+      <main id="main" class="main" role="main">
+        <section class="hero">
+          <div class="container hero_inner">
+            <div class="hero__text">
+              <h1>GoAgent</h1>
+              <p class="tag">A simple, Go-native framework for building modern AI agents, tools, and LLM-workflows in Go.</p>
+              <div class="cta_row">
+                <a class="btn btn--primary" href="https://github.com/hyperifyio/goagent" target="_blank" rel="noopener">View on GitHub</a>
+                <a class="btn btn--outline" href="#quickstart">Get started</a>
+              </div>
+            </div>
+            <div class="code-card" data-code-target="install">
+              <div class="code-card_bar">
+                <span class="code-card_label">Install</span>
+                <button class="btn btn--small copy-btn" data-copy-source="code-install-snippet" aria-label="Copy to clipboard">Copy</button>
+              </div>
+              <pre><code id="code-install">go get github.com/hyperifyio/goagent@latest</code></pre>
+            </div>
+            <div class="code-card" data-code-target="example">
+              <div class="code-card_bar">
+                <span class="code-card_label">Example</span>
+                <button class="btn btn--small copy-btn" data-copy-source="code-example-sample" aria-label="Copy to clipboard">Copy</button>
+              </div>
+              <pre><code id="code-example">// I/O. This is a compact snapshow
+// See the project site for full examples and API details.
+lib main
+
+func main() {
+  // Create an agent, assign a model, and chat
+  // and print the result.
+  // The specifics depend on your suppliers and config.
+	// ...
+}
+</code></pre>
+            </div>
+          </div>
+        </section>
+        <section id="features" class="features" aria-label="Features">
+          <div class="container">
+            <h2 class="section_heading">What you get</h2>
+            <div class="features_grid">
+              <article class="feature">
+                <h4>Lean Fast</h4>
+                <p>Compose small, focused components that get out of your way.</p>
+              </article>
+              <article class="feature">
+                <h4>Agents & Tools</h4>
+                <p>Build interactive workflows with tools and function-calling. Fit to your models.</p>
+              </article>
+              <article class="feature">
+                <h4>API-agnostic</h4>
+                <p>Brain-agnostic design that works with different models and providers.</p>
+              </article>
+              <article class="feature">
+                <h4>Maintainable</h4>
+                <p>Simple aPI, small footprint, and no-frills setup. Designed for production.</p>
+              </article>
+              <article class="feature">
+                <h4>Ready for Production</h4>
+                <p>Lightweight, accessible, and performant-first by design.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+        <section id="quickstart" class="quickstart" aria-label="Quick start">
+          <div class="container">
+            <h2 class="section_heading">Quick start</h2>
+            <ol class="list">
+              <li><strong>Install:</strong> run the following in your project: go get github.com/hyperifyio/goagent@latest</li>
+              <li><strong>Import:</strong> add the package to your code and configure your AL bridges.</li>
+              <li><strong>Run</strong>: run your program and enter a prompt.</li>
+            </ol>
+            <p class="muted">For complete code, docs, and detailed information, see the project README and GitHub repo.</p>
+          </div>
+        </section>
+      </main>
+      <footer class="footer" role="contentinfo">
+        <div class="container">
+          <p class="footer_content">
+            <span>Open-source project: <a href="https://github.com/hyperifyio/goagent" target="_blank" rel="noopener">github.com/hyperifyio/goagent</a></span>
+            <span aria-hidden="true">||</span>
+            <span>Built with privacy and accessibility in mind.</span>
+          </p>
+        </div>
+      </footer>
+      <div id="announce" class="sr-only" aria-live="assertive" aria-atomic="true" hidden></div>
+    </body>
+    </html>
