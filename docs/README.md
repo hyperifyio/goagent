@@ -38,6 +38,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/reference/searxng_search.md](reference/searxng_search.md)
  - Tool reference: PDF extract (`pdf_extract`).
    - Link: [docs/reference/pdf_extract.md](reference/pdf_extract.md)
+ - Tool reference: Wayback lookup (`wayback_lookup`).
+   - Link: [docs/reference/wayback_lookup.md](reference/wayback_lookup.md)
 
 - Security: Threat model and trust boundaries.
   - Link: [docs/security/threat-model.md](security/threat-model.md)

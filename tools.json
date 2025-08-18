@@ -387,5 +387,21 @@
       "command": ["./tools/bin/rss_fetch"],
       "timeoutSec": 10
     }
+    ,
+    {
+      "name": "wayback_lookup",
+      "description": "Query Internet Archive Wayback Machine for closest snapshot; optionally trigger save",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "save": {"type": "boolean", "default": false}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/wayback_lookup"],
+      "timeoutSec": 10
+    }
   ]
 }
