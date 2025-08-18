@@ -338,5 +338,21 @@
       "command": ["./tools/bin/readability_extract"],
       "timeoutSec": 10
     }
+    ,
+    {
+      "name": "metadata_extract",
+      "description": "Extract OpenGraph, Twitter cards, and JSON-LD from HTML",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "html": {"type": "string"},
+          "base_url": {"type": "string"}
+        },
+        "required": ["html", "base_url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/metadata_extract"],
+      "timeoutSec": 10
+    }
   ]
 }

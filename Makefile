@@ -42,7 +42,8 @@ TOOLS := \
   http_fetch \
   searxng_search \
   robots_check \
-  readability_extract
+  readability_extract \
+  metadata_extract
 
 .PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint lint-precheck fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version install-golangci
 
