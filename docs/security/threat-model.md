@@ -43,3 +43,4 @@ The `img_create` tool interacts with the Images API and may handle large base64 
 ## References
 - See `README.md` Security model for a quick summary.
 - ADR-0001 documents the CLI architecture and contracts.
+ - Research tools security posture and guardrails: see [security/research-tools.md](research-tools.md)
