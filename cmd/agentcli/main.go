@@ -57,6 +57,9 @@ type cliConfig struct {
 	printConfig  bool
     // Pre-stage tool policy
     prepToolsAllowExternal bool // when false, pre-stage uses built-in read-only tools and ignores -tools
+    // Optional pre-stage-specific tools manifest path; when set and external tools are allowed,
+    // the pre-stage uses this manifest instead of -tools
+    prepToolsPath string
 	// Sources for effective timeouts: "flag" | "env" | "default"
 	httpTimeoutSource   string
     prepHTTPTimeoutSource string
@@ -211,7 +214,7 @@ func parseFlags() (cliConfig, int) {
     flag.StringVar(&cfg.systemFile, "system-file", "", "Path to file containing system prompt ('-' for STDIN; mutually exclusive with -system)")
     flag.StringVar(&cfg.promptFile, "prompt-file", "", "Path to file containing user prompt ('-' for STDIN; mutually exclusive with -prompt)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
-	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
+    flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
 	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
 	flag.StringVar(&cfg.model, "model", defaultModel, "Model ID")
@@ -259,6 +262,7 @@ func parseFlags() (cliConfig, int) {
     flag.BoolVar(&cfg.verbose, "verbose", false, "Also print non-final assistant channels (critic/confidence) to stderr")
     flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
     flag.BoolVar(&cfg.prepToolsAllowExternal, "prep-tools-allow-external", false, "Allow pre-stage to execute external tools from -tools; when false, pre-stage is limited to built-in read-only tools")
+    flag.StringVar(&cfg.prepToolsPath, "prep-tools", "", "Path to pre-stage tools.json (optional; used only with -prep-tools-allow-external)")
     flag.BoolVar(&cfg.prepCacheBust, "prep-cache-bust", false, "Skip pre-stage cache and force recompute")
     // Enabled by default; user can disable to skip pre-stage entirely. Track if explicitly set.
     cfg.prepEnabled = true
@@ -1090,10 +1094,13 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         if !cfg.prepToolsAllowExternal {
             return "builtin:fs.read_file,fs.list_dir,fs.stat,env.get,os.info"
         }
-        if strings.TrimSpace(cfg.toolsPath) == "" {
+        // Prefer -prep-tools when provided; otherwise fall back to -tools
+        manifest := strings.TrimSpace(cfg.prepToolsPath)
+        if manifest == "" { manifest = strings.TrimSpace(cfg.toolsPath) }
+        if manifest == "" {
             return "external:none"
         }
-        b, err := os.ReadFile(cfg.toolsPath)
+        b, err := os.ReadFile(manifest)
         if err != nil {
             // If manifest cannot be read, include the error string so key changes predictably
             return "manifest_err:" + oneLine(err.Error())
@@ -1172,11 +1179,14 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     }
 
     // External tools allowed: require a manifest and enforce availability
-    if strings.TrimSpace(cfg.toolsPath) == "" {
+    // Prefer -prep-tools when provided; otherwise use -tools
+    manifest := strings.TrimSpace(cfg.prepToolsPath)
+    if manifest == "" { manifest = strings.TrimSpace(cfg.toolsPath) }
+    if manifest == "" {
         // No manifest; nothing to execute
         return out, nil
     }
-    registry, _, lerr := tools.LoadManifest(cfg.toolsPath)
+    registry, _, lerr := tools.LoadManifest(manifest)
     if lerr != nil {
         safeFprintf(stderr, "error: failed to load tools manifest for pre-stage: %v\n", lerr)
         return nil, lerr
@@ -1403,6 +1413,7 @@ func printUsage(w io.Writer) {
     b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
     b.WriteString("  -prep-tools-allow-external\n    Allow pre-stage to execute external tools from -tools (default false)\n")
     b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
+    b.WriteString("  -prep-tools string\n    Path to pre-stage tools.json (optional; used only with -prep-tools-allow-external)\n")
     b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
     b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
     b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")

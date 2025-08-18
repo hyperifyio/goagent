@@ -825,6 +825,69 @@ func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(ma
     if !found { t.Fatalf("expected ok tool output; stderr=%s", errBuf.String()) }
 }
 
+// When -prep-tools-allow-external is set and -prep-tools is provided, the pre-stage
+// must use the pre-stage manifest instead of -tools.
+func TestPrep_UsesPrepToolsWhenProvided(t *testing.T) {
+    repo := t.TempDir()
+    // Build two tiny tools under separate manifest dirs
+    // Tool A under manifest A
+    manADir := filepath.Join(repo, "A")
+    if err := os.MkdirAll(filepath.Join(manADir, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+    srcA := filepath.Join(repo, "a.go")
+    if err := os.WriteFile(srcA, []byte(`package main
+import ("encoding/json"; "io"; "os")
+func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"which":"A"})}
+`), 0o644); err != nil { t.Fatalf("write srcA: %v", err) }
+    binA := filepath.Join(manADir, "tools", "bin", "which")
+    if runtime.GOOS == "windows" { binA += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", binA, srcA).CombinedOutput(); err != nil { t.Fatalf("build A: %v: %s", err, string(out)) }
+    manA := filepath.Join(manADir, "tools.json")
+    mA := map[string]any{"tools": []map[string]any{{"name":"which","command": []string{"./tools/bin/which"}, "schema": map[string]any{"type":"object"}}}}
+    if b, err := json.Marshal(mA); err != nil { t.Fatalf("marshal A: %v", err) } else if err := os.WriteFile(manA, b, 0o644); err != nil { t.Fatalf("write manA: %v", err) }
+
+    // Tool B under manifest B
+    manBDir := filepath.Join(repo, "B")
+    if err := os.MkdirAll(filepath.Join(manBDir, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+    srcB := filepath.Join(repo, "b.go")
+    if err := os.WriteFile(srcB, []byte(`package main
+import ("encoding/json"; "io"; "os")
+func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"which":"B"})}
+`), 0o644); err != nil { t.Fatalf("write srcB: %v", err) }
+    binB := filepath.Join(manBDir, "tools", "bin", "which")
+    if runtime.GOOS == "windows" { binB += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", binB, srcB).CombinedOutput(); err != nil { t.Fatalf("build B: %v: %s", err, string(out)) }
+    manB := filepath.Join(manBDir, "tools.json")
+    mB := map[string]any{"tools": []map[string]any{{"name":"which","command": []string{"./tools/bin/which"}, "schema": map[string]any{"type":"object"}}}}
+    if b, err := json.Marshal(mB); err != nil { t.Fatalf("marshal B: %v", err) } else if err := os.WriteFile(manB, b, 0o644); err != nil { t.Fatalf("write manB: %v", err) }
+
+    // Mock model returns a tool_call to function name "which"
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+            FinishReason: "tool_calls",
+            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t1", Type:"function", Function:oai.ToolCallFunction{Name:"which", Arguments:"{}"}}}},
+        }}})
+    }))
+    defer srv.Close()
+
+    // Provide both -tools and -prep-tools; expect pre-stage to use manB
+    cfg := cliConfig{prompt:"x", systemPrompt:"s", baseURL:srv.URL, model:"m", prepHTTPTimeout: 2*time.Second, httpRetries: 0, toolTimeout: 2*time.Second, debug: true,
+        toolsPath: manA, prepToolsPath: manB, prepToolsAllowExternal: true}
+    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
+    var errBuf bytes.Buffer
+    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
+    // Find tool output and assert it came from B
+    var which string
+    for _, m := range outMsgs {
+        if m.Role == oai.RoleTool && m.Name == "which" {
+            var obj map[string]any
+            _ = json.Unmarshal([]byte(m.Content), &obj)
+            if s, ok := obj["which"].(string); ok { which = s }
+        }
+    }
+    if which != "B" { t.Fatalf("expected pre-stage to use -prep-tools manifest; got which=%q stderr=%s", which, errBuf.String()) }
+}
+
 // https://github.com/hyperifyio/goagent/issues/289
 // When -top-p is provided, temperature must be omitted and a one-line warning printed.
 func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {

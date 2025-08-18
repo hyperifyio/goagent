@@ -42,6 +42,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-verbose`: Also print non-final assistant channels (critic/confidence) to stderr
 - `-quiet`: Suppress non-final output; print only final text to stdout
 - `-prep-tools-allow-external`: Allow pre-stage to execute external tools from `-tools` (default false). When not set, pre-stage is limited to built-in read-only tools and ignores `-tools`.
+- `-prep-tools string`: Path to pre-stage tools.json (optional). Used only when `-prep-tools-allow-external` is enabled; if provided, the pre-stage uses this manifest instead of `-tools`.
 - `-capabilities`: Print enabled tools and exit
 - `-print-config`: Print resolved config and exit
 - `--version | -version`: Print version and exit
