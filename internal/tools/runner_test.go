@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
-    "fmt"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -331,9 +331,9 @@ func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 // New test for env passthrough: only allowlisted keys are visible to the child,
 // and audit logs include only key names (not values).
 func TestRunToolWithJSON_EnvPassthrough_KeysOnlyAudit(t *testing.T) {
-    dir := t.TempDir()
-    helper := filepath.Join(dir, "printenv.go")
-    if err := os.WriteFile(helper, []byte(`package main
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "printenv.go")
+	if err := os.WriteFile(helper, []byte(`package main
 import (
   "encoding/json"; "os"; "fmt"
 )
@@ -347,50 +347,62 @@ func main(){
   fmt.Print(string(b))
 }
 `), 0o644); err != nil {
-        t.Fatalf("write: %v", err)
-    }
-    bin := filepath.Join(dir, "printenv")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
-        t.Fatalf("build helper: %v: %s", err, string(out))
-    }
+		t.Fatalf("write: %v", err)
+	}
+	bin := filepath.Join(dir, "printenv")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+		t.Fatalf("build helper: %v: %s", err, string(out))
+	}
 
-    // Set env in parent
-    t.Setenv("OAI_API_KEY", "sk-live-should-not-appear-in-audit")
-    t.Setenv("OAI_BASE_URL", "https://example.invalid")
-    t.Setenv("UNSAFE", "DO-NOT-PASS")
+	// Set env in parent
+	t.Setenv("OAI_API_KEY", "sk-live-should-not-appear-in-audit")
+	t.Setenv("OAI_BASE_URL", "https://example.invalid")
+	t.Setenv("UNSAFE", "DO-NOT-PASS")
 
-    // Clean audit dir at repo root
-    root := findRepoRoot(t)
-    if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil { t.Logf("cleanup: %v", err) }
+	// Clean audit dir at repo root
+	root := findRepoRoot(t)
+	if err := os.RemoveAll(filepath.Join(root, ".goagent")); err != nil {
+		t.Logf("cleanup: %v", err)
+	}
 
-    // Allowlist only OAI_API_KEY and OAI_BASE_URL
-    spec := ToolSpec{Name: "printenv", Command: []string{bin}, TimeoutSec: 2, EnvPassthrough: []string{"OAI_API_KEY", "OAI_BASE_URL"}}
-    out, err := RunToolWithJSON(context.Background(), spec, []byte(`{}`), 5*time.Second)
-    if err != nil { t.Fatalf("unexpected error: %v", err) }
+	// Allowlist only OAI_API_KEY and OAI_BASE_URL
+	spec := ToolSpec{Name: "printenv", Command: []string{bin}, TimeoutSec: 2, EnvPassthrough: []string{"OAI_API_KEY", "OAI_BASE_URL"}}
+	out, err := RunToolWithJSON(context.Background(), spec, []byte(`{}`), 5*time.Second)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-    // Child should see allowed keys and not see UNSAFE
-    var got map[string]string
-    if err := json.Unmarshal(out, &got); err != nil { t.Fatalf("bad json: %v", err) }
-    if got["OAI_API_KEY"] == "" || got["OAI_BASE_URL"] == "" {
-        t.Fatalf("allowed envs not visible to child: %v", got)
-    }
-    if got["UNSAFE"] != "" { t.Fatalf("unexpected UNSAFE in child env: %q", got["UNSAFE"]) }
+	// Child should see allowed keys and not see UNSAFE
+	var got map[string]string
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("bad json: %v", err)
+	}
+	if got["OAI_API_KEY"] == "" || got["OAI_BASE_URL"] == "" {
+		t.Fatalf("allowed envs not visible to child: %v", got)
+	}
+	if got["UNSAFE"] != "" {
+		t.Fatalf("unexpected UNSAFE in child env: %q", got["UNSAFE"])
+	}
 
-    // Audit should include envKeys but never the secret values
-    auditDir := filepath.Join(root, ".goagent", "audit")
-    logFile := waitForAuditFile(t, auditDir, 2*time.Second)
-    data, errRead := os.ReadFile(logFile)
-    if errRead != nil { t.Fatalf("read audit: %v", errRead) }
-    s := string(data)
-    // Must mention the keys
-    if !strings.Contains(s, "\"envKeys\"") || !(strings.Contains(s, "OAI_API_KEY") && strings.Contains(s, "OAI_BASE_URL")) {
-        t.Fatalf("audit missing envKeys or keys: %s", s)
-    }
-    // Must not contain the actual secret value
-    if strings.Contains(s, "sk-live-should-not-appear-in-audit") || strings.Contains(s, fmt.Sprintf("%q", "sk-live-should-not-appear-in-audit")) {
-        t.Fatalf("secret value leaked into audit: %s", s)
-    }
+	// Audit should include envKeys but never the secret values
+	auditDir := filepath.Join(root, ".goagent", "audit")
+	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
+	data, errRead := os.ReadFile(logFile)
+	if errRead != nil {
+		t.Fatalf("read audit: %v", errRead)
+	}
+	s := string(data)
+	// Must mention the keys
+	if !strings.Contains(s, "\"envKeys\"") || !(strings.Contains(s, "OAI_API_KEY") && strings.Contains(s, "OAI_BASE_URL")) {
+		t.Fatalf("audit missing envKeys or keys: %s", s)
+	}
+	// Must not contain the actual secret value
+	if strings.Contains(s, "sk-live-should-not-appear-in-audit") || strings.Contains(s, fmt.Sprintf("%q", "sk-live-should-not-appear-in-audit")) {
+		t.Fatalf("secret value leaked into audit: %s", s)
+	}
 }
 
 // findRepoRoot walks upward from CWD to locate the directory containing go.mod.

@@ -31,29 +31,29 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	ctx, cancel := context.WithTimeout(parentCtx, to)
 	defer cancel()
 
-    cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
-    // Scrub environment to a minimal allowlist: PATH and HOME by default,
-    // plus any keys explicitly allowed via spec.EnvPassthrough when present
-    // in the parent environment. Values are never logged to audit; only keys
-    // are recorded for observability.
-    var env []string
-    if v := os.Getenv("PATH"); v != "" {
-        env = append(env, "PATH="+v)
-    }
-    if v := os.Getenv("HOME"); v != "" {
-        env = append(env, "HOME="+v)
-    }
-    // Track which keys were actually passed through for audit (names only)
-    var passedKeys []string
-    if len(spec.EnvPassthrough) > 0 {
-        for _, key := range spec.EnvPassthrough {
-            if val, ok := os.LookupEnv(key); ok {
-                env = append(env, key+"="+val)
-                passedKeys = append(passedKeys, key)
-            }
-        }
-    }
-    cmd.Env = env
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	// Scrub environment to a minimal allowlist: PATH and HOME by default,
+	// plus any keys explicitly allowed via spec.EnvPassthrough when present
+	// in the parent environment. Values are never logged to audit; only keys
+	// are recorded for observability.
+	var env []string
+	if v := os.Getenv("PATH"); v != "" {
+		env = append(env, "PATH="+v)
+	}
+	if v := os.Getenv("HOME"); v != "" {
+		env = append(env, "HOME="+v)
+	}
+	// Track which keys were actually passed through for audit (names only)
+	var passedKeys []string
+	if len(spec.EnvPassthrough) > 0 {
+		for _, key := range spec.EnvPassthrough {
+			if val, ok := os.LookupEnv(key); ok {
+				env = append(env, key+"="+val)
+				passedKeys = append(passedKeys, key)
+			}
+		}
+	}
+	cmd.Env = env
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdin pipe: %w", err)
@@ -110,8 +110,8 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 			exitCode = -1
 		}
 	}
-    // Best-effort audit (failures do not affect tool result)
-    writeAudit(spec, start, exitCode, len(out), len(serr), passedKeys)
+	// Best-effort audit (failures do not affect tool result)
+	writeAudit(spec, start, exitCode, len(out), len(serr), passedKeys)
 
 	if ctx.Err() == context.DeadlineExceeded {
 		// Normalize timeout error to a deterministic string per product rules
@@ -149,7 +149,7 @@ func writeAudit(spec ToolSpec, start time.Time, exitCode, stdoutBytes, stderrByt
 		StdoutBytes int      `json:"stdoutBytes"`
 		StderrBytes int      `json:"stderrBytes"`
 		Truncated   bool     `json:"truncated"`
-        EnvKeys     []string `json:"envKeys,omitempty"`
+		EnvKeys     []string `json:"envKeys,omitempty"`
 	}
 
 	cwd, err := os.Getwd()
@@ -166,7 +166,7 @@ func writeAudit(spec ToolSpec, start time.Time, exitCode, stdoutBytes, stderrByt
 		StdoutBytes: stdoutBytes,
 		StderrBytes: stderrBytes,
 		Truncated:   false,
-        EnvKeys:     append([]string(nil), envKeys...),
+		EnvKeys:     append([]string(nil), envKeys...),
 	}
 	if err := appendAuditLog(entry); err != nil {
 		_ = err
