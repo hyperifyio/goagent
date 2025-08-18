@@ -10,6 +10,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 
 - Why use it: deterministic, portable, and safe by default. Works with hosted providers and with local endpoints like `http://localhost:1234/v1`.
 - Who it’s for: engineers who want a minimal agent runner with clear guarantees and zero vendor lock‑in.
+- What makes it different: strict "argv‑only" tool execution, explicit allowlists, and a pragmatic default LLM policy for predictable behavior across providers.
 
 ## Table of contents
 - [Why goagent?](#why-goagent)
@@ -44,6 +45,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [More examples](#more-examples)
 - [CI quality gates](docs/operations/ci-quality-gates.md)
 
+
 ## Why goagent?
 - Minimal, portable, vendor‑agnostic: works with any OpenAI‑compatible endpoint
 - Deterministic and auditable: argv‑only tool execution, JSON stdin/stdout, strict timeouts
@@ -52,10 +54,10 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 
 ## Features
 - OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
-- Tool manifest `tools.json` using JSON Schema parameters (see [Tools manifest reference](docs/reference/tools-manifest.md))
-- Per‑call timeouts; argv‑only execution with JSON stdin/stdout
-- Deterministic tool error mapping as JSON (e.g., `{ "error": "..." }`)
-- Minimal process environment for tools; audit logging with redaction
+- **Explicit tools allowlist**: `tools.json` with JSON Schema parameters (see [Tools manifest reference](docs/reference/tools-manifest.md))
+- **Deterministic execution**: argv‑only tools, JSON stdin/stdout, per‑call timeouts
+- **Predictable error surface**: tool errors mapped as structured JSON
+- **Observability & hygiene**: audit logging with redaction; transcript size controls
 
 ## Installation
 
@@ -77,6 +79,11 @@ go install github.com/hyperifyio/goagent/cmd/agentcli@latest
 git clone https://github.com/hyperifyio/goagent
 cd goagent
 make bootstrap tidy build build-tools
+```
+
+Verify installation:
+```bash
+./bin/agentcli --version
 ```
 
 Developer prerequisites (examples):
@@ -156,6 +163,8 @@ Run the agent:
 ```
 
 Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a concise final answer.
+
+Tip: run `./bin/agentcli -h` for the complete help output.
 
 ## Usage
 Flags are order‑insensitive. You can place `-prompt` and other flags in any order; precedence remains flag > environment > default.
@@ -542,6 +551,7 @@ See ADR‑0003 for the full policy and rationale: [docs/adr/0003-toolchain-and-l
 
 ## Support
 - Open an issue on the tracker: [Issues](https://github.com/hyperifyio/goagent/issues)
+  - For security concerns, avoid posting secrets in logs. If a private report is needed, open an issue with minimal detail and a maintainer will reach out.
 
 ## Roadmap
 Planned improvements and open ideas are tracked in `FUTURE_CHECKLIST.md`. Larger architectural decisions are recorded under `docs/adr/` (see ADR‑0001 and ADR‑0002). Contributions to the roadmap are welcome via issues and PRs.
@@ -552,7 +562,11 @@ Experimental, but actively maintained. Interfaces may change before a stable 1.0
 ## License and credits
 MIT license. See `LICENSE`.
 
-Inspired by OpenAI‑compatible agent patterns and built for portability and safety.
+Maintainers and authors:
+- Hyperify.io maintainers
+- Primary author: Jaakko Heusala
+
+Acknowledgements: inspired by OpenAI‑compatible agent patterns; built for portability and safety.
 
 ## More examples
 See `examples/unrestricted.md` for copy‑paste prompts demonstrating `exec` + file tools to write, build, and run code in a sandboxed environment.
