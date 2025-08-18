@@ -55,30 +55,3 @@ Next: authenticate the GitHub CLI for github.com using device flow with SSH prot
 * [ ] Observability: add structured logs (trace id, tool name, wall\_ms, bytes\_out) and emit OpenTelemetry span attributes; DoD: local run shows JSON logs with those fields and a span named `tools.starlark.run`.
 * [ ] Contract examples: add `docs/interfaces/code.sandbox.starlark.run.md` with request/response examples (valid, timeout, error), security notes, and performance caveats; DoD: doc renders and is linked from main docs.
 
-# JavaScript tool — `code.sandbox.js.run` (Goja, pure Go ES5.1; in-memory execution)
-
-(Goja is a pure Go ECMAScript 5.1 engine; code runs from a string with no I/O unless you bind it.
-
-* [ ] Implement tool and handler for `code.sandbox.js.run`: create `internal/tools/jsrun/handler.go` to accept `{source:string,input:string,limits:{wall_ms:int,output_kb:int}}`; embed Goja VM, `vm.Set("read_input", func() string {…})`, `vm.Set("emit", func(s string){…})`, run via `vm.RunString(source)`; cap output with a bounded buffer; DoD: unit test shows `emit(read_input())` returns input and output > limit is truncated with error. 
-* [ ] Timeouts with interruption: implement wall-time cancel by running the VM in a goroutine and stopping it via Goja’s interrupt mechanism (set `vm.Interrupt` / supported pattern) or cooperative check wrapper; ensure an interrupt yields a standardized `TIMEOUT`; DoD: test with `for(;;){}` halts within configured `wall_ms` and returns `TIMEOUT`.
-* [ ] Deny-by-default capability model: do not bind `require`, `console`, timers, or any FS/net; expose only `emit` and `read_input`; add negative tests proving absent globals; DoD: tests verify `typeof require === 'undefined'`, `typeof console === 'undefined'`.
-* [ ] Structured errors & schema parity with Starlark: map Goja exceptions to `{code:"EVAL_ERROR",message}`; preserve `TIMEOUT` and `OUTPUT_LIMIT` semantics; DoD: tests assert identical error shapes to Starlark tool for analogous failures.
-* [ ] Docs & examples: add `docs/interfaces/code.sandbox.js.run.md` with usage, security notes, and pitfalls (no timers/Promise unless explicitly added); DoD: doc linked from README; example works via CLI.
-* [ ] Observability: add logs and span attributes (tool name, wall\_ms, bytes\_out); DoD: local run shows structured logs and a span `tools.js.run`.
-
-# WebAssembly tool — `code.sandbox.wasm.run` (wazero; base64 `.wasm` bytes only, no WAT/compile)
-
-(wazero is a pure-Go WebAssembly runtime; instantiate modules from bytes in memory; host functions can read guest linear memory; module memory growth can be bounded via module config; execution is cancelable via context.
-
-* [ ] Implement tool and handler for `code.sandbox.wasm.run`: create `internal/tools/wasmrun/handler.go` to accept `{module_b64:string,entry?:string,input:string,limits:{wall_ms:int,mem_pages:int,output_kb:int}}`; decode base64 to bytes, create a wazero runtime, instantiate a minimal host module `env.emit(ptr:uint32,len:uint32)` that reads guest memory and appends to a bounded buffer; instantiate guest with `NewModuleConfig()` and set memory limit pages; call exported function `entry||"main"` under `context.WithTimeout`; DoD: unit test invokes a tiny embedded `.wasm` that writes “ok” via `emit` and returns success; timeout returns `TIMEOUT`; output limit enforced.
-* [ ] Deny WASI by default: do not instantiate WASI; provide only `env.emit` as host import; add negative test that a WASI-dependent module fails with a clear error (`MISSING_IMPORT`); DoD: test passes and error is documented.
-* [ ] Memory safety & limits: configure module to a maximum of `limits.mem_pages` (e.g., 16 MiB = 256 pages) and assert growth beyond limit errors; add test that attempts `memory.grow` over cap → standardized `MEMORY_LIMIT`; DoD: test passes and limit is documented in the interface.
-* [ ] Host memory read correctness: implement helper to locate the guest memory (`api.Module.Memory()`), bounds-check `[ptr:ptr+len)` before reading, and error on OOB; add unit tests for valid and OOB reads; DoD: tests pass and OOB returns standardized `OOB_MEMORY`.
-* [ ] Structured errors & schema: map wazero traps (e.g., unreachable) and context cancels to `{code:"TRAP"|"TIMEOUT"|...}`; include `details.trap` when available; DoD: table tests cover trap, timeout, missing import, memory limit, OOB read.
-* [ ] Embed a known-good sample module for tests: add a tiny `.wasm` (precompiled and stored as base64 in test file) that exports `main(ptr,len)` and calls `env.emit`; document how it was produced (e.g., TinyGo/Rust, but not built at test time); DoD: tests never hit filesystem or external toolchain and run offline.
-* [ ] Observability: log and span attributes (module size bytes, wall\_ms, mem\_pages\_used, bytes\_out); DoD: local run shows structured logs and span `tools.wasm.run`.
-
-# Cross-cutting items (apply to all three tools; execute per tool to keep independence)
-
-* [ ] Shared limits & sanitizer: create `internal/sandbox/limits.go` with `BoundedBuffer(maxKB) io.Writer`, wall-time helper, and standard error helpers; vendor (or copy) per tool so each task is independent; DoD: each tool compiles with its own copy and tests verify size/time caps.
-* [ ] Security notes & examples: for each tool, add a “Security Model” section to its interface doc stating deny-by-default capabilities and no ambient FS/net/clock; include a minimal example and a malicious loop example that times out; DoD: docs exist and examples execute locally with the respective tool CLI invocation.
