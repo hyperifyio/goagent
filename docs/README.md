@@ -23,6 +23,9 @@ This docs index helps you navigate architecture notes and diagrams.
  - CLI reference: complete flag list, env precedence, exit codes.
    - Link: [docs/reference/cli-reference.md](reference/cli-reference.md)
 
+- Tool reference: Image generation tool (`img_create`).
+  - Link: [docs/reference/img_create.md](reference/img_create.md)
+
 - Security: Threat model and trust boundaries.
   - Link: [docs/security/threat-model.md](security/threat-model.md)
 
