@@ -150,6 +150,55 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 export PATH="$(go env GOPATH)/bin:$PATH"
 ```
 
+## Image generation errors (img_create)
+
+- Invalid API key or missing base URL
+  - Symptom: stderr JSON like `{"error":"missing OAI_IMAGE_BASE_URL or OAI_BASE_URL"}` or API error `{"error":"unauthorized"}`.
+  - Fix:
+    ```bash
+    # Set base URL and API key (Unix/macOS)
+    export OAI_IMAGE_BASE_URL=https://api.openai.com
+    export OAI_API_KEY=sk-...
+    # Optional: fallback base if OAI_IMAGE_BASE_URL is unset
+    export OAI_BASE_URL=https://api.openai.com
+    ```
+    See reference: docs/reference/img_create.md
+
+- HTTP 429 (rate limited) or 5xx
+  - Behavior: the tool retries up to 2 times with backoff (250ms, 500ms, 1s) and then emits `{"error":"api status 429"}` or a server message if present.
+  - Fix: wait and retry; reduce parallel invocations; consider lowering `n` or image `size` to lessen load:
+    ```bash
+    echo '{"prompt":"tiny-pixel","n":1,"size":"512x512","save":{"dir":"assets"}}' | ./tools/bin/img_create || true
+    ```
+
+- Moderation/refusal or API 400 with message
+  - Behavior: non-2xx with body `{error:"..."}` or `{error:{message:"..."}}` is surfaced as that message in stderr JSON.
+  - Fix: adjust the prompt to comply with policy; verify `size` matches `^\d{3,4}x\d{3,4}$` and `n` is 1..4.
+
+- Request timeout
+  - Symptom: `{"error":"http error: context deadline exceeded"}` when the Images API is slow.
+  - Fix: increase the HTTP timeout and retry:
+    ```bash
+    export OAI_HTTP_TIMEOUT=180s
+    echo '{"prompt":"tiny-pixel","n":1,"size":"1024x1024","save":{"dir":"assets"}}' | ./tools/bin/img_create || true
+    ```
+  - If timeouts persist, try a smaller `size` or lower `n`.
+
+- Missing save.dir when not returning base64
+  - Symptom: `{"error":"save.dir is required when return_b64=false"}`.
+  - Fix: provide a repo-relative directory under `save.dir` or set `return_b64:true`:
+    ```bash
+    # Save to repo-relative assets/
+    echo '{"prompt":"tiny-pixel","save":{"dir":"assets"}}' | ./tools/bin/img_create
+
+    # Or return base64 (elided by default)
+    echo '{"prompt":"tiny-pixel","return_b64":true}' | ./tools/bin/img_create
+    ```
+
+Notes:
+- The tool only writes under the repository root and rejects absolute paths or `..` escapes.
+- By default, base64 in stdout is elided; set `IMG_CREATE_DEBUG_B64=1` (or `DEBUG_B64=1`) to include it when `return_b64=true`.
+
 ## General verification
 - Run the test suite (offline):
 ```bash
