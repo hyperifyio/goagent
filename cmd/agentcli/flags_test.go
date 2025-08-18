@@ -168,54 +168,75 @@ var _ = runtime.GOOS
 
 // TestHTTPRetryPrecedence verifies precedence and defaults for -http-retries and -http-retry-backoff.
 func TestHTTPRetryPrecedence(t *testing.T) {
-    // Save and restore env
-    unset := func(k string) func() { v, ok := os.LookupEnv(k); if ok { return func(){ _ = os.Setenv(k, v) } }; _ = os.Unsetenv(k); return func(){} }
-    restore1 := unset("OAI_HTTP_RETRIES")
-    defer restore1()
-    restore2 := unset("OAI_HTTP_RETRY_BACKOFF")
-    defer restore2()
+	// Save and restore env using t.Setenv for cleanliness
+	t.Setenv("OAI_HTTP_RETRIES", "")
+	t.Setenv("OAI_HTTP_RETRY_BACKOFF", "")
 
-    t.Run("defaults when neither flags nor env", func(t *testing.T) {
-        orig := os.Args; defer func(){ os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p"}
-        cfg, code := parseFlags()
-        if code != 0 { t.Fatalf("parseFlags exit=%d; want 0", code) }
-        if cfg.httpRetries != 2 { t.Fatalf("httpRetries=%d; want 2", cfg.httpRetries) }
-        if cfg.httpBackoff.String() != "500ms" { t.Fatalf("httpBackoff=%s; want 500ms", cfg.httpBackoff) }
-    })
+	t.Run("defaults when neither flags nor env", func(t *testing.T) {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.httpRetries != 2 {
+			t.Fatalf("httpRetries=%d; want 2", cfg.httpRetries)
+		}
+		if cfg.httpBackoff.String() != "500ms" {
+			t.Fatalf("httpBackoff=%s; want 500ms", cfg.httpBackoff)
+		}
+	})
 
-    t.Run("env applies when flags unset", func(t *testing.T) {
-        _ = os.Setenv("OAI_HTTP_RETRIES", "5")
-        _ = os.Setenv("OAI_HTTP_RETRY_BACKOFF", "750ms")
-        orig := os.Args; defer func(){ os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p"}
-        cfg, code := parseFlags()
-        if code != 0 { t.Fatalf("parseFlags exit=%d; want 0", code) }
-        if cfg.httpRetries != 5 { t.Fatalf("httpRetries=%d; want 5", cfg.httpRetries) }
-        if cfg.httpBackoff.String() != "750ms" { t.Fatalf("httpBackoff=%s; want 750ms", cfg.httpBackoff) }
-        _ = os.Unsetenv("OAI_HTTP_RETRIES")
-        _ = os.Unsetenv("OAI_HTTP_RETRY_BACKOFF")
-    })
+	t.Run("env applies when flags unset", func(t *testing.T) {
+		t.Setenv("OAI_HTTP_RETRIES", "5")
+		t.Setenv("OAI_HTTP_RETRY_BACKOFF", "750ms")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.httpRetries != 5 {
+			t.Fatalf("httpRetries=%d; want 5", cfg.httpRetries)
+		}
+		if cfg.httpBackoff.String() != "750ms" {
+			t.Fatalf("httpBackoff=%s; want 750ms", cfg.httpBackoff)
+		}
+	})
 
-    t.Run("flags override env", func(t *testing.T) {
-        _ = os.Setenv("OAI_HTTP_RETRIES", "7")
-        _ = os.Setenv("OAI_HTTP_RETRY_BACKOFF", "900ms")
-        orig := os.Args; defer func(){ os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-http-retries", "3", "-http-retry-backoff", "1s"}
-        cfg, code := parseFlags()
-        if code != 0 { t.Fatalf("parseFlags exit=%d; want 0", code) }
-        if cfg.httpRetries != 3 { t.Fatalf("httpRetries=%d; want 3", cfg.httpRetries) }
-        if cfg.httpBackoff.String() != "1s" { t.Fatalf("httpBackoff=%s; want 1s", cfg.httpBackoff) }
-        _ = os.Unsetenv("OAI_HTTP_RETRIES")
-        _ = os.Unsetenv("OAI_HTTP_RETRY_BACKOFF")
-    })
+	t.Run("flags override env", func(t *testing.T) {
+		t.Setenv("OAI_HTTP_RETRIES", "7")
+		t.Setenv("OAI_HTTP_RETRY_BACKOFF", "900ms")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-http-retries", "3", "-http-retry-backoff", "1s"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.httpRetries != 3 {
+			t.Fatalf("httpRetries=%d; want 3", cfg.httpRetries)
+		}
+		if cfg.httpBackoff.String() != "1s" {
+			t.Fatalf("httpBackoff=%s; want 1s", cfg.httpBackoff)
+		}
+	})
 
-    t.Run("explicit zero via flags retains zero", func(t *testing.T) {
-        orig := os.Args; defer func(){ os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-http-retries", "0", "-http-retry-backoff", "0"}
-        cfg, code := parseFlags()
-        if code != 0 { t.Fatalf("parseFlags exit=%d; want 0", code) }
-        if cfg.httpRetries != 0 { t.Fatalf("httpRetries=%d; want 0", cfg.httpRetries) }
-        if cfg.httpBackoff != 0 { t.Fatalf("httpBackoff=%s; want 0", cfg.httpBackoff) }
-    })
+	t.Run("explicit zero via flags retains zero", func(t *testing.T) {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-http-retries", "0", "-http-retry-backoff", "0"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.httpRetries != 0 {
+			t.Fatalf("httpRetries=%d; want 0", cfg.httpRetries)
+		}
+		if cfg.httpBackoff != 0 {
+			t.Fatalf("httpBackoff=%s; want 0", cfg.httpBackoff)
+		}
+	})
 }

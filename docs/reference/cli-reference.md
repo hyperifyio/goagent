@@ -19,6 +19,8 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-http-timeout duration`: HTTP timeout for pre-stage (env `OAI_PREP_HTTP_TIMEOUT`; falls back to `-http-timeout` if unset)
 - `-http-retries int`: Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
 - `-http-retry-backoff duration`: Base backoff between HTTP retry attempts (exponential) (default 300ms)
+- `-image-base-url string`: Image API base URL (env `OAI_IMAGE_BASE_URL`; inherits `-base-url` if unset)
+- `-image-api-key string`: Image API key (env `OAI_IMAGE_API_KEY`; inherits `-api-key` if unset; falls back to `OPENAI_API_KEY`)
 - `-tool-timeout duration`: Per-tool timeout (falls back to `-timeout` if unset)
 - `-timeout duration`: [DEPRECATED] Global timeout; prefer `-http-timeout` and `-tool-timeout` (default 30s)
 - `-temp float`: Sampling temperature (default 1.0; omitted for models that do not support it)

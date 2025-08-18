@@ -80,6 +80,11 @@ type cliConfig struct {
 	prepAPIKeySource      string // "flag" | "env:OAI_PREP_API_KEY|env:OAI_API_KEY|env:OPENAI_API_KEY" | "inherit|empty"
 	prepHTTPRetriesSource string // "flag" | "env" | "inherit"
 	prepHTTPBackoffSource string // "flag" | "env" | "inherit"
+	// Image API overrides and sources
+	imageBaseURL       string
+	imageAPIKey        string
+	imageBaseURLSource string // "flag" | "env" | "inherit"
+	imageAPIKeySource  string // "flag" | "env|env:OPENAI_API_KEY" | "inherit|empty"
 	// Message viewing modes
 	prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
 	printMessages bool // When true, pretty-print final merged messages to stderr before main call
@@ -159,29 +164,29 @@ func (f *float64FlexFlag) Set(s string) error {
 
 // intFlexFlag wires an int destination and records if it was set via flag.
 type intFlexFlag struct {
-    dst *int
-    set *bool
+	dst *int
+	set *bool
 }
 
 func (f *intFlexFlag) String() string {
-    if f == nil || f.dst == nil {
-        return "0"
-    }
-    return strconv.Itoa(*f.dst)
+	if f == nil || f.dst == nil {
+		return "0"
+	}
+	return strconv.Itoa(*f.dst)
 }
 
 func (f *intFlexFlag) Set(s string) error {
-    v, err := strconv.Atoi(strings.TrimSpace(s))
-    if err != nil {
-        return err
-    }
-    if f.dst != nil {
-        *f.dst = v
-    }
-    if f.set != nil {
-        *f.set = true
-    }
-    return nil
+	v, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return err
+	}
+	if f.dst != nil {
+		*f.dst = v
+	}
+	if f.set != nil {
+		*f.set = true
+	}
+	return nil
 }
 
 func getEnv(key, def string) string {
@@ -269,7 +274,7 @@ func parseFlags() (cliConfig, int) {
 	cfg.toolTimeout = 0
 	var httpSet, toolSet bool
 	var prepHTTPSet bool
-    flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+	flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.prepHTTPTimeout, set: &prepHTTPSet}, "prep-http-timeout", "HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.toolTimeout, set: &toolSet}, "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
 	// Use a flexible float flag to detect whether -temp was explicitly set
@@ -292,22 +297,22 @@ func parseFlags() (cliConfig, int) {
 	// Pre-stage explicit overrides
 	flag.StringVar(&cfg.prepModel, "prep-model", "", "Pre-stage model ID (env OAI_PREP_MODEL; inherits -model if unset)")
 	flag.StringVar(&cfg.prepBaseURL, "prep-base-url", "", "Pre-stage base URL (env OAI_PREP_BASE_URL; inherits -base-url if unset)")
-    flag.StringVar(&cfg.prepAPIKey, "prep-api-key", "", "Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)")
-    flag.IntVar(&cfg.prepHTTPRetries, "prep-http-retries", 0, "Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)")
-    flag.DurationVar(&cfg.prepHTTPBackoff, "prep-http-retry-backoff", 0, "Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
-    // Global HTTP retry knobs: precedence flag > env > default
-    var httpRetriesSet bool
-    (func() {
-        cfg.httpRetries = -1 // sentinel to detect unset
-        f := &intFlexFlag{dst: &cfg.httpRetries, set: &httpRetriesSet}
-        flag.CommandLine.Var(f, "http-retries", "Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)")
-    })()
-    var httpBackoffSet bool
-    (func() {
-        cfg.httpBackoff = 0 // resolved after parsing
-        f := durationFlexFlag{dst: &cfg.httpBackoff, set: &httpBackoffSet}
-        flag.CommandLine.Var(f, "http-retry-backoff", "Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)")
-    })()
+	flag.StringVar(&cfg.prepAPIKey, "prep-api-key", "", "Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)")
+	flag.IntVar(&cfg.prepHTTPRetries, "prep-http-retries", 0, "Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)")
+	flag.DurationVar(&cfg.prepHTTPBackoff, "prep-http-retry-backoff", 0, "Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
+	// Global HTTP retry knobs: precedence flag > env > default
+	var httpRetriesSet bool
+	(func() {
+		cfg.httpRetries = -1 // sentinel to detect unset
+		f := &intFlexFlag{dst: &cfg.httpRetries, set: &httpRetriesSet}
+		flag.CommandLine.Var(f, "http-retries", "Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)")
+	})()
+	var httpBackoffSet bool
+	(func() {
+		cfg.httpBackoff = 0 // resolved after parsing
+		f := durationFlexFlag{dst: &cfg.httpBackoff, set: &httpBackoffSet}
+		flag.CommandLine.Var(f, "http-retry-backoff", "Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)")
+	})()
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
 	flag.BoolVar(&cfg.verbose, "verbose", false, "Also print non-final assistant channels (critic/confidence) to stderr")
 	flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
@@ -328,6 +333,9 @@ func parseFlags() (cliConfig, int) {
 	flag.StringVar(&cfg.loadMessagesPath, "load-messages", "", "Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
+	// Image API flags
+	flag.StringVar(&cfg.imageBaseURL, "image-base-url", "", "Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)")
+	flag.StringVar(&cfg.imageAPIKey, "image-api-key", "", "Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 	if strings.TrimSpace(prepProfileRaw) != "" {
 		cfg.prepProfile = oai.PromptProfile(strings.TrimSpace(prepProfileRaw))
@@ -349,7 +357,7 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
 	httpEnvUsed := false
 	if cfg.httpTimeout <= 0 {
@@ -386,7 +394,7 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-    // Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
+	// Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
 	if cfg.toolTimeout <= 0 {
 		if cfg.timeout > 0 {
 			cfg.toolTimeout = cfg.timeout
@@ -395,28 +403,28 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-    // Resolve global HTTP retry knobs with precedence: flag > env > default
-    if !httpRetriesSet {
-        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRIES")); v != "" {
-            if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-                cfg.httpRetries = n
-            }
-        }
-    }
-    if cfg.httpRetries < 0 {
-        cfg.httpRetries = 2
-    }
-    if !httpBackoffSet {
-        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRY_BACKOFF")); v != "" {
-            if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
-                cfg.httpBackoff = d
-            }
-        }
-    }
-    if cfg.httpBackoff == 0 && !httpBackoffSet {
-        // Only apply default when not explicitly set to 0 via flag
-        cfg.httpBackoff = 500 * time.Millisecond
-    }
+	// Resolve global HTTP retry knobs with precedence: flag > env > default
+	if !httpRetriesSet {
+		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRIES")); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				cfg.httpRetries = n
+			}
+		}
+	}
+	if cfg.httpRetries < 0 {
+		cfg.httpRetries = 2
+	}
+	if !httpBackoffSet {
+		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRY_BACKOFF")); v != "" {
+			if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
+				cfg.httpBackoff = d
+			}
+		}
+	}
+	if cfg.httpBackoff == 0 && !httpBackoffSet {
+		// Only apply default when not explicitly set to 0 via flag
+		cfg.httpBackoff = 500 * time.Millisecond
+	}
 
 	// Resolve prep overrides precedence: flag > env OAI_PREP_* > inherit main-call
 	// Model
@@ -488,6 +496,14 @@ func parseFlags() (cliConfig, int) {
 		if cfg.prepHTTPBackoffSource == "" {
 			cfg.prepHTTPBackoffSource = "inherit"
 		}
+	}
+
+	// Resolve image config using helper (flag > env > inherit > fallback)
+	if img, baseSrc, keySrc := oai.ResolveImageConfig(cfg.imageBaseURL, cfg.imageAPIKey, cfg.baseURL, cfg.apiKey); true {
+		cfg.imageBaseURL = img.BaseURL
+		cfg.imageAPIKey = img.APIKey
+		cfg.imageBaseURLSource = baseSrc
+		cfg.imageAPIKeySource = keySrc
 	}
 
 	// Set source labels
@@ -1566,8 +1582,10 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
 	b.WriteString("  -prep-http-timeout duration\n    HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
-  b.WriteString("  -http-retries int\n    Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)\n")
-  b.WriteString("  -http-retry-backoff duration\n    Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)\n")
+	b.WriteString("  -http-retries int\n    Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)\n")
+	b.WriteString("  -http-retry-backoff duration\n    Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)\n")
+	b.WriteString("  -image-base-url string\n    Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)\n")
+	b.WriteString("  -image-api-key string\n    Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
 	b.WriteString("  -prep-profile string\n    Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)\n")
@@ -1730,6 +1748,17 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 			"top_pSource":       prepTopPSource,
 		},
 	}
+	// Image block with redacted API key
+	{
+		img, baseSrc, keySrc := oai.ResolveImageConfig(cfg.imageBaseURL, cfg.imageAPIKey, cfg.baseURL, cfg.apiKey)
+		payload["image"] = map[string]any{
+			"baseURL":       img.BaseURL,
+			"baseURLSource": baseSrc,
+			"apiKey":        oai.MaskAPIKeyLast4(img.APIKey),
+			"apiKeySource":  keySrc,
+		}
+	}
+
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		// Fallback to a simple line to avoid surprising exits
