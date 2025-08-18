@@ -25,3 +25,5 @@ dist/
 go.work
 .idea/
 .vscode/
+# Editor swap files
+*.swp
