@@ -469,7 +469,7 @@ Notes:
 ```bash
 make build-tools
 mkdir -p tmp_search_demo && printf 'alpha\nbeta\ngamma\n' > tmp_search_demo/sample.txt
-jq -n '{path:"tmp_search_demo",pattern:"^ga",glob:"**/*.txt",caseInsensitive:false}' | ./tools/bin/fs_search | jq '.matches'
+jq -n '{query:"^ga",globs:["**/*.txt"],regex:true}' | ./tools/bin/fs_search | jq '.matches'
 rm -rf tmp_search_demo
 ```
 
