@@ -92,6 +92,13 @@ type cliConfig struct {
 	imageHTTPTimeoutSource string // "flag" | "env" | "inherit"
 	imageHTTPRetriesSource string // "flag" | "env" | "inherit"
 	imageHTTPBackoffSource string // "flag" | "env" | "inherit"
+	// Image request parameter pass-throughs
+	imageN                     int
+	imageSize                  string
+	imageQuality               string // standard|hd
+	imageStyle                 string // natural|vivid
+	imageResponseFormat        string // url|b64_json
+	imageTransparentBackground bool
 	// Message viewing modes
 	prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
 	printMessages bool // When true, pretty-print final merged messages to stderr before main call
@@ -356,6 +363,21 @@ func parseFlags() (cliConfig, int) {
 	var imageHTTPBackoffSet bool
 	cfg.imageHTTPBackoff = 0
 	flag.Var(durationFlexFlag{dst: &cfg.imageHTTPBackoff, set: &imageHTTPBackoffSet}, "image-http-retry-backoff", "Image HTTP retry backoff (env OAI_IMAGE_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
+	// Image parameter pass-through flags (precedence: flag > env > default)
+	// -image-n
+	cfg.imageN = -1 // sentinel for unset
+	var imageNSet bool
+	flag.Var(&intFlexFlag{dst: &cfg.imageN, set: &imageNSet}, "image-n", "Number of images to generate (env OAI_IMAGE_N; default 1)")
+	// -image-size
+	flag.StringVar(&cfg.imageSize, "image-size", "", "Image size WxH, e.g., 1024x1024 (env OAI_IMAGE_SIZE; default 1024x1024)")
+	// -image-quality
+	flag.StringVar(&cfg.imageQuality, "image-quality", "", "Image quality: standard|hd (env OAI_IMAGE_QUALITY; default standard)")
+	// -image-style
+	flag.StringVar(&cfg.imageStyle, "image-style", "", "Image style: natural|vivid (env OAI_IMAGE_STYLE; default natural)")
+	// -image-response-format
+	flag.StringVar(&cfg.imageResponseFormat, "image-response-format", "", "Image response format: url|b64_json (env OAI_IMAGE_RESPONSE_FORMAT; default url)")
+	// -image-transparent-background
+	flag.CommandLine.Var(&boolFlexFlag{dst: &cfg.imageTransparentBackground}, "image-transparent-background", "Request transparent background when supported (env OAI_IMAGE_TRANSPARENT_BACKGROUND; default false)")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 	if strings.TrimSpace(prepProfileRaw) != "" {
 		cfg.prepProfile = oai.PromptProfile(strings.TrimSpace(prepProfileRaw))
@@ -570,6 +592,58 @@ func parseFlags() (cliConfig, int) {
 		cfg.imageHTTPBackoff = cfg.httpBackoff
 		if cfg.imageHTTPBackoffSource == "" {
 			cfg.imageHTTPBackoffSource = "inherit"
+		}
+	}
+
+	// Resolve image parameter pass-throughs with precedence: flag > env > default
+	if !imageNSet {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_N")); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+				cfg.imageN = n
+			}
+		}
+	}
+	if cfg.imageN < 0 {
+		cfg.imageN = 1
+	}
+	if strings.TrimSpace(cfg.imageSize) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_SIZE")); v != "" {
+			cfg.imageSize = v
+		}
+	}
+	if strings.TrimSpace(cfg.imageSize) == "" {
+		cfg.imageSize = "1024x1024"
+	}
+	if strings.TrimSpace(cfg.imageQuality) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_QUALITY")); v != "" {
+			cfg.imageQuality = v
+		}
+	}
+	if strings.TrimSpace(cfg.imageQuality) == "" {
+		cfg.imageQuality = "standard"
+	}
+	if strings.TrimSpace(cfg.imageStyle) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_STYLE")); v != "" {
+			cfg.imageStyle = v
+		}
+	}
+	if strings.TrimSpace(cfg.imageStyle) == "" {
+		cfg.imageStyle = "natural"
+	}
+	if strings.TrimSpace(cfg.imageResponseFormat) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_RESPONSE_FORMAT")); v != "" {
+			cfg.imageResponseFormat = v
+		}
+	}
+	if strings.TrimSpace(cfg.imageResponseFormat) == "" {
+		cfg.imageResponseFormat = "url"
+	}
+	// Transparent background flag from env if flag not explicitly set
+	if !cfg.imageTransparentBackground {
+		if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_TRANSPARENT_BACKGROUND")); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				cfg.imageTransparentBackground = b
+			}
 		}
 	}
 
@@ -1664,6 +1738,12 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-api-key string\n    Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)\n")
 	b.WriteString("  -prep-http-retries int\n    Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)\n")
 	b.WriteString("  -prep-http-retry-backoff duration\n    Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)\n")
+	b.WriteString("  -image-n int\n    Number of images to generate (env OAI_IMAGE_N; default 1)\n")
+	b.WriteString("  -image-size string\n    Image size WxH, e.g., 1024x1024 (env OAI_IMAGE_SIZE; default 1024x1024)\n")
+	b.WriteString("  -image-quality string\n    Image quality: standard|hd (env OAI_IMAGE_QUALITY; default standard)\n")
+	b.WriteString("  -image-style string\n    Image style: natural|vivid (env OAI_IMAGE_STYLE; default natural)\n")
+	b.WriteString("  -image-response-format string\n    Image response format: url|b64_json (env OAI_IMAGE_RESPONSE_FORMAT; default url)\n")
+	b.WriteString("  -image-transparent-background\n    Request transparent background when supported (env OAI_IMAGE_TRANSPARENT_BACKGROUND; default false)\n")
 	b.WriteString("  -debug\n    Dump request/response JSON to stderr\n")
 	b.WriteString("  -verbose\n    Also print non-final assistant channels (critic/confidence) to stderr\n")
 	b.WriteString("  -quiet\n    Suppress non-final output; print only final text to stdout\n")
@@ -1832,6 +1912,12 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 			"httpRetriesSource":      nonEmptyOr(cfg.imageHTTPRetriesSource, "inherit"),
 			"httpRetryBackoff":       cfg.imageHTTPBackoff.String(),
 			"httpRetryBackoffSource": nonEmptyOr(cfg.imageHTTPBackoffSource, "inherit"),
+			"n":                      cfg.imageN,
+			"size":                   cfg.imageSize,
+			"quality":                cfg.imageQuality,
+			"style":                  cfg.imageStyle,
+			"response_format":        cfg.imageResponseFormat,
+			"transparent_background": cfg.imageTransparentBackground,
 		}
 	}
 

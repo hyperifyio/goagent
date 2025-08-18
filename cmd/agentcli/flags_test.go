@@ -163,6 +163,99 @@ func TestHelpContainsRoleFlags(t *testing.T) {
 	}
 }
 
+// TestImageParamDefaultsAndEnvAndFlags verifies precedence and defaults for image param pass-throughs.
+func TestImageParamDefaultsAndEnvAndFlags(t *testing.T) {
+	// Clear possibly impacting envs
+	t.Setenv("OAI_IMAGE_N", "")
+	t.Setenv("OAI_IMAGE_SIZE", "")
+	t.Setenv("OAI_IMAGE_QUALITY", "")
+	t.Setenv("OAI_IMAGE_STYLE", "")
+	t.Setenv("OAI_IMAGE_RESPONSE_FORMAT", "")
+	t.Setenv("OAI_IMAGE_TRANSPARENT_BACKGROUND", "")
+
+	t.Run("defaults when neither flags nor env", func(t *testing.T) { //nolint:tparallel // serial to avoid env races
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageN != 1 || cfg.imageSize != "1024x1024" || cfg.imageQuality != "standard" || cfg.imageStyle != "natural" || cfg.imageResponseFormat != "url" || cfg.imageTransparentBackground != false {
+			t.Fatalf("defaults mismatch: n=%d size=%s quality=%s style=%s resp=%s transparent=%v", cfg.imageN, cfg.imageSize, cfg.imageQuality, cfg.imageStyle, cfg.imageResponseFormat, cfg.imageTransparentBackground)
+		}
+	})
+
+	t.Run("env applies when flags unset", func(t *testing.T) { //nolint:tparallel
+		t.Setenv("OAI_IMAGE_N", "3")
+		t.Setenv("OAI_IMAGE_SIZE", "512x512")
+		t.Setenv("OAI_IMAGE_QUALITY", "hd")
+		t.Setenv("OAI_IMAGE_STYLE", "vivid")
+		t.Setenv("OAI_IMAGE_RESPONSE_FORMAT", "b64_json")
+		t.Setenv("OAI_IMAGE_TRANSPARENT_BACKGROUND", "true")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageN != 3 || cfg.imageSize != "512x512" || cfg.imageQuality != "hd" || cfg.imageStyle != "vivid" || cfg.imageResponseFormat != "b64_json" || cfg.imageTransparentBackground != true {
+			t.Fatalf("env mismatch: n=%d size=%s quality=%s style=%s resp=%s transparent=%v", cfg.imageN, cfg.imageSize, cfg.imageQuality, cfg.imageStyle, cfg.imageResponseFormat, cfg.imageTransparentBackground)
+		}
+	})
+
+	t.Run("flags override env", func(t *testing.T) { //nolint:tparallel
+		t.Setenv("OAI_IMAGE_N", "2")
+		t.Setenv("OAI_IMAGE_SIZE", "256x256")
+		t.Setenv("OAI_IMAGE_QUALITY", "standard")
+		t.Setenv("OAI_IMAGE_STYLE", "natural")
+		t.Setenv("OAI_IMAGE_RESPONSE_FORMAT", "url")
+		t.Setenv("OAI_IMAGE_TRANSPARENT_BACKGROUND", "false")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-image-n", "4", "-image-size", "640x640", "-image-quality", "hd", "-image-style", "vivid", "-image-response-format", "b64_json", "-image-transparent-background", "true"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageN != 4 || cfg.imageSize != "640x640" || cfg.imageQuality != "hd" || cfg.imageStyle != "vivid" || cfg.imageResponseFormat != "b64_json" || cfg.imageTransparentBackground != true {
+			t.Fatalf("flags mismatch: n=%d size=%s quality=%s style=%s resp=%s transparent=%v", cfg.imageN, cfg.imageSize, cfg.imageQuality, cfg.imageStyle, cfg.imageResponseFormat, cfg.imageTransparentBackground)
+		}
+	})
+}
+
+// TestPrintConfig_IncludesImageParams verifies print-config output reflects resolved image params.
+func TestPrintConfig_IncludesImageParams(t *testing.T) {
+	orig := os.Args
+	defer func() { os.Args = orig }()
+	os.Args = []string{"agentcli.test", "-prompt", "p", "-image-n", "2", "-image-size", "512x512", "-image-quality", "hd", "-image-style", "vivid", "-image-response-format", "b64_json", "-image-transparent-background", "true", "-print-config"}
+	var out bytes.Buffer
+	// parse then print
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parseFlags exit=%d; want 0", code)
+	}
+	exit := printResolvedConfig(cfg, &out)
+	if exit != 0 {
+		t.Fatalf("printResolvedConfig exit=%d; want 0", exit)
+	}
+	s := out.String()
+	for _, token := range []string{
+		"\"image\"",
+		"\"n\": 2",
+		"\"size\": \"512x512\"",
+		"\"quality\": \"hd\"",
+		"\"style\": \"vivid\"",
+		"\"response_format\": \"b64_json\"",
+		"\"transparent_background\": true",
+	} {
+		if !strings.Contains(s, token) {
+			t.Fatalf("print-config missing %s in output: %s", token, s)
+		}
+	}
+}
+
 // Avoid unused imports on some platforms
 var _ = runtime.GOOS
 
