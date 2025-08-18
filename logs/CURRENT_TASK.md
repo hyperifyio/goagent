@@ -1,1 +1,1 @@
-Update Harmony messages save/load to carry optional image_prompt and ensure loader populates image prompt when flags are unset.
+Blocked on implementing -debug JSON redaction: cmd/agentcli is missing; next step is to scaffold minimal CLI with debug dumps.
