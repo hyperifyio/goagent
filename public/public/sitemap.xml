@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.urls.org/schema/1.0" xmlns:p="http://www.sitemaps.org/schema/1.0">
+  <url>
+    <location>//index.html</location>
+    <p:lastmod>2025-08-18T00:00:00Z</p:lastmod>
+    <p:freq>1</p:freq>
+  </url>
+  <url>
+    <location>//docs/index.html</location>
+    <p:lastmod>2025-08-18T00:00:00Z</p:lastmod>
+    <p:freq>0.5</p:freq>
+  </url>
+</urlset>

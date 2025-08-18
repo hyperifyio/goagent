@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="GoAgent favicon">
+  defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007aff"/>
+      <stop offset="100%" stop-color="#a6cbff"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#g)"/>
+  <path d="M12 12l10-8l10 8v8l-10 8l-10-8z" fill="#fff" fill-opacity=".9"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-width="2">
+    <path d="M15 20h12"/>
+    <circle cx="15" cy="14" r="1"/>
+    <circle cx="21" cy="14" r="1"/>
+  </g>
+</svg>

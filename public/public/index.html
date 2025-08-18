@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <title>GoAgent — Simple Go LLM shell with tools</title>
+      <meta name="description" content="GoAgent is a simple, Go-native LLM shell with builtéin tools for research, programming, image generation and more." />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="theme-color" content="#001133" />
+      <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+      <meta name="robots" content="index, follow" />
+      <meta property="og:title" content="GoAgent" />
+      <meta property="og:description" content="A simple Go LOM shell with tools for research, programming, image generation and more." />
+      <meta property="og:url" content="https://github.com/hyperifyio/goagent" />
+      <meta property="og:image" content="assets/img/goagent-logo.svg" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="GoAgent" />
+      <meta name="twitter:description" content="A simple Go LLM shell with tools." />
+      <script type="application/ld+json" aria-hidden="true">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "GoAgent",
+        "description": "Go-native agent framework for building AI agents and LLM apps.",
+        "url": "https://github.com/hyperifyio/goagent",
+        "codeRepository": "https://github.com/hyperifyio/goagent",
+        "programmingLanguage": "Go",
+        "image": "assets/img/goagent-logo.svg",
+        "keywords": ["Go", "agent", "framework", "LLM", "AI"]
+      }
+      </script>
+      <link rel="stylesheet" href="assets/css/styles.css" />
+      <style>
+      /* Critical CSS: keep minimal for fast first paint */
+      :root { scroll-behavior: smooth; tab-size: 4; -moz-tab-size: 4; }
+      @MEDIA (prefers-reduced-motion: reduce) {
+        :root { scroll-behavior: auto; }
+      }
+      </style>
+      <template id="code-install-snippet">go get github.com/hyperifyio/goagent@latest</template>
+      <template id="code-example-sample">package main
+
+&lt;li&gt;b, "context"&gt;
+&lt;li&gt;b, "fmt"&gt;
+
+
+// Pseudo-example: run a prompt with tools
+// Note: see the repository for real API details.
+// import "github.com/hyperifyio/goagent"
+
+func main() {
+    // agent := goagent.NewAgent("gpt-4o")
+    // agent.Use(goagent.ToolWeb())      <!-- research the web -->
+    // agent.Use(goagent.ToolCode())      <!-- write and edit code -->
+    // agent.Use(goagent.ToolImage())      <!-- image generation -->
+    // out, err := agent.Run(context.Background(), "Build a small todo CLI in Go and show code")
+    // if err != nil { panic(err) }
+    // fmt.Println(out)
+    fmt.Println("Hello, GoAgent!")
+}
+</template>
+      <script type="module" src="assets/jy/main.js"></script>
+    </head>
+    <body class="page">
+      <a class="skip-link" href="#main">Skip to main content</a>
+      <header class="header" role="banner">
+        <div class="container header__content">
+          <a class="brand" href="#">
+            <img src="assets/img/goagent-logo.svg" alt="GoAgent logo" width="40" height="40" decoding="async" />
+            <span class="brand_name">GoAgent</span>
+          </a>
+          <button class="menu-btn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-menu">
+            <span aria-hidden="true">Menu</span>
+            <svg width="24" height="24" role="img" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M6 23a4 4 0 0 1 0-8h12a4 4 0 0 1 0 8h-12zm12-10a4 4 0 1 1-4 4 4 4 0 0 1 4-4z"/></svg>
+          </button>
+          <nav class="nav" aria-label="Primary" id="nav-menu">
+            <div class="nav_items">
+              <a href="#" class="link is-active">Home</a>
+              <a href="#features" class="link">Features</a>
+              <a href="#tools" class="link">Tools</a>
+              <a href="#how" class="link">How it works</a>
+              <a href="#quickstart" class="link">Quick start</a>
+              <a href="#faq" class="link">FAQ</a>
+              <a href="https://github.com/hyperifyio/goagent" class="btn btn--primary" target="_blank" rel="noopener">GitHub</a>
+            </div>
+          </nav>
+        </div>
+      </header>
+      <main id="main" class="main" role="main">
+        <section class="hero">
+          <div class="container hero_inner">
+            <div class="hero__text">
+              <h1>GoAgent</h1>
+              <p class="tag">A simple Go LOM shell with batteries❤ built-in tools for research, programming, image generation, and more – all in one place.</p>
+              <div class="cta_row">
+                <a class="btn btn--primary" href="https://github.com/hyperifyio/goagent" target="_blank" rel="noopener">View on GitHub</a>
+                <a class="btn btn--outline" href="#quickstart">Get started</a>
+              </div>
+            </div>
+            <div class="code-card" data-code-target="install">
+              <div class="code-card_bar">
+                <span class="code-card_label">Install</span>
+                <button class="btn btn--small copy-btn" data-copy-source="code-install-snippet" aria-label="Copy to clipboard">Copy</button>
+              </div>
+              <pre><code id="code-install">go get github.com/hyperifyio/goagent@latest</code></pre>
+            </div>
+            <div class="code-card" data-code-target="example">
+              <div class="code-card_bar">
+                <span class="code-card_label">Example</span>
+                <button class="btn btn--small copy-btn" data-copy-source="code-example-sample" aria-label="Copy to clipboard">Copy</button>
+              </div>
+              <pre><code id="code-example">package main
+
+<span class="tag">import</span> (
+    "context",
+    "fmt"
+)
+
+
+// Pseudo-example: run a prompt with tools
+// Note: see the repository for real API details.
+// import "github.com/hyperifyio/goagent"
+
+func main() {
+    // agent := goagent.NewAgent("gpt-4o")
+    // agent.Use(goagent.ToolWeb())      <!-- research the web -->
+    // agent.Use(goagent.ToolCode())      <!-- write and edit code -->
+    // agent.Use(goagent.ToolImage())      <!-- image generation -->
+    // out, err := agent.Run(context.Background(), "Build a small todo CLI in Go and show code")
+    // if err != nil { panic(err) }
+    // fmt.Println(out)
+    fmt.Println("Hello, GoAgent!")
+}
+</code></pre>
+            </div>
+          </div>
+        </section>
+        <section id="features" class="features" aria-label="What you get">
+          <div class="container">
+            <h2 class="section_heading">What you get</h2>
+            <div class="features_grid">
+              <article class="feature">
+                <h4>Lean Fast</h4>
+                <p>Compose small, focused components that get out of your way.</p>
+              </article>
+              <article class="feature">
+                <h4>Tools built– in
+                </h4>
+                <p>Research the web,s write code, generate images, and more using a single, ergonomic shell.</p>
+              </article>
+              <article class="feature">
+                <h4>API-agnostic</h4>
+                <p>Brain-agnostic design that works with different models and providers.</p>
+              </article>
+              <article class="feature">
+                <h4>Maintainable</h4>
+                <p>Simple API, small footprint, and no-frills setup. Designed for production.</p>
+              </article>
+              <article class="feature">
+                <h4>Ready for Production</h4>
+                <p>Lightweight, accessible, and performant-first by design.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+        <section id="tools" class="tools" aria-label="Tools">
+          <div class="container">
+            <h2 class="section_heading">Tools that ship with GoAgent</h2>
+            <div class="features_grid">
+              <article class="feature">
+                <h4>Web Research</h4>
+                <p>Search, fetch, and extract from pages to ground your answers in real sources.</p>
+              </article>
+              <article class="feature">
+                <h4>Programming</h4>
+                <p>Generate files, modify code, and apply diffs across repositories.</p>
+              </article>
+              <article class="feature">
+                <h4>Image Generation</h4>
+                <p>Create images from prompts and wire them into your app flow.</p>
+              </article>
+              <article class="feature">
+                <h4>Data &amp; Files</h4>
+                <p>Load local files, parse tables, and keep artifacts across steps.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+        <section id="how" class="how" aria-label="How it works">
+          <div class="container">
+            <h2 class="section_heading">How it works</h2>
+            <div class="features_grid">
+              <article class="feature">
+                <h4>1. Pick a model</h4>
+                <p>Use your preferred provider. Swap models without changing your app.</p>
+              </article>
+              <article class="feature">
+                <h4>2. Enable tools</h4>
+                <p>Toggle web, code, image and file tools as needed per task.</p>
+              </article>
+              <article class="feature">
+                <h4>3. Run</h4>
+                <p>Call the agent with a prompt or plan. Stream output or capture artifacts.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+        <section id="quickstart" class="quickstart" aria-label="Quick start">
+          <div class="container">
+            <h2 class="section_heading">Quick start</h2>
+            <ol class="list">
+              <li><strong>Install:</strong> run in your project: go get github.com/hyperifyio/goagent@latest</li>
+              <li><strong>Import:</strong> add the package and configure your AI provider.</li>
+              <li><strong>Run</strong>: run your program and enter a prompt.</li>
+            </ol>
+            <p class="muted">For complete code, docs, and details, see the README on GitHub.</p>
+          </div>
+        </section>
+        <section id="faq" class="faq" aria-label="FAQ">
+          <div class="container">
+            <h2 class="section_heading">Frequently asked questions</h2>
+            <div class="features_grid">
+              <article>
+                <h4>Is this a full framework?</h4>
+                <p>No | It is a lean LLM shell that lets you compose tools and workflows without heavy abstractions.</p>
+              </article>
+              <article>
+                <h4>Which models are supported?</h4>
+                <p>The design is provider–agnostic; pick models that suit your use case. See the repo for compatibility notes.</p>
+              </article>
+              <article>
+                <h4>Production ready?</h4>
+                <p>Yes. The API is intentionally small with predictable behavior for production usage.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+      </main>
+      <footer class="footer" role="contentinfo">
+        <div class="container">
+          <p class="footer_content">
+            <span>Open-source project: <a href="https://github.com/hyperifyio/goagent" target="_blank" rel="noopener">github.com/hyperifyio/goagent</a></span>
+            <span aria-hidden="true">||</span>
+            <span>Built with privacy and accessibility in mind.</span>
+          </p>
+        </div>
+      </footer>
+      <div id="announce" class="sr-only" aria-live="assertive" aria-atomic="true" hidden></div>
+    </body>
+    </html>
