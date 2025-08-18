@@ -75,12 +75,16 @@ func TestHappyPath_SaveOnePNG(t *testing.T) {
             N int `json:"n"`
             Size string `json:"size"`
             RespFmt string `json:"response_format"`
+            Background string `json:"background"`
         }
         if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
             t.Fatalf("bad json: %v", err)
         }
         if req.Model != "gpt-image-1" || req.Prompt != "tiny-pixel" || req.N != 1 || req.Size != "1024x1024" || req.RespFmt != "b64_json" {
             t.Fatalf("unexpected payload: %+v", req)
+        }
+        if req.Background != "transparent" {
+            t.Fatalf("expected extras merged: background=transparent, got %q", req.Background)
         }
         _ = json.NewEncoder(w).Encode(map[string]any{
             "data": []map[string]any{{"b64_json": png1x1}},
@@ -94,6 +98,7 @@ func TestHappyPath_SaveOnePNG(t *testing.T) {
     stdout, stderr, code := runTool(t, bin, map[string]any{
         "prompt": "tiny-pixel",
         "save": map[string]any{"dir": outDir, "basename": "img", "ext": "png"},
+        "extras": map[string]any{"background": "transparent"},
     }, map[string]string{
         "OAI_IMAGE_BASE_URL": srv.URL,
         "OAI_API_KEY":        "test-123",
@@ -121,6 +126,62 @@ func TestHappyPath_SaveOnePNG(t *testing.T) {
     want, _ := base64.StdEncoding.DecodeString(png1x1)
     if len(got) != len(want) {
         t.Fatalf("bytes mismatch: got %d want %d", len(got), len(want))
+    }
+}
+
+func TestExtras_DoNotOverrideCoreKeys_AndSanitize(t *testing.T) {
+    // Server returns a trivial valid image
+    png1x1 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9cFmgAAAAASUVORK5CYII="
+    var captured map[string]any
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req map[string]any
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            t.Fatalf("bad json: %v", err)
+        }
+        captured = req
+        _ = json.NewEncoder(w).Encode(map[string]any{
+            "data": []map[string]any{{"b64_json": png1x1}},
+        })
+    }))
+    defer srv.Close()
+
+    bin := buildTool(t)
+    outDir := testutil.MakeRepoRelTempDir(t, "imgcreate-out-")
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+        "n": 2,
+        "size": "512x512",
+        "model": "gpt-image-1",
+        "save": map[string]any{"dir": outDir},
+        "extras": map[string]any{
+            "prompt": "OVERRIDE-ATTEMPT",
+            "n": 99,
+            "size": "2048x2048",
+            "response_format": "raw",
+            "ok_string": "yes",
+            "ok_number": 1.5,
+            "ok_bool": true,
+            "drop_obj": map[string]any{"x": 1},
+            "drop_arr": []any{1,2,3},
+        },
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": srv.URL,
+    })
+    if code != 0 {
+        t.Fatalf("unexpected failure: %s", stderr)
+    }
+    // Core keys must remain as provided in top-level fields
+    if captured["prompt"] != "tiny" || captured["n"].(float64) != 2 || captured["size"] != "512x512" || captured["response_format"] != "b64_json" {
+        t.Fatalf("core keys overridden by extras: %+v", captured)
+    }
+    if captured["ok_string"] != "yes" || captured["ok_bool"] != true {
+        t.Fatalf("expected sanitized primitives present: %+v", captured)
+    }
+    if _, ok := captured["drop_obj"]; ok {
+        t.Fatalf("unexpected object in extras: %+v", captured)
+    }
+    if _, ok := captured["drop_arr"]; ok {
+        t.Fatalf("unexpected array in extras: %+v", captured)
     }
 }
 

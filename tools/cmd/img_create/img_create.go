@@ -24,6 +24,11 @@ type inputSpec struct {
 	Size      string `json:"size"`
 	Model     string `json:"model"`
 	ReturnB64 bool   `json:"return_b64"`
+    // Optional extras that are shallow-merged into the request body
+    // after validation as string->primitive. Unknown or non-primitive
+    // values are dropped. Core keys (model, prompt, n, size, response_format)
+    // are never overridden by extras.
+    Extras    map[string]any `json:"extras"`
 	Save      *struct {
 		Dir      string `json:"dir"`
 		Basename string `json:"basename"`
@@ -106,6 +111,18 @@ func run() error {
         "n":               in.N,
         "size":            in.Size,
         "response_format": "b64_json",
+    }
+    // Merge sanitized extras without allowing overrides of core keys
+    if len(in.Extras) > 0 {
+        safe := sanitizeExtras(in.Extras)
+        for k, v := range safe {
+            switch k {
+            case "model", "prompt", "n", "size", "response_format":
+                // do not override core keys
+            default:
+                reqBody[k] = v
+            }
+        }
     }
     bodyBytes, err := json.Marshal(reqBody)
     if err != nil {
@@ -312,4 +329,33 @@ func writeJSON(v any) error {
     }
     fmt.Println(string(b))
     return nil
+}
+
+// sanitizeExtras filters a map to only include string keys with primitive
+// JSON types: string, float64 (numbers), bool. It also allows nulls and
+// rejects nested arrays/objects to keep the request predictable.
+func sanitizeExtras(in map[string]any) map[string]any {
+    out := make(map[string]any, len(in))
+    for k, v := range in {
+        if strings.TrimSpace(k) == "" {
+            continue
+        }
+        switch tv := v.(type) {
+        case string:
+            out[k] = tv
+        case bool:
+            out[k] = tv
+        case float64:
+            // json.Unmarshal decodes all numbers into float64 by default
+            out[k] = tv
+        case int, int32, int64, uint, uint32, uint64:
+            // In practice, numbers arrive as float64, but accept ints as well
+            out[k] = tv
+        case nil:
+            out[k] = nil
+        default:
+            // drop arrays, maps, and unknown types
+        }
+    }
+    return out
 }

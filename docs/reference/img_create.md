@@ -70,6 +70,7 @@ Set `IMG_CREATE_DEBUG_B64=1` (or `DEBUG_B64=1`) to include base64 in stdout for 
 | `save.dir`  | string    | cond.    | —             | repo‑relative; must not escape repo root   | Required when `return_b64=false` (default).
 | `save.basename` | string| no       | `img`         | must not contain path separators           | Filename stem; tool appends `_<001..>.ext`.
 | `save.ext`  | string    | no       | `png`         | enum: `png`                                | Output format; currently PNG only.
+| `extras`    | object    | no       | —             | shallow map of string→primitive            | Optional pass-through for known keys like `background:"transparent"`; only primitives are allowed; core keys are not overridden.
 
 Notes:
 - When saving files, the tool writes atomically to `save.dir` and returns file metadata including SHA‑256.
