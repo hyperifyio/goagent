@@ -41,7 +41,7 @@ func TestWikiQuery_TitlesSuccess(t *testing.T) {
 	bin := testutil.BuildTool(t, "wiki_query")
 	stdin := []byte(`{"titles":"Golang","language":"en"}`)
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), "MEDIAWIKI_BASE_URL="+ts.URL)
+    cmd.Env = append(os.Environ(), "MEDIAWIKI_BASE_URL="+ts.URL, "WIKI_QUERY_ALLOW_LOCAL=1")
 	cmd.Stdin = bytes.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -52,9 +52,9 @@ func TestWikiQuery_TitlesSuccess(t *testing.T) {
 
 	var out struct{
 		Pages []struct{
-			Title   string ` + "`json:\"title\"`" + `
-			URL     string ` + "`json:\"url\"`" + `
-			Extract string ` + "`json:\"extract\"`" + `
+			Title   string `json:"title"`
+			URL     string `json:"url"`
+			Extract string `json:"extract"`
 		}
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
@@ -93,7 +93,7 @@ func TestWikiQuery_SearchSuccess(t *testing.T) {
 	bin := testutil.BuildTool(t, "wiki_query")
 	stdin := []byte(`{"search":"golang"}`)
 	cmd := exec.Command(bin)
-	cmd.Env = append(os.Environ(), "MEDIAWIKI_BASE_URL="+ts.URL)
+    cmd.Env = append(os.Environ(), "MEDIAWIKI_BASE_URL="+ts.URL, "WIKI_QUERY_ALLOW_LOCAL=1")
 	cmd.Stdin = bytes.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
