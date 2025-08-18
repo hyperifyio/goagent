@@ -90,6 +90,7 @@ echo "Security MUST be documented" | ./bin/agentcli \
 
 - Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted, `top_p` is included, and a one-line warning is printed to stderr.
 - Tools are executed via argv only with JSON stdin/stdout and strict timeouts; no shell is used.
+- See ADR‑0005 for the pre-stage flow and channel routing details: [../adr/0005-harmony-pre-processing-and-channel-aware-output.md](../adr/0005-harmony-pre-processing-and-channel-aware-output.md).
 
 ## Prompt profiles
 

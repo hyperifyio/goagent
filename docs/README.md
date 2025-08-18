@@ -10,9 +10,12 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0003-toolchain-and-lint-policy.md](adr/0003-toolchain-and-lint-policy.md)
 - ADR-0004: Default LLM Call Policy — default temperature 1.0, capability-based omission, one-knob rule, and observability fields.
   - Link: [docs/adr/0004-default-llm-policy.md](adr/0004-default-llm-policy.md)
+- ADR-0005: Harmony pre-processing and channel-aware output — pre-stage HTTP call, parallel read-only tools, validator/audit with stage tags, and deterministic channel routing.
+  - Link: [docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md](adr/0005-harmony-pre-processing-and-channel-aware-output.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)
+  - Link: [docs/diagrams/harmony-prep-seq.md](diagrams/harmony-prep-seq.md)
 
 - Architecture: Module boundaries and allowed imports between layers.
   - Link: [docs/architecture/module-boundaries.md](architecture/module-boundaries.md)

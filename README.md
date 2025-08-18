@@ -263,6 +263,7 @@ go test ./examples -run TestWorkedExample_ToolCalls_TemperatureOne_Sequencing -v
 ```
 
 ### View refined messages (pre-stage and final)
+See also ADR‑0005 for the pre‑stage flow and channel routing details: `docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md`.
 Inspect message arrays deterministically without running the full loop:
 
 ```bash
@@ -486,10 +487,12 @@ Start with the [Documentation index](docs/README.md) for design docs, ADRs, and 
 - [CLI reference](docs/reference/cli-reference.md)
 - [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Security: Threat model](docs/security/threat-model.md)
+- [ADR‑0005: Harmony pre‑processing and channel‑aware output](docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md)
 
 ## Diagrams
 - Agent loop: `docs/diagrams/agentcli-seq.md`
 - Toolbelt interactions: `docs/diagrams/toolbelt-seq.md`
+- Pre‑stage flow: `docs/diagrams/harmony-prep-seq.md`
 
 ## Tests
 Run the full test suite (offline):
