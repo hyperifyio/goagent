@@ -1,1 +1,1 @@
-Idle: documentation update completed for image/HTTP flags and precedence.
+Adding --help snapshot test asserting flags and key phrases.
