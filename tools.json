@@ -306,5 +306,21 @@
       "timeoutSec": 15,
       "envPassthrough": ["SEARXNG_BASE_URL","HTTP_TIMEOUT_MS"]
     }
+    ,
+    {
+      "name": "robots_check",
+      "description": "Evaluate robots.txt for a given URL and user agent",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "user_agent": {"type": "string"}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/robots_check"],
+      "timeoutSec": 10
+    }
   ]
 }
