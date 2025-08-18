@@ -17,7 +17,7 @@ ToolSpec fields:
 - `schema` (object, optional): JSON Schema for the tool parameters. This is passed through to the model as `parameters` in the OpenAI "function" tool.
 - `command` (array of string, required): Argv vector. First element is the program path (relative or absolute); subsequent elements are fixed args. When relative, it MUST start with `./tools/bin/NAME` (use `.exe` on Windows). Relative paths are resolved against the directory containing this `tools.json` (not the process working directory). The runner will execute this program and write the function call JSON arguments to stdin.
 - `timeoutSec` (integer, optional): Per-call timeout override in seconds. If omitted, the CLI's `-timeout` applies.
-- `envPassthrough` (array of string, optional): Allowlist of environment variable names to pass from the parent process to the tool. Names are normalized to uppercase and must match the regex `[A-Z_][A-Z0-9_]*`. Duplicates are removed preserving first occurrence. The runner always sets a minimal base environment (e.g., `PATH`, `HOME`) and augments it with only these keys if present in the parent.
+- `envPassthrough` (array of string, optional): Allowlist of environment variable names to pass from the parent process to the tool. Names are normalized to uppercase and must match the regex `[A-Z_][A-Z0-9_]*`. Duplicates are removed preserving first occurrence. The runner always sets a minimal base environment (e.g., `PATH`, `HOME`) and augments it with only these keys if present in the parent. For observability, the audit log records only the names of keys passed (as `envKeys`), never their values.
 
 Notes:
 - Validation errors are precise and include the offending index/name.
