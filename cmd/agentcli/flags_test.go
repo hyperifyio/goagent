@@ -240,3 +240,77 @@ func TestHTTPRetryPrecedence(t *testing.T) {
 		}
 	})
 }
+
+// TestImageHTTPKnobsPrecedence verifies precedence and inheritance for image HTTP knobs.
+func TestImageHTTPKnobsPrecedence(t *testing.T) {
+	t.Run("defaults inherit from main when neither flags nor env", func(t *testing.T) {
+		// Clear envs that might affect defaults
+		t.Setenv("OAI_IMAGE_HTTP_TIMEOUT", "")
+		t.Setenv("OAI_IMAGE_HTTP_RETRIES", "")
+		t.Setenv("OAI_IMAGE_HTTP_RETRY_BACKOFF", "")
+		t.Setenv("OAI_HTTP_TIMEOUT", "")
+		t.Setenv("OAI_HTTP_RETRIES", "")
+		t.Setenv("OAI_HTTP_RETRY_BACKOFF", "")
+
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageHTTPTimeout != cfg.httpTimeout {
+			t.Fatalf("imageHTTPTimeout=%s; want inherit %s", cfg.imageHTTPTimeout, cfg.httpTimeout)
+		}
+		if cfg.imageHTTPRetries != cfg.httpRetries {
+			t.Fatalf("imageHTTPRetries=%d; want inherit %d", cfg.imageHTTPRetries, cfg.httpRetries)
+		}
+		if cfg.imageHTTPBackoff != cfg.httpBackoff {
+			t.Fatalf("imageHTTPBackoff=%s; want inherit %s", cfg.imageHTTPBackoff, cfg.httpBackoff)
+		}
+	})
+
+	t.Run("env applies when flags unset", func(t *testing.T) {
+		t.Setenv("OAI_IMAGE_HTTP_TIMEOUT", "7s")
+		t.Setenv("OAI_IMAGE_HTTP_RETRIES", "9")
+		t.Setenv("OAI_IMAGE_HTTP_RETRY_BACKOFF", "1.5s")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageHTTPTimeout.String() != "7s" {
+			t.Fatalf("imageHTTPTimeout=%s; want 7s", cfg.imageHTTPTimeout)
+		}
+		if cfg.imageHTTPRetries != 9 {
+			t.Fatalf("imageHTTPRetries=%d; want 9", cfg.imageHTTPRetries)
+		}
+		if cfg.imageHTTPBackoff.String() != "1.5s" {
+			t.Fatalf("imageHTTPBackoff=%s; want 1.5s", cfg.imageHTTPBackoff)
+		}
+	})
+
+	t.Run("flags override env", func(t *testing.T) {
+		t.Setenv("OAI_IMAGE_HTTP_TIMEOUT", "7s")
+		t.Setenv("OAI_IMAGE_HTTP_RETRIES", "9")
+		t.Setenv("OAI_IMAGE_HTTP_RETRY_BACKOFF", "1.5s")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-image-http-timeout", "3s", "-image-http-retries", "5", "-image-http-retry-backoff", "1s"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageHTTPTimeout.String() != "3s" {
+			t.Fatalf("imageHTTPTimeout=%s; want 3s", cfg.imageHTTPTimeout)
+		}
+		if cfg.imageHTTPRetries != 5 {
+			t.Fatalf("imageHTTPRetries=%d; want 5", cfg.imageHTTPRetries)
+		}
+		if cfg.imageHTTPBackoff.String() != "1s" {
+			t.Fatalf("imageHTTPBackoff=%s; want 1s", cfg.imageHTTPBackoff)
+		}
+	})
+}

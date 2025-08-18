@@ -264,6 +264,18 @@ func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
 	}
 }
 
+// Help should list image HTTP behavior flags to keep docs/tests in sync.
+func TestHelpMentionsImageHTTPFlags(t *testing.T) {
+	var b strings.Builder
+	printUsage(&b)
+	help := b.String()
+	for _, token := range []string{"-image-http-timeout", "-image-http-retries", "-image-http-retry-backoff"} {
+		if !strings.Contains(help, token) {
+			t.Fatalf("help missing %s token; help=\n%s", token, help)
+		}
+	}
+}
+
 // Pre-stage one-knob: when -prep-top-p is provided, the prep request must include top_p
 // and omit temperature. We exercise the minimal runPreStage helper.
 func TestPrepOneKnob_TopPOmitsTemperature(t *testing.T) {

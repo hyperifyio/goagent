@@ -85,6 +85,13 @@ type cliConfig struct {
 	imageAPIKey        string
 	imageBaseURLSource string // "flag" | "env" | "inherit"
 	imageAPIKeySource  string // "flag" | "env|env:OPENAI_API_KEY" | "inherit|empty"
+	// Image HTTP behavior
+	imageHTTPTimeout       time.Duration
+	imageHTTPRetries       int
+	imageHTTPBackoff       time.Duration
+	imageHTTPTimeoutSource string // "flag" | "env" | "inherit"
+	imageHTTPRetriesSource string // "flag" | "env" | "inherit"
+	imageHTTPBackoffSource string // "flag" | "env" | "inherit"
 	// Message viewing modes
 	prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
 	printMessages bool // When true, pretty-print final merged messages to stderr before main call
@@ -336,6 +343,19 @@ func parseFlags() (cliConfig, int) {
 	// Image API flags
 	flag.StringVar(&cfg.imageBaseURL, "image-base-url", "", "Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)")
 	flag.StringVar(&cfg.imageAPIKey, "image-api-key", "", "Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)")
+	// Image HTTP behavior flags
+	// Timeout (duration)
+	var imageHTTPTimeoutSet bool
+	cfg.imageHTTPTimeout = 0
+	flag.Var(durationFlexFlag{dst: &cfg.imageHTTPTimeout, set: &imageHTTPTimeoutSet}, "image-http-timeout", "Image HTTP timeout (env OAI_IMAGE_HTTP_TIMEOUT; inherits -http-timeout if unset)")
+	// Retries (int)
+	var imageHTTPRetriesSet bool
+	cfg.imageHTTPRetries = -1 // sentinel for unset
+	flag.Var(&intFlexFlag{dst: &cfg.imageHTTPRetries, set: &imageHTTPRetriesSet}, "image-http-retries", "Image HTTP retries (env OAI_IMAGE_HTTP_RETRIES; inherits -http-retries if unset)")
+	// Backoff (duration)
+	var imageHTTPBackoffSet bool
+	cfg.imageHTTPBackoff = 0
+	flag.Var(durationFlexFlag{dst: &cfg.imageHTTPBackoff, set: &imageHTTPBackoffSet}, "image-http-retry-backoff", "Image HTTP retry backoff (env OAI_IMAGE_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 	if strings.TrimSpace(prepProfileRaw) != "" {
 		cfg.prepProfile = oai.PromptProfile(strings.TrimSpace(prepProfileRaw))
@@ -504,6 +524,53 @@ func parseFlags() (cliConfig, int) {
 		cfg.imageAPIKey = img.APIKey
 		cfg.imageBaseURLSource = baseSrc
 		cfg.imageAPIKeySource = keySrc
+	}
+
+	// Resolve image HTTP knobs with precedence: flag > env > inherit from main HTTP knobs
+	// Timeout
+	if imageHTTPTimeoutSet {
+		cfg.imageHTTPTimeoutSource = "flag"
+	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_TIMEOUT")); v != "" {
+		if d, err := parseDurationFlexible(v); err == nil && d > 0 {
+			cfg.imageHTTPTimeout = d
+			cfg.imageHTTPTimeoutSource = "env"
+		}
+	}
+	if cfg.imageHTTPTimeout <= 0 {
+		cfg.imageHTTPTimeout = cfg.httpTimeout
+		if cfg.imageHTTPTimeoutSource == "" {
+			cfg.imageHTTPTimeoutSource = "inherit"
+		}
+	}
+	// Retries
+	if imageHTTPRetriesSet {
+		cfg.imageHTTPRetriesSource = "flag"
+	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_RETRIES")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.imageHTTPRetries = n
+			cfg.imageHTTPRetriesSource = "env"
+		}
+	}
+	if cfg.imageHTTPRetries < 0 {
+		cfg.imageHTTPRetries = cfg.httpRetries
+		if cfg.imageHTTPRetriesSource == "" {
+			cfg.imageHTTPRetriesSource = "inherit"
+		}
+	}
+	// Backoff
+	if imageHTTPBackoffSet {
+		cfg.imageHTTPBackoffSource = "flag"
+	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_RETRY_BACKOFF")); v != "" {
+		if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
+			cfg.imageHTTPBackoff = d
+			cfg.imageHTTPBackoffSource = "env"
+		}
+	}
+	if cfg.imageHTTPBackoff == 0 {
+		cfg.imageHTTPBackoff = cfg.httpBackoff
+		if cfg.imageHTTPBackoffSource == "" {
+			cfg.imageHTTPBackoffSource = "inherit"
+		}
 	}
 
 	// Set source labels
@@ -1586,6 +1653,9 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -http-retry-backoff duration\n    Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)\n")
 	b.WriteString("  -image-base-url string\n    Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)\n")
 	b.WriteString("  -image-api-key string\n    Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)\n")
+	b.WriteString("  -image-http-timeout duration\n    Image HTTP timeout (env OAI_IMAGE_HTTP_TIMEOUT; inherits -http-timeout if unset)\n")
+	b.WriteString("  -image-http-retries int\n    Image HTTP retries (env OAI_IMAGE_HTTP_RETRIES; inherits -http-retries if unset)\n")
+	b.WriteString("  -image-http-retry-backoff duration\n    Image HTTP retry backoff (env OAI_IMAGE_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
 	b.WriteString("  -prep-profile string\n    Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)\n")
@@ -1752,10 +1822,16 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	{
 		img, baseSrc, keySrc := oai.ResolveImageConfig(cfg.imageBaseURL, cfg.imageAPIKey, cfg.baseURL, cfg.apiKey)
 		payload["image"] = map[string]any{
-			"baseURL":       img.BaseURL,
-			"baseURLSource": baseSrc,
-			"apiKey":        oai.MaskAPIKeyLast4(img.APIKey),
-			"apiKeySource":  keySrc,
+			"baseURL":                img.BaseURL,
+			"baseURLSource":          baseSrc,
+			"apiKey":                 oai.MaskAPIKeyLast4(img.APIKey),
+			"apiKeySource":           keySrc,
+			"httpTimeout":            cfg.imageHTTPTimeout.String(),
+			"httpTimeoutSource":      nonEmptyOr(cfg.imageHTTPTimeoutSource, "inherit"),
+			"httpRetries":            cfg.imageHTTPRetries,
+			"httpRetriesSource":      nonEmptyOr(cfg.imageHTTPRetriesSource, "inherit"),
+			"httpRetryBackoff":       cfg.imageHTTPBackoff.String(),
+			"httpRetryBackoffSource": nonEmptyOr(cfg.imageHTTPBackoffSource, "inherit"),
 		}
 	}
 
@@ -1767,6 +1843,14 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	}
 	safeFprintln(stdout, string(data))
 	return 0
+}
+
+// nonEmptyOr returns a when non-empty, otherwise b.
+func nonEmptyOr(a, b string) string {
+	if strings.TrimSpace(a) == "" {
+		return b
+	}
+	return a
 }
 
 // writeFileAtomic writes data to path atomically by writing to a temp file
