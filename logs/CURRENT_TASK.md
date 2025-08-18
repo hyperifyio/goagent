@@ -1,1 +1,1 @@
-Blocked on implementing -debug JSON redaction: cmd/agentcli is missing; next step is to scaffold minimal CLI with debug dumps.
+Blocked: extend --capabilities output to show phase-specific backends; cmd/agentcli is missing.
