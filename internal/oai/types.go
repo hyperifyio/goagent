@@ -1,8 +1,9 @@
 package oai
 
 import (
-	"encoding/json"
-	"strings"
+    "encoding/json"
+    "fmt"
+    "strings"
 )
 
 // Message roles
@@ -89,6 +90,61 @@ func mentionsUnsupportedTemperature(body string) bool {
 	}
 	return (strings.Contains(s, "unsupported") && strings.Contains(s, "temperature")) ||
 		(strings.Contains(s, "invalid") && strings.Contains(s, "temperature"))
+}
+
+// NormalizeHarmonyMessages returns a copy of messages with roles trimmed and
+// lowercased, and assistant channel tokens normalized to a safe subset.
+// Valid roles are: system, developer, user, assistant, tool. Any other role
+// results in an error. Channels are optional; when present on assistant
+// messages they are lowercased, non-ASCII characters are removed, and the
+// result is truncated to 32 characters. Unknown channel names are allowed and
+// simply pass through after normalization; they may not be auto-printed unless
+// explicitly routed by the CLI.
+func NormalizeHarmonyMessages(in []Message) ([]Message, error) {
+    out := make([]Message, 0, len(in))
+    for _, m := range in {
+        nm := m
+        nm.Role = strings.ToLower(strings.TrimSpace(nm.Role))
+        switch nm.Role {
+        case RoleSystem, RoleDeveloper, RoleUser, RoleAssistant, RoleTool:
+            // ok
+        default:
+            return nil, fmt.Errorf("invalid role: %q", m.Role)
+        }
+        // Normalize channel only for assistant messages
+        if nm.Role == RoleAssistant {
+            ch := strings.ToLower(strings.TrimSpace(nm.Channel))
+            if ch != "" {
+                ch = normalizeAssistantChannel(ch)
+            }
+            nm.Channel = ch
+        } else {
+            // Other roles should not carry a channel
+            nm.Channel = ""
+        }
+        out = append(out, nm)
+    }
+    return out, nil
+}
+
+// normalizeAssistantChannel makes channel tokens safe: lowercased, ASCII-only
+// subset [a-z0-9_-], and max length 32. Characters outside the allowed set are
+// dropped. If the result is empty after filtering, the empty string is
+// returned, which the CLI treats as an unchannelled assistant message.
+func normalizeAssistantChannel(in string) string {
+    const maxLen = 32
+    // Filter to allowed characters
+    b := make([]byte, 0, len(in))
+    for i := 0; i < len(in); i++ {
+        c := in[i]
+        if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
+            b = append(b, c)
+        }
+        if len(b) >= maxLen {
+            break
+        }
+    }
+    return string(b)
 }
 
 // ChatCompletionsResponse represents the response for chat completions.

@@ -1117,9 +1117,15 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     }
 
     // Construct request mirroring main loop sampling rules but using -prep-top-p
+    // Normalize/validate Harmony roles and assistant channels before pre-stage
+    normalizedIn, normErr := oai.NormalizeHarmonyMessages(messages)
+    if normErr != nil {
+        safeFprintf(stderr, "error: prep invalid message role: %v\n", normErr)
+        return nil, normErr
+    }
     req := oai.ChatCompletionsRequest{
         Model:    prepModel,
-        Messages: messages,
+        Messages: normalizedIn,
     }
     // Pre-flight validate message sequence to avoid API 400s for stray tool messages
     if err := oai.ValidateMessageSequence(req.Messages); err != nil {
@@ -1161,13 +1167,17 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
     // If there are no tool calls, return messages unchanged
     if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
         // Cache the unchanged transcript as well for consistency
-        _ = writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, messages)
-        return messages, nil
+        _ = writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, normalizedIn)
+        return normalizedIn, nil
     }
 
     // Append the assistant message carrying tool_calls
+    // Normalize assistant channel/token on the response message
     assistantMsg := resp.Choices[0].Message
-    out := append(append([]oai.Message{}, messages...), assistantMsg)
+    if norm, err := oai.NormalizeHarmonyMessages([]oai.Message{assistantMsg}); err == nil && len(norm) == 1 {
+        assistantMsg = norm[0]
+    }
+    out := append(append([]oai.Message{}, normalizedIn...), assistantMsg)
 
     // Decide pre-stage tool execution policy: built-in read-only by default
     if !cfg.prepToolsAllowExternal {

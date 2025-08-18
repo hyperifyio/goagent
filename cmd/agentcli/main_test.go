@@ -976,6 +976,46 @@ func TestChannelPrinting_DefaultVerboseQuiet(t *testing.T) {
     if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
 }
 
+// FEATURE_CHECKLIST L27: Harmony normalizer — roles validation and channel normalization
+func TestHarmonyNormalizer_RoleValidationAndChannelNormalization(t *testing.T) {
+    // Unknown role should cause pre-stage to fail before HTTP call
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatalf("server should not be called when role is invalid")
+    }))
+    defer srv.Close()
+    cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+    // Inject initMessages to include an invalid role
+    cfg.initMessages = []oai.Message{{Role: "System ", Content: "s"}, {Role: "User", Content: "u"}, {Role: "DEVELOPER", Content: "d"}, {Role: "assistant", Channel: "Critic!", Content: "c"}, {Role: "weird", Content: "x"}}
+    var errBuf bytes.Buffer
+    if _, err := runPreStage(cfg, cfg.initMessages, &errBuf); err == nil {
+        t.Fatalf("expected error for invalid role; stderr=%q", errBuf.String())
+    }
+
+    // Valid roles with messy casing/whitespace should normalize; assistant channel cleaned
+    steps := 0
+    okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        steps++
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { t.Fatalf("decode: %v", err) }
+        if len(req.Messages) < 4 {
+            t.Fatalf("expected at least 4 normalized messages; got %d", len(req.Messages))
+        }
+        if req.Messages[0].Role != oai.RoleSystem { t.Fatalf("role[0]=%q want system", req.Messages[0].Role) }
+        if req.Messages[1].Role != oai.RoleDeveloper { t.Fatalf("role[1]=%q want developer", req.Messages[1].Role) }
+        if req.Messages[2].Role != oai.RoleUser { t.Fatalf("role[2]=%q want user", req.Messages[2].Role) }
+        if req.Messages[3].Role != oai.RoleAssistant { t.Fatalf("role[3]=%q want assistant", req.Messages[3].Role) }
+        if req.Messages[3].Channel != "critic" { t.Fatalf("assistant channel normalized=%q want 'critic'", req.Messages[3].Channel) }
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+    }))
+    defer okSrv.Close()
+    cfg2 := cliConfig{prompt: "u", systemPrompt: "s", baseURL: okSrv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+    msgs := []oai.Message{{Role: " System\t", Content: "s"}, {Role: "DEVELOPER ", Content: "d"}, {Role: " user", Content: "u"}, {Role: "assistant", Channel: " Critic!!! ", Content: "c"}}
+    var buf bytes.Buffer
+    if _, err := runPreStage(cfg2, msgs, &buf); err != nil {
+        t.Fatalf("unexpected error: %v stderr=%q", err, buf.String())
+    }
+}
+
 // FEATURE_CHECKLIST L24: Custom channel routing via -channel-route name=stdout|stderr|omit
 func TestChannelRoute_FlagParsingAndRouting(t *testing.T) {
     // Invalid channel name
