@@ -23,6 +23,26 @@
     }
     ,
     {
+      "name": "http_fetch",
+      "description": "Safe HTTP/HTTPS fetcher with byte cap and redirects",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "method": {"type": "string", "enum": ["GET", "HEAD"]},
+          "max_bytes": {"type": "integer", "minimum": 1, "default": 1048576},
+          "timeout_ms": {"type": "integer", "minimum": 1, "default": 10000},
+          "decompress": {"type": "boolean", "default": true}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/http_fetch"],
+      "timeoutSec": 15,
+      "envPassthrough": ["HTTP_TIMEOUT_MS"]
+    }
+    ,
+    {
       "name": "fs_read_file",
       "description": "Read a repository-relative file as base64 with optional offset and max bytes",
       "schema": {
