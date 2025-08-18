@@ -54,4 +54,3 @@ Next: authenticate the GitHub CLI for github.com using device flow with SSH prot
 * [ ] Structured errors & shared schema: return standardized errors `{code:string,message:string,details?:object}` for timeouts (`TIMEOUT`), output limit exceeded (`OUTPUT_LIMIT`), and evaluation failures (`EVAL_ERROR`); update shared error schema doc and example in README; DoD: unit tests assert JSON shape for each failure mode and README section is present.
 * [ ] Observability: add structured logs (trace id, tool name, wall\_ms, bytes\_out) and emit OpenTelemetry span attributes; DoD: local run shows JSON logs with those fields and a span named `tools.starlark.run`.
 * [ ] Contract examples: add `docs/interfaces/code.sandbox.starlark.run.md` with request/response examples (valid, timeout, error), security notes, and performance caveats; DoD: doc renders and is linked from main docs.
-
