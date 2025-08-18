@@ -476,5 +476,36 @@
       "timeoutSec": 15,
       "envPassthrough": ["GITHUB_TOKEN"]
     }
+    ,
+    {
+      "name": "citation_pack",
+      "description": "Normalize a citation and optionally include Wayback archive URL",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "doc": {
+            "type": "object",
+            "properties": {
+              "title": {"type": "string"},
+              "url": {"type": "string"},
+              "published_at": {"type": "string"}
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          },
+          "archive": {
+            "type": "object",
+            "properties": {
+              "wayback": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["doc"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/citation_pack"],
+      "timeoutSec": 10
+    }
   ]
 }
