@@ -27,6 +27,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
   - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
   - [Exec tool](#exec-tool)
   - [Filesystem tools](#filesystem-tools)
+  - [Image generation tool (img_create)](#image-generation-tool-img_create)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Tests](#tests)
@@ -379,6 +380,74 @@ printf 'hello world' > tmp_stat_demo.txt
 echo '{"path":"tmp_stat_demo.txt","hash":"sha256"}' | ./tools/bin/fs_stat | jq .
 rm -f tmp_stat_demo.txt
 ```
+
+### Image generation tool (img_create)
+
+Generate images via an OpenAI‑compatible Images API and save files into your repository (default) or return base64 on demand.
+
+Quickstart (Unix/macOS/Windows via `make build-tools`):
+
+```bash
+make build-tools
+```
+
+Minimal `tools.json` entry (copy/paste next to your binary):
+
+```json
+{
+  "tools": [
+    {
+      "name": "img_create",
+      "description": "Generate image(s) with OpenAI Images API and save to repo or return base64",
+      "schema": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {"type": "string"},
+          "n": {"type": "integer", "minimum": 1, "maximum": 4, "default": 1},
+          "size": {"type": "string", "pattern": "^\\d{3,4}x\\d{3,4}$", "default": "1024x1024"},
+          "model": {"type": "string", "default": "gpt-image-1"},
+          "return_b64": {"type": "boolean", "default": false},
+          "save": {
+            "type": "object",
+            "required": ["dir"],
+            "properties": {
+              "dir": {"type": "string"},
+              "basename": {"type": "string", "default": "img"},
+              "ext": {"type": "string", "enum": ["png"], "default": "png"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/img_create"],
+      "timeoutSec": 120,
+      "envPassthrough": ["OAI_API_KEY", "OAI_BASE_URL", "OAI_IMAGE_BASE_URL", "OAI_HTTP_TIMEOUT"]
+    }
+  ]
+}
+```
+
+Run the agent with a prompt that instructs the assistant to call `img_create` and save under `assets/`:
+
+```bash
+export OAI_BASE_URL=${OAI_BASE_URL:-https://api.openai.com/v1}
+export OAI_API_KEY=your-key
+
+./bin/agentcli \
+  -tools ./tools.json \
+  -prompt "Generate a tiny illustrative image using img_create and save it under assets/ with basename banner" \
+  -debug
+
+# Expect: one or more PNGs under assets/ (e.g., assets/banner_001.png) and a concise final message on stdout
+```
+
+Notes:
+- By default, the tool writes image files and does not include base64 in transcripts, avoiding large payloads.
+- To return base64 instead, pass `{ "return_b64": true }` to the tool; base64 is elided in stdout unless `IMG_CREATE_DEBUG_B64=1` or `DEBUG_B64=1` is set.
+- Windows: the built binary is `./tools/bin/img_create.exe` and `tools.json` should reference the `.exe`.
+- See Troubleshooting for network/API issues and timeouts: `docs/runbooks/troubleshooting.md`.
 
 #### fs_search
 ```bash
