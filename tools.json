@@ -284,6 +284,27 @@
       "command": ["./tools/bin/img_create"],
       "timeoutSec": 120,
       "envPassthrough": ["OAI_API_KEY", "OAI_BASE_URL", "OAI_IMAGE_BASE_URL", "OAI_HTTP_TIMEOUT"]
+    },
+    {
+      "name": "searxng_search",
+      "description": "Meta search via SearXNG",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "time_range": {"type": "string", "enum": ["day","week","month","year"]},
+          "categories": {"type": "array", "items": {"type": "string"}},
+          "engines": {"type": "array", "items": {"type": "string"}},
+          "language": {"type": "string"},
+          "page": {"type": "integer", "minimum": 1},
+          "size": {"type": "integer", "minimum": 1, "maximum": 50}
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/searxng_search"],
+      "timeoutSec": 15,
+      "envPassthrough": ["SEARXNG_BASE_URL","HTTP_TIMEOUT_MS"]
     }
   ]
 }
