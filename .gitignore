@@ -16,6 +16,8 @@ tests/
 coverage.out
 *.coverprofile
 coverage.html
+lint.err
+lint_verify.err
 
 # Common local artifacts
 dist/
