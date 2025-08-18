@@ -92,14 +92,14 @@ func langOrDefault(l string) string {
 }
 
 func ssrfGuard(base string) error {
-    if os.Getenv("WIKI_QUERY_ALLOW_LOCAL") == "1" {
-        return nil
-    }
+	if os.Getenv("WIKI_QUERY_ALLOW_LOCAL") == "1" {
+		return nil
+	}
 	u, err := url.Parse(base)
 	if err != nil {
 		return fmt.Errorf("MEDIAWIKI_BASE_URL invalid: %w", err)
 	}
-	host, port, _ := net.SplitHostPort(u.Host)
+	host := u.Hostname()
 	if host == "" {
 		host = u.Host
 	}
@@ -112,7 +112,6 @@ func ssrfGuard(base string) error {
 			return errors.New("SSRF blocked: private address")
 		}
 	}
-	_ = port
 	return nil
 }
 
@@ -131,7 +130,7 @@ func fetchExtracts(c *http.Client, base, lang, titles string) ([]page, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 	var raw struct {
 		Query struct {
 			Pages map[string]struct {
@@ -166,7 +165,7 @@ func fetchOpenSearch(c *http.Client, base, query string) ([]page, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 	var arr []any
 	if err := json.NewDecoder(resp.Body).Decode(&arr); err != nil {
 		return nil, err
@@ -200,8 +199,16 @@ func toStringSlice(v any) ([]string, bool) {
 	return s, true
 }
 
-func min(a, b int) int { if a < b { return a }; return b }
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func encErr(w *os.File, err error) {
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	if e := json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}); e != nil {
+		// best-effort stderr encoding
+		_, _ = w.Write([]byte("{\"error\":\"internal encode error\"}\n")) //nolint:errcheck
+	}
 }
