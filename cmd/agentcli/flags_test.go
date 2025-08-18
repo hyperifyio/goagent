@@ -227,6 +227,51 @@ func TestImageParamDefaultsAndEnvAndFlags(t *testing.T) {
 	})
 }
 
+// TestImageModelFlagPrecedence verifies precedence flag > env > default for -image-model.
+func TestImageModelFlagPrecedence(t *testing.T) {
+	t.Run("default when neither flags nor env", func(t *testing.T) { //nolint:tparallel
+		t.Setenv("OAI_IMAGE_MODEL", "")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageModel != "gpt-image-1" {
+			t.Fatalf("imageModel=%q; want gpt-image-1", cfg.imageModel)
+		}
+	})
+
+	t.Run("env applies when flag unset", func(t *testing.T) { //nolint:tparallel
+		t.Setenv("OAI_IMAGE_MODEL", "env-model")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageModel != "env-model" {
+			t.Fatalf("imageModel=%q; want env-model", cfg.imageModel)
+		}
+	})
+
+	t.Run("flags override env", func(t *testing.T) { //nolint:tparallel
+		t.Setenv("OAI_IMAGE_MODEL", "env-model")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-image-model", "flag-model"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.imageModel != "flag-model" {
+			t.Fatalf("imageModel=%q; want flag-model", cfg.imageModel)
+		}
+	})
+}
+
 // TestPrintConfig_IncludesImageParams verifies print-config output reflects resolved image params.
 func TestPrintConfig_IncludesImageParams(t *testing.T) {
 	orig := os.Args

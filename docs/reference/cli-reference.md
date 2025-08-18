@@ -20,6 +20,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-http-retries int`: Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
 - `-http-retry-backoff duration`: Base backoff between HTTP retry attempts (exponential) (default 300ms)
 - `-image-base-url string`: Image API base URL (env `OAI_IMAGE_BASE_URL`; inherits `-base-url` if unset)
+- `-image-model string`: Image model ID (env `OAI_IMAGE_MODEL`; default `gpt-image-1`)
 - `-image-api-key string`: Image API key (env `OAI_IMAGE_API_KEY`; inherits `-api-key` if unset; falls back to `OPENAI_API_KEY`)
 - `-image-http-timeout duration`: Image HTTP timeout (env `OAI_IMAGE_HTTP_TIMEOUT`; inherits `-http-timeout` if unset)
 - `-image-http-retries int`: Image HTTP retries (env `OAI_IMAGE_HTTP_RETRIES`; inherits `-http-retries` if unset)

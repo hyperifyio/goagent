@@ -96,6 +96,7 @@ type cliConfig struct {
 	imageHTTPRetriesSource string // "flag" | "env" | "inherit"
 	imageHTTPBackoffSource string // "flag" | "env" | "inherit"
 	// Image request parameter pass-throughs
+	imageModel                 string
 	imageN                     int
 	imageSize                  string
 	imageQuality               string // standard|hd
@@ -360,6 +361,9 @@ func parseFlags() (cliConfig, int) {
 	// Image API flags
 	flag.StringVar(&cfg.imageBaseURL, "image-base-url", "", "Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)")
 	flag.StringVar(&cfg.imageAPIKey, "image-api-key", "", "Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)")
+	// Image model flag (precedence: flag > env > default)
+	defaultImageModel := getEnv("OAI_IMAGE_MODEL", "gpt-image-1")
+	flag.StringVar(&cfg.imageModel, "image-model", defaultImageModel, "Image model ID (env OAI_IMAGE_MODEL; default gpt-image-1)")
 	// Image HTTP behavior flags
 	// Timeout (duration)
 	var imageHTTPTimeoutSet bool
@@ -1748,6 +1752,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -http-retries int\n    Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)\n")
 	b.WriteString("  -http-retry-backoff duration\n    Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)\n")
 	b.WriteString("  -image-base-url string\n    Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)\n")
+	b.WriteString("  -image-model string\n    Image model ID (env OAI_IMAGE_MODEL; default gpt-image-1)\n")
 	b.WriteString("  -image-api-key string\n    Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)\n")
 	b.WriteString("  -image-http-timeout duration\n    Image HTTP timeout (env OAI_IMAGE_HTTP_TIMEOUT; inherits -http-timeout if unset)\n")
 	b.WriteString("  -image-http-retries int\n    Image HTTP retries (env OAI_IMAGE_HTTP_RETRIES; inherits -http-retries if unset)\n")
@@ -1942,6 +1947,7 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 			"baseURLSource":          baseSrc,
 			"apiKey":                 oai.MaskAPIKeyLast4(img.APIKey),
 			"apiKeySource":           keySrc,
+			"model":                  cfg.imageModel,
 			"httpTimeout":            cfg.imageHTTPTimeout.String(),
 			"httpTimeoutSource":      nonEmptyOr(cfg.imageHTTPTimeoutSource, "inherit"),
 			"httpRetries":            cfg.imageHTTPRetries,

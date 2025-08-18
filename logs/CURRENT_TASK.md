@@ -1,0 +1,1 @@
+Implement S01:image-model-flag-parse by adding -image-model flag with env precedence, updating help, tests, and print-config to include image.model.
