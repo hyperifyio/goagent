@@ -164,6 +164,8 @@ func TestHelpContainsRoleFlags(t *testing.T) {
 }
 
 // TestImageParamDefaultsAndEnvAndFlags verifies precedence and defaults for image param pass-throughs.
+//
+//nolint:gocyclo // Intentional multi-branch table-style assertions for env/flag precedence in one test.
 func TestImageParamDefaultsAndEnvAndFlags(t *testing.T) {
 	// Clear possibly impacting envs
 	t.Setenv("OAI_IMAGE_N", "")

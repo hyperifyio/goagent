@@ -85,13 +85,13 @@ func TestResolveImageConfig_MaskAPIKeyLast4_Compatibility(t *testing.T) {
 }
 
 func TestParseDurationFlexible_EnvEquivalence(t *testing.T) {
-	// Ensure our internal parser treats env duration strings and integers equally
-	_ = os.Setenv("X", "750ms")
-	if d, err := parseDurationFlexible(os.Getenv("X")); err != nil || d != 750*time.Millisecond {
-		t.Fatalf("parse 750ms failed: %v %s", err, d)
-	}
-	_ = os.Setenv("X", "2")
-	if d, err := parseDurationFlexible(os.Getenv("X")); err != nil || d != 2*time.Second {
-		t.Fatalf("parse 2 failed: %v %s", err, d)
-	}
+    // Ensure our internal parser treats env duration strings and integers equally
+    t.Setenv("X", "750ms")
+    if d, err := parseDurationFlexible(os.Getenv("X")); err != nil || d != 750*time.Millisecond {
+        t.Fatalf("parse 750ms failed: %v %s", err, d)
+    }
+    t.Setenv("X", "2")
+    if d, err := parseDurationFlexible(os.Getenv("X")); err != nil || d != 2*time.Second {
+        t.Fatalf("parse 2 failed: %v %s", err, d)
+    }
 }
