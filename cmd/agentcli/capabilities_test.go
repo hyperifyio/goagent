@@ -27,11 +27,11 @@ func TestPrintCapabilities_NoToolsPath(t *testing.T) {
 func TestPrintCapabilities_WithManifest(t *testing.T) {
 	dir := t.TempDir()
 	toolsPath := filepath.Join(dir, "tools.json")
-    manifest := map[string]any{
+	manifest := map[string]any{
 		"tools": []map[string]any{
 			{"name": "btool", "description": "b desc", "schema": map[string]any{"type": "object"}, "command": []string{"/bin/true"}},
 			{"name": "atool", "description": "a desc", "schema": map[string]any{"type": "object"}, "command": []string{"/bin/true"}},
-            {"name": "img_create", "description": "Generate images", "schema": map[string]any{"type": "object"}, "command": []string{"/bin/true"}},
+			{"name": "img_create", "description": "Generate images", "schema": map[string]any{"type": "object"}, "command": []string{"/bin/true"}},
 		},
 	}
 	data, err := json.Marshal(manifest)
@@ -49,7 +49,7 @@ func TestPrintCapabilities_WithManifest(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d; stderr=%q", code, errBuf.String())
 	}
 	got := outBuf.String()
-    // Should include warning and sorted tool names (atool before btool)
+	// Should include warning and sorted tool names (atool before btool)
 	if !strings.Contains(got, "Capabilities (enabled tools):") {
 		t.Fatalf("capabilities header missing: %q", got)
 	}
@@ -58,8 +58,8 @@ func TestPrintCapabilities_WithManifest(t *testing.T) {
 	if aIdx < 0 || bIdx < 0 || aIdx > bIdx {
 		t.Fatalf("tools not listed or not sorted: %q", got)
 	}
-    // Ensure img_create has explicit network/file warning
-    if !strings.Contains(got, "- img_create: Generate images [WARNING: makes outbound network calls and can save files]") {
-        t.Fatalf("img_create warning missing or incorrect: %q", got)
-    }
+	// Ensure img_create has explicit network/file warning
+	if !strings.Contains(got, "- img_create: Generate images [WARNING: makes outbound network calls and can save files]") {
+		t.Fatalf("img_create warning missing or incorrect: %q", got)
+	}
 }
