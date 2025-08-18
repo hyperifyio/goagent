@@ -13,15 +13,15 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - What makes it different: strict "argv‑only" tool execution, explicit allowlists, and a pragmatic default LLM policy for predictable behavior across providers.
 
 ## Table of contents
-- [Why goagent?](#why-goagent)
+- [At a glance](#at-a-glance)
 - [Features](#features)
 - [Installation](#installation)
-- [Configuration](#configuration)
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
   - [Why you usually don’t need to change knobs](#why-you-usually-dont-need-to-change-knobs)
   - [Capabilities](#capabilities)
+- [Configuration](#configuration)
 - [Examples](#examples)
   - [Zero-config with GPT-5](#zero-config-with-gpt-5)
   - [Tool calls transcript](#tool-calls-transcript)
@@ -37,20 +37,21 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Documentation](#documentation)
 - [Diagrams](#diagrams)
 - [Contributing](#contributing)
-- [Tooling](#tooling)
+- [Development tooling](#tooling)
 - [Support](#support)
 - [Roadmap](#roadmap)
 - [Project status](#project-status)
 - [License and credits](#license-and-credits)
+- [Changelog](#changelog)
 - [More examples](#more-examples)
 - [CI quality gates](docs/operations/ci-quality-gates.md)
 
 
-## Why goagent?
+## At a glance
 - Minimal, portable, vendor‑agnostic: works with any OpenAI‑compatible endpoint
 - Deterministic and auditable: argv‑only tool execution, JSON stdin/stdout, strict timeouts
 - Safe by default: explicit allowlist of tools; no shell evaluation
-- Batteries included: small toolbelt for filesystem and process tasks
+- Batteries included: a small toolbelt for filesystem, process, network, and image tasks
 
 ## Features
 - OpenAI‑compatible `POST /v1/chat/completions` via `net/http` (no SDK)
@@ -567,6 +568,9 @@ Maintainers and authors:
 - Primary author: Jaakko Heusala
 
 Acknowledgements: inspired by OpenAI‑compatible agent patterns; built for portability and safety.
+
+## Changelog
+See `CHANGELOG.md` for notable changes and release notes.
 
 ## More examples
 See `examples/unrestricted.md` for copy‑paste prompts demonstrating `exec` + file tools to write, build, and run code in a sandboxed environment.
