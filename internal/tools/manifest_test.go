@@ -11,7 +11,7 @@ import (
 func TestLoadManifest_OK(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "tools.json")
-    data := map[string]any{
+	data := map[string]any{
 		"tools": []map[string]any{
 			{
 				"name":        "hello",
@@ -19,8 +19,8 @@ func TestLoadManifest_OK(t *testing.T) {
 				"schema":      map[string]any{"type": "object"},
 				// absolute path allowed in tests
 				"command": []string{"/bin/echo", "{}"},
-                // envPassthrough should be normalized, deduplicated
-                "envPassthrough": []string{"oai_api_key", "OAI_API_KEY", " Path ", "TZ"},
+				// envPassthrough should be normalized, deduplicated
+				"envPassthrough": []string{"oai_api_key", "OAI_API_KEY", " Path ", "TZ"},
 			},
 		},
 	}
@@ -38,16 +38,16 @@ func TestLoadManifest_OK(t *testing.T) {
 	if len(reg) != 1 || len(tools) != 1 {
 		t.Fatalf("unexpected sizes: reg=%d tools=%d", len(reg), len(tools))
 	}
-    spec := reg["hello"]
-    want := []string{"OAI_API_KEY", "PATH", "TZ"}
-    if len(spec.EnvPassthrough) != len(want) {
-        t.Fatalf("envPassthrough len: got %d want %d", len(spec.EnvPassthrough), len(want))
-    }
-    for i := range want {
-        if spec.EnvPassthrough[i] != want[i] {
-            t.Fatalf("envPassthrough[%d]: got %q want %q", i, spec.EnvPassthrough[i], want[i])
-        }
-    }
+	spec := reg["hello"]
+	want := []string{"OAI_API_KEY", "PATH", "TZ"}
+	if len(spec.EnvPassthrough) != len(want) {
+		t.Fatalf("envPassthrough len: got %d want %d", len(spec.EnvPassthrough), len(want))
+	}
+	for i := range want {
+		if spec.EnvPassthrough[i] != want[i] {
+			t.Fatalf("envPassthrough[%d]: got %q want %q", i, spec.EnvPassthrough[i], want[i])
+		}
+	}
 }
 
 func TestLoadManifest_DuplicateName(t *testing.T) {
@@ -137,28 +137,28 @@ func TestLoadManifest_CommandEscapeAndDotDot(t *testing.T) {
 }
 
 func TestLoadManifest_InvalidEnvPassthrough(t *testing.T) {
-    dir := t.TempDir()
-    file := filepath.Join(dir, "tools.json")
-    // Invalid names: leading digit and dash inside
-    data := map[string]any{
-        "tools": []map[string]any{
-            {
-                "name":    "t",
-                "command": []string{"/bin/true"},
-                "envPassthrough": []string{"1BAD", "GOOD", "OAI-API-KEY"},
-            },
-        },
-    }
-    b, err := json.Marshal(data)
-    if err != nil {
-        t.Fatalf("marshal: %v", err)
-    }
-    if err := os.WriteFile(file, b, 0o644); err != nil {
-        t.Fatalf("write: %v", err)
-    }
-    if _, _, err := LoadManifest(file); err == nil {
-        t.Fatalf("expected error for invalid envPassthrough entries")
-    }
+	dir := t.TempDir()
+	file := filepath.Join(dir, "tools.json")
+	// Invalid names: leading digit and dash inside
+	data := map[string]any{
+		"tools": []map[string]any{
+			{
+				"name":           "t",
+				"command":        []string{"/bin/true"},
+				"envPassthrough": []string{"1BAD", "GOOD", "OAI-API-KEY"},
+			},
+		},
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(file, b, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, err := LoadManifest(file); err == nil {
+		t.Fatalf("expected error for invalid envPassthrough entries")
+	}
 }
 
 // Relative command paths must resolve against the manifest directory, not process CWD.
