@@ -21,30 +21,25 @@ import (
 // In production it defaults to time.Now.
 var timeNow = time.Now
 
-func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte, defaultTimeout time.Duration) ([]byte, error) {
-	start := time.Now()
-	// Derive timeout: spec.TimeoutSec overrides when >0
-	to := defaultTimeout
+// computeToolTimeout derives the timeout for a tool execution, honoring
+// spec.TimeoutSec when provided; otherwise it falls back to the default.
+func computeToolTimeout(spec ToolSpec, defaultTimeout time.Duration) time.Duration {
 	if spec.TimeoutSec > 0 {
-		to = time.Duration(spec.TimeoutSec) * time.Second
+		return time.Duration(spec.TimeoutSec) * time.Second
 	}
-	ctx, cancel := context.WithTimeout(parentCtx, to)
-	defer cancel()
+	return defaultTimeout
+}
 
-	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
-	// Scrub environment to a minimal allowlist: PATH and HOME by default,
-	// plus any keys explicitly allowed via spec.EnvPassthrough when present
-	// in the parent environment. Values are never logged to audit; only keys
-	// are recorded for observability.
-	var env []string
+// buildToolEnvironment constructs a minimal environment for the tool process
+// and returns the environment slice along with the list of env keys that were
+// passed through (for audit visibility).
+func buildToolEnvironment(spec ToolSpec) (env []string, passedKeys []string) {
 	if v := os.Getenv("PATH"); v != "" {
 		env = append(env, "PATH="+v)
 	}
 	if v := os.Getenv("HOME"); v != "" {
 		env = append(env, "HOME="+v)
 	}
-	// Track which keys were actually passed through for audit (names only)
-	var passedKeys []string
 	if len(spec.EnvPassthrough) > 0 {
 		for _, key := range spec.EnvPassthrough {
 			if val, ok := os.LookupEnv(key); ok {
@@ -53,6 +48,34 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 			}
 		}
 	}
+	return env, passedKeys
+}
+
+// normalizeWaitError maps timeout and process errors to deterministic errors.
+func normalizeWaitError(ctx context.Context, waitErr error, stderrText string) error {
+	if ctx.Err() == context.DeadlineExceeded {
+		return errors.New("tool timed out")
+	}
+	if waitErr != nil {
+		msg := stderrText
+		if msg == "" {
+			msg = waitErr.Error()
+		}
+		return errors.New(msg)
+	}
+	return nil
+}
+
+func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte, defaultTimeout time.Duration) ([]byte, error) {
+	start := time.Now()
+	// Derive timeout, honoring per-tool override when provided.
+	to := computeToolTimeout(spec, defaultTimeout)
+	ctx, cancel := context.WithTimeout(parentCtx, to)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	// Build minimal environment and record passed-through keys for audit.
+	env, passedKeys := buildToolEnvironment(spec)
 	cmd.Env = env
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -113,17 +136,8 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 	// Best-effort audit (failures do not affect tool result)
 	writeAudit(spec, start, exitCode, len(out), len(serr), passedKeys)
 
-	if ctx.Err() == context.DeadlineExceeded {
-		// Normalize timeout error to a deterministic string per product rules
-		return nil, errors.New("tool timed out")
-	}
-	if err != nil {
-		// Prefer stderr text when available for context
-		msg := string(serr)
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, errors.New(msg)
+	if normErr := normalizeWaitError(ctx, err, string(serr)); normErr != nil {
+		return nil, normErr
 	}
 	return out, nil
 }

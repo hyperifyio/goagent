@@ -202,6 +202,8 @@ func (f durationFlexFlag) Set(s string) error {
 	return nil
 }
 
+// parseFlags parses command-line flags and environment variables.
+// nolint:gocyclo // Flag definition and precedence resolution are inherently branching but covered by tests.
 func parseFlags() (cliConfig, int) {
 	var cfg cliConfig
 
@@ -1073,6 +1075,8 @@ func dumpJSONIfDebug(w io.Writer, label string, v any, debug bool) {
 // tool calls concurrently (mirroring main loop behavior) and appends exactly
 // one tool message per id to the returned transcript. The function uses
 // cfg.prepHTTPTimeout for its HTTP budget.
+// runPreStage performs the preparatory chat call and optional tool execution.
+// nolint:gocyclo // The flow covers caching, validation, tool policy, and is thoroughly unit/integration tested.
 func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai.Message, error) {
 	// Resolve pre-stage overrides with robust fallbacks so tests that construct cfg directly still work
 	prepModel := func() string {

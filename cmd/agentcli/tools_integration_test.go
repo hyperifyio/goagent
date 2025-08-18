@@ -349,6 +349,7 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 // Deterministic end-to-end acceptance: pre-stage returns two read-only tool calls
 // and a non-final assistant channel; the agent executes built-in pre-stage tools,
 // routes the non-final channel to stderr under -verbose, and the main call completes.
+// nolint:gocyclo // End-to-end integration test favors readability over low cyclomatic complexity.
 func TestAcceptance_EndToEnd_PrepReadonlyTools_ChannelRouting_AndMainCompletion(t *testing.T) {
 	// Work in an isolated temp directory and create a small file for fs.read_file
 	tmp := t.TempDir()
@@ -439,6 +440,7 @@ func TestAcceptance_EndToEnd_PrepReadonlyTools_ChannelRouting_AndMainCompletion(
 // mock that first requests a tool call to img_create (saving under out/) and then returns
 // a final assistant message summarizing the saved path. Asserts one PNG is written and
 // stdout equals the final assistant content.
+// nolint:gocyclo // End-to-end integration test favors readability over low cyclomatic complexity.
 func TestAgent_EndToEnd_ImageCreate_SavesPNG_AndPrintsFinal(t *testing.T) {
 	// Use an isolated temp directory so relative save paths land here
 	// Do not chdir yet; building the tool needs repo root as CWD
