@@ -1,21 +1,22 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"testing"
-	"time"
+    "bytes"
+    "encoding/base64"
+    "encoding/json"
+    "io"
+    "net/http"
+    "net/http/httptest"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "runtime"
+    "testing"
+    "time"
+    "strings"
 
-	"github.com/hyperifyio/goagent/internal/oai"
-	testutil "github.com/hyperifyio/goagent/tools/testutil"
+    "github.com/hyperifyio/goagent/internal/oai"
+    testutil "github.com/hyperifyio/goagent/tools/testutil"
 )
 
 // copyFile copies a file from src to dst with 0755 mode and checks errors.
@@ -332,4 +333,85 @@ func TestRunAgent_AdvertisesSchemas_AndExecutesFsWriteThenRead(t *testing.T) {
 	if string(got) != string(content) {
 		t.Fatalf("file content mismatch: got %q want %q", string(got), string(content))
 	}
+}
+
+// Deterministic end-to-end acceptance: pre-stage returns two read-only tool calls
+// and a non-final assistant channel; the agent executes built-in pre-stage tools,
+// routes the non-final channel to stderr under -verbose, and the main call completes.
+func TestAcceptance_EndToEnd_PrepReadonlyTools_ChannelRouting_AndMainCompletion(t *testing.T) {
+    // Work in an isolated temp directory and create a small file for fs.read_file
+    tmp := t.TempDir()
+    oldWD, err := os.Getwd()
+    if err != nil { t.Fatalf("getwd: %v", err) }
+    if err := os.Chdir(tmp); err != nil { t.Fatalf("chdir tmp: %v", err) }
+    t.Cleanup(func() { _ = os.Chdir(oldWD) })
+
+    if err := os.WriteFile("prestage.txt", []byte("hi"), 0o644); err != nil {
+        t.Fatalf("write prestage.txt: %v", err)
+    }
+
+    // Two-step mock server: pre-stage -> tool_calls; main -> verify tool outputs present
+    step := 0
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost || r.URL.Path != "/chat/completions" {
+            t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+        }
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { t.Fatalf("decode: %v", err) }
+        step++
+        switch step {
+        case 1:
+            // Pre-stage: return two built-in read-only tool calls with a non-final channel
+            resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{
+                    Role:    oai.RoleAssistant,
+                    Channel: "critic",
+                    Content: "pre-critic",
+                    ToolCalls: []oai.ToolCall{
+                        {ID: "t1", Type: "function", Function: oai.ToolCallFunction{Name: "fs.read_file", Arguments: `{"path":"prestage.txt"}`}},
+                        {ID: "t2", Type: "function", Function: oai.ToolCallFunction{Name: "os.info", Arguments: `{}`}},
+                    },
+                },
+            }}}
+            _ = json.NewEncoder(w).Encode(resp)
+        case 2:
+            // Main call: assert pre-stage tool outputs were appended to messages
+            var haveRead, haveOS bool
+            for _, m := range req.Messages {
+                if m.Role == oai.RoleTool && m.Name == "fs.read_file" && strings.Contains(m.Content, `"content":"hi"`) {
+                    haveRead = true
+                }
+                if m.Role == oai.RoleTool && m.Name == "os.info" && strings.Contains(m.Content, "goos") {
+                    haveOS = true
+                }
+            }
+            if !haveRead || !haveOS {
+                t.Fatalf("expected pre-stage tool outputs present (fs.read_file=%v os.info=%v)", haveRead, haveOS)
+            }
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "OK"},
+            }}})
+        default:
+            t.Fatalf("unexpected extra request step=%d", step)
+        }
+    }))
+    defer srv.Close()
+
+    var outBuf, errBuf bytes.Buffer
+    code := cliMain([]string{
+        "-prompt", "x",
+        "-base-url", srv.URL,
+        "-model", "m",
+        "-max-steps", "1",
+        "-verbose",
+    }, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if got := outBuf.String(); got != "OK\n" {
+        t.Fatalf("unexpected stdout: %q", got)
+    }
+    if !strings.Contains(errBuf.String(), "pre-critic") {
+        t.Fatalf("stderr did not contain pre-stage non-final channel content; got=%q", errBuf.String())
+    }
 }
