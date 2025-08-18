@@ -36,6 +36,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/reference/http_fetch.md](reference/http_fetch.md)
 - Tool reference: SearXNG search (`searxng_search`).
   - Link: [docs/reference/searxng_search.md](reference/searxng_search.md)
+ - Tool reference: PDF extract (`pdf_extract`).
+   - Link: [docs/reference/pdf_extract.md](reference/pdf_extract.md)
 
 - Security: Threat model and trust boundaries.
   - Link: [docs/security/threat-model.md](security/threat-model.md)

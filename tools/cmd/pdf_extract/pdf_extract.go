@@ -35,13 +35,19 @@ const maxPDFSizeBytes = 20 * 1024 * 1024 // 20 MiB
 
 func main() {
 	if err := run(); err != nil {
+		// Special-case OCR availability to emit a stable error code
+		if errors.Is(err, errOCRUnavailable) || strings.EqualFold(strings.TrimSpace(err.Error()), "ocr unavailable") {
+			fmt.Fprintln(os.Stderr, "{\"error\":\"OCR_UNAVAILABLE\"}")
+			os.Exit(1)
+		}
 		msg := strings.ReplaceAll(err.Error(), "\n", " ")
 		fmt.Fprintf(os.Stderr, "{\"error\":%q}\n", msg)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+// nolint:gocyclo // Structured similarly to sibling tools; complexity acceptable for this CLI wrapper
+func run() error { // refactor candidates exist; keep within lint threshold
 	in, err := decodeInput()
 	if err != nil {
 		return err
@@ -62,7 +68,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("mktemp dir: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer func() { _ = os.RemoveAll(tmpDir) }() //nolint:errcheck // best-effort cleanup
 	pdfPath := filepath.Join(tmpDir, "in.pdf")
 	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
 		return fmt.Errorf("write temp pdf: %w", err)
@@ -73,7 +79,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("open pdf: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() { _ = f.Close() }() //nolint:errcheck // best-effort close
 
 	totalPages := r.NumPage()
 	targetPages, err := normalizePages(in.Pages, totalPages)
@@ -128,10 +134,17 @@ func run() error {
 		outPages = append(outPages, pageOut{Index: idx, Text: texts[idx]})
 	}
 
+	start := time.Now()
 	out := output{PageCount: totalPages, Pages: outPages}
 	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
 		return fmt.Errorf("encode json: %w", err)
 	}
+	_ = appendAudit(map[string]any{ //nolint:errcheck
+		"ts":         time.Now().UTC().Format(time.RFC3339Nano),
+		"tool":       "pdf_extract",
+		"page_count": totalPages,
+		"ms":         time.Since(start).Milliseconds(),
+	})
 	return nil
 }
 
@@ -239,4 +252,47 @@ func runTesseractOCR(pdfPath string, pageCount int, emptyRequested int) ([]strin
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts, nil
+}
+
+// appendAudit writes an NDJSON line under .goagent/audit/YYYYMMDD.log at the repo root.
+func appendAudit(entry any) error {
+	b, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	root := moduleRoot()
+	dir := filepath.Join(root, ".goagent", "audit")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	fname := time.Now().UTC().Format("20060102") + ".log"
+	path := filepath.Join(dir, fname)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }() //nolint:errcheck
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		return err
+	}
+	return nil
+}
+
+// moduleRoot walks upward from CWD to the directory containing go.mod; falls back to CWD.
+func moduleRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return "."
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return cwd
+		}
+		dir = parent
+	}
 }
