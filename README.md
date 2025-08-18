@@ -34,7 +34,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Tests](#tests)
-- [Documentation](#documentation)
+ - [Documentation](#documentation)
 - [Diagrams](#diagrams)
 - [Contributing](#contributing)
 - [Development tooling](#tooling)
@@ -494,6 +494,7 @@ Common issues and deterministic fixes are documented with copy‑paste commands 
 ## Documentation
 Start with the [Documentation index](docs/README.md) for design docs, ADRs, and references:
 - [Tools manifest reference](docs/reference/tools-manifest.md)
+- [Research tools reference](docs/reference/research-tools.md)
 - [CLI reference](docs/reference/cli-reference.md)
 - [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Security: Threat model](docs/security/threat-model.md)
