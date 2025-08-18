@@ -2,6 +2,8 @@ package oai
 
 import (
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,6 +76,79 @@ func TestResolveDuration(t *testing.T) {
 	}
 	if v, src := ResolveDuration(false, 0, "", nil, time.Second); v != time.Second || src != "default" {
 		t.Fatalf("default fallback failed: %s %s", v, src)
+	}
+}
+
+func TestParseDurationFlexible_ErrorCases(t *testing.T) {
+	// Empty string should return an error
+	if _, err := parseDurationFlexible(""); err == nil {
+		t.Fatalf("expected error for empty input")
+	}
+	// Negative seconds should return range error
+	if _, err := parseDurationFlexible("-5"); err == nil {
+		t.Fatalf("expected error for negative seconds")
+	}
+	// Non-parsable should return syntax error
+	if _, err := parseDurationFlexible("nonsense"); err == nil {
+		t.Fatalf("expected error for nonsense input")
+	}
+}
+
+func TestResolveInt_EnvWhitespaceAndDefaultFallback(t *testing.T) {
+	// Env value with whitespace parses after trimming
+	if v, src := ResolveInt(false, 0, " 7 ", nil, 1); v != 7 || src != "env" {
+		t.Fatalf("env whitespace trim failed: v=%d src=%s", v, src)
+	}
+	// Env parse error with nil inherit falls back to default
+	if v, src := ResolveInt(false, 0, "bogus", nil, 3); v != 3 || src != "default" {
+		t.Fatalf("default fallback failed: v=%d src=%s", v, src)
+	}
+}
+
+func TestResolveBool_EnvParseErrorDefaultFallback(t *testing.T) {
+	// Env parse error with nil inherit falls back to default
+	if v, src := ResolveBool(false, false, "notbool", nil, true); v != true || src != "default" {
+		t.Fatalf("default fallback for bool failed: v=%v src=%s", v, src)
+	}
+}
+
+func TestResolveString_TrimEnvAndInherit(t *testing.T) {
+	inh := "  inherited  "
+	// Env wins and is trimmed
+	if v, src := ResolveString("", "  env  ", &inh, "def"); v != "env" || src != "env" {
+		t.Fatalf("env trim failed: v=%q src=%s", v, src)
+	}
+	// When env empty, inherit applies and is trimmed
+	if v, src := ResolveString("", "", &inh, "def"); v != strings.TrimSpace(inh) || src != "inherit" {
+		t.Fatalf("inherit trim failed: v=%q src=%s", v, src)
+	}
+}
+
+func TestResolveDuration_EnvWhitespace(t *testing.T) {
+	inh := time.Second
+	if v, src := ResolveDuration(false, 0, " 1s ", &inh, time.Second); v != time.Second || src != "env" {
+		t.Fatalf("env whitespace duration failed: v=%s src=%s", v, src)
+	}
+}
+
+func TestResolveInt_TrimsDoesNotAcceptNonDigits(t *testing.T) {
+	// Guard: numeric string with suffix should not parse; falls back to inherit
+	inh := 42
+	if v, src := ResolveInt(false, 0, "5s", &inh, 0); v != inh || src != "inherit" {
+		t.Fatalf("inherit after bad int parse failed: v=%d src=%s", v, src)
+	}
+}
+
+func TestParseDurationFlexible_EnvEquivalence_WhitespaceAndDigits(t *testing.T) {
+	t.Setenv("X", " 10 ")
+	d, err := parseDurationFlexible(strings.TrimSpace(os.Getenv("X")))
+	if err != nil || d != 10*time.Second {
+		t.Fatalf("parse integer seconds with whitespace failed: %v %s", err, d)
+	}
+	// Also ensure large but valid seconds parse
+	s := strconv.Itoa(15)
+	if d2, err := parseDurationFlexible(s); err != nil || d2 != 15*time.Second {
+		t.Fatalf("parse integer seconds failed: %v %s", err, d2)
 	}
 }
 
