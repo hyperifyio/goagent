@@ -403,5 +403,25 @@
       "command": ["./tools/bin/wayback_lookup"],
       "timeoutSec": 10
     }
+    ,
+    {
+      "name": "wiki_query",
+      "description": "MediaWiki summaries/search",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "titles": {"type": "string"},
+          "search": {"type": "string"},
+          "language": {"type": "string"}
+        },
+        "oneOf": [
+          {"required": ["titles"]},
+          {"required": ["search"]}
+        ],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/wiki_query"],
+      "timeoutSec": 10
+    }
   ]
 }
