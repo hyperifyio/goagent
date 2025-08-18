@@ -441,5 +441,22 @@
       "command": ["./tools/bin/openalex_search"],
       "timeoutSec": 15
     }
+    ,
+    {
+      "name": "crossref_search",
+      "description": "Search DOI metadata via Crossref",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "rows": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/crossref_search"],
+      "timeoutSec": 15,
+      "envPassthrough": ["CROSSREF_MAILTO", "HTTP_TIMEOUT_MS"]
+    }
   ]
 }

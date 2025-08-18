@@ -36,6 +36,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/reference/http_fetch.md](reference/http_fetch.md)
 - Tool reference: SearXNG search (`searxng_search`).
   - Link: [docs/reference/searxng_search.md](reference/searxng_search.md)
+- Tool reference: Crossref search (`crossref_search`).
+  - Link: [docs/reference/crossref_search.md](reference/crossref_search.md)
  - Tool reference: PDF extract (`pdf_extract`).
    - Link: [docs/reference/pdf_extract.md](reference/pdf_extract.md)
  - Tool reference: Wayback lookup (`wayback_lookup`).
