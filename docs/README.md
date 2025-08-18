@@ -14,6 +14,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md](adr/0005-harmony-pre-processing-and-channel-aware-output.md)
  - ADR-0006: Image generation tool (img_create) — minimal Images API integration, repo‑relative saves, env passthrough, and transcript hygiene.
    - Link: [docs/adr/0006-image-generation-tool-img_create.md](adr/0006-image-generation-tool-img_create.md)
+ - ADR-0010: Adopt SearXNG & network research toolbelt (CLI-only) — credible web discovery with provenance via SearXNG and a safe, CLI-only toolbelt.
+   - Link: [docs/adr/0010-research-tools-searxng.md](adr/0010-research-tools-searxng.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)

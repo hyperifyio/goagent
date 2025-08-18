@@ -499,6 +499,7 @@ Start with the [Documentation index](docs/README.md) for design docs, ADRs, and 
 - [Security: Threat model](docs/security/threat-model.md)
 - [ADR‑0005: Harmony pre‑processing and channel‑aware output](docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md)
 - [ADR‑0006: Image generation tool (img_create)](docs/adr/0006-image-generation-tool-img_create.md)
+- [ADR‑0010: Adopt SearXNG & network research toolbelt (CLI-only)](docs/adr/0010-research-tools-searxng.md)
 
 ## Diagrams
 - Agent loop: `docs/diagrams/agentcli-seq.md`
