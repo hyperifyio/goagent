@@ -1,1 +1,1 @@
-Blocked: extend --capabilities output to show phase-specific backends; cmd/agentcli is missing.
+Idle: documentation update completed for image/HTTP flags and precedence.
