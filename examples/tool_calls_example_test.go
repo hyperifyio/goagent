@@ -1,3 +1,4 @@
+//nolint:errcheck // Example-style tests elide some error checks for brevity; core assertions enforce correctness.
 package examples
 
 import (
@@ -210,7 +211,7 @@ func TestWorkedExample_ToolCalls_TemperatureOne_Sequencing(t *testing.T) {
 	cmd := exec.Command(agentBin,
 		"-prompt", "write and read a file",
 		"-tools", manifestPath,
-        "-prep-tools-allow-external",
+		"-prep-tools-allow-external",
 		"-base-url", srv.URL,
 		"-model", "test",
 		"-max-steps", "4",

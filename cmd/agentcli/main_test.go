@@ -1,22 +1,23 @@
+//nolint:errcheck // Many test helpers intentionally drop errors from encoders/writes and env setters; behavior asserted separately.
 package main
 
 import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "net/http"
-    "net/http/httptest"
-    "os/exec"
-    "runtime"
-    "strings"
-    "testing"
-    "time"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
 
-    "github.com/hyperifyio/goagent/internal/oai"
-    "github.com/hyperifyio/goagent/internal/tools"
+	"github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/tools"
 )
 
 // https://github.com/hyperifyio/goagent/issues/97
@@ -102,7 +103,7 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
 	defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
 
-    // Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s, prep inherits http
+	// Case 1: defaults — http falls back to legacy -timeout (30s), tool to 30s, prep inherits http
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 	os.Args = []string{"agentcli.test", "-prompt", "x"}
@@ -110,17 +111,17 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
 	}
-    if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second {
+	if cfg.httpTimeout != cfg.timeout || cfg.timeout != 30*time.Second {
 		t.Fatalf("expected httpTimeout=timeout=30s, got http=%v timeout=%v", cfg.httpTimeout, cfg.timeout)
 	}
 	if cfg.toolTimeout != cfg.timeout {
 		t.Fatalf("expected toolTimeout=timeout, got %v vs %v", cfg.toolTimeout, cfg.timeout)
 	}
-    if cfg.prepHTTPTimeout != cfg.httpTimeout {
-        t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
-    }
+	if cfg.prepHTTPTimeout != cfg.httpTimeout {
+		t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
+	}
 
-    // Case 2: env OAI_HTTP_TIMEOUT overrides legacy and prep inherits http
+	// Case 2: env OAI_HTTP_TIMEOUT overrides legacy and prep inherits http
 	if err := os.Setenv("OAI_HTTP_TIMEOUT", "2m"); err != nil {
 		t.Fatalf("set env: %v", err)
 	}
@@ -129,15 +130,15 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
 	}
-    if cfg.httpTimeout != 2*time.Minute {
+	if cfg.httpTimeout != 2*time.Minute {
 		t.Fatalf("expected httpTimeout=2m from env, got %v", cfg.httpTimeout)
 	}
 	if cfg.toolTimeout != 30*time.Second {
 		t.Fatalf("expected toolTimeout=30s default, got %v", cfg.toolTimeout)
 	}
-    if cfg.prepHTTPTimeout != cfg.httpTimeout {
-        t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
-    }
+	if cfg.prepHTTPTimeout != cfg.httpTimeout {
+		t.Fatalf("expected prepHTTPTimeout to inherit httpTimeout; got prep=%v http=%v", cfg.prepHTTPTimeout, cfg.httpTimeout)
+	}
 
 	// Case 3: flags override env and legacy
 	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-tool-timeout", "7s", "-timeout", "1s"}
@@ -152,42 +153,66 @@ func TestParseFlags_SplitTimeoutResolution(t *testing.T) {
 
 // Verify precedence for -prep-http-timeout: flag > env OAI_PREP_HTTP_TIMEOUT > -http-timeout > default
 func TestPrepHTTPTimeout_Precedence(t *testing.T) {
-    save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
-    restore := func(k, v string, ok bool) {
-        if ok {
-            if err := os.Setenv(k, v); err != nil { t.Fatalf("restore %s: %v", k, err) }
-        } else {
-            if err := os.Unsetenv(k); err != nil { t.Fatalf("unset %s: %v", k, err) }
-        }
-    }
-    prepEnvVal, prepEnvOK := save("OAI_PREP_HTTP_TIMEOUT")
-    httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
-    defer restore("OAI_PREP_HTTP_TIMEOUT", prepEnvVal, prepEnvOK)
-    defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
+	save := func(k string) (string, bool) { v, ok := os.LookupEnv(k); return v, ok }
+	restore := func(k, v string, ok bool) {
+		if ok {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("restore %s: %v", k, err)
+			}
+		} else {
+			if err := os.Unsetenv(k); err != nil {
+				t.Fatalf("unset %s: %v", k, err)
+			}
+		}
+	}
+	prepEnvVal, prepEnvOK := save("OAI_PREP_HTTP_TIMEOUT")
+	httpEnvVal, httpEnvOK := save("OAI_HTTP_TIMEOUT")
+	defer restore("OAI_PREP_HTTP_TIMEOUT", prepEnvVal, prepEnvOK)
+	defer restore("OAI_HTTP_TIMEOUT", httpEnvVal, httpEnvOK)
 
-    // Case A: inherit from http-timeout when no flag/env
-    orig := os.Args
-    defer func() { os.Args = orig }()
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
-    cfg, code := parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.prepHTTPTimeout != 5*time.Second { t.Fatalf("inheritance failed: prep=%v want 5s", cfg.prepHTTPTimeout) }
-    if cfg.prepHTTPTimeoutSource != "inherit" { t.Fatalf("prep source=%s want inherit", cfg.prepHTTPTimeoutSource) }
+	// Case A: inherit from http-timeout when no flag/env
+	orig := os.Args
+	defer func() { os.Args = orig }()
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.prepHTTPTimeout != 5*time.Second {
+		t.Fatalf("inheritance failed: prep=%v want 5s", cfg.prepHTTPTimeout)
+	}
+	if cfg.prepHTTPTimeoutSource != "inherit" {
+		t.Fatalf("prep source=%s want inherit", cfg.prepHTTPTimeoutSource)
+	}
 
-    // Case B: env OAI_PREP_HTTP_TIMEOUT overrides http-timeout
-    if err := os.Setenv("OAI_PREP_HTTP_TIMEOUT", "7s"); err != nil { t.Fatalf("set env: %v", err) }
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
-    cfg, code = parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.prepHTTPTimeout != 7*time.Second { t.Fatalf("prep from env got %v want 7s", cfg.prepHTTPTimeout) }
-    if cfg.prepHTTPTimeoutSource != "env" { t.Fatalf("prep source=%s want env", cfg.prepHTTPTimeoutSource) }
+	// Case B: env OAI_PREP_HTTP_TIMEOUT overrides http-timeout
+	if err := os.Setenv("OAI_PREP_HTTP_TIMEOUT", "7s"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s"}
+	cfg, code = parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.prepHTTPTimeout != 7*time.Second {
+		t.Fatalf("prep from env got %v want 7s", cfg.prepHTTPTimeout)
+	}
+	if cfg.prepHTTPTimeoutSource != "env" {
+		t.Fatalf("prep source=%s want env", cfg.prepHTTPTimeoutSource)
+	}
 
-    // Case C: flag -prep-http-timeout overrides env
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "9s"}
-    cfg, code = parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    if cfg.prepHTTPTimeout != 9*time.Second { t.Fatalf("prep from flag got %v want 9s", cfg.prepHTTPTimeout) }
-    if cfg.prepHTTPTimeoutSource != "flag" { t.Fatalf("prep source=%s want flag", cfg.prepHTTPTimeoutSource) }
+	// Case C: flag -prep-http-timeout overrides env
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "9s"}
+	cfg, code = parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	if cfg.prepHTTPTimeout != 9*time.Second {
+		t.Fatalf("prep from flag got %v want 9s", cfg.prepHTTPTimeout)
+	}
+	if cfg.prepHTTPTimeoutSource != "flag" {
+		t.Fatalf("prep source=%s want flag", cfg.prepHTTPTimeoutSource)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/251
@@ -242,292 +267,333 @@ func TestDefaultTemperature_IsOneAndPropagates(t *testing.T) {
 // Pre-stage one-knob: when -prep-top-p is provided, the prep request must include top_p
 // and omit temperature. We exercise the minimal runPreStage helper.
 func TestPrepOneKnob_TopPOmitsTemperature(t *testing.T) {
-    var seenTemp *float64
-    var seenTopP *float64
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-            t.Fatalf("decode: %v", err)
-        }
-        seenTemp = req.Temperature
-        seenTopP = req.TopP
-        // Return minimal assistant content
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	var seenTemp *float64
+	var seenTopP *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		seenTemp = req.Temperature
+		seenTopP = req.TopP
+		// Return minimal assistant content
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 2 * time.Second, httpRetries: 0}
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    cfg.prepTopP = 0.9
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
-        t.Fatalf("runPreStage error: %v", err)
-    }
-    if seenTemp != nil {
-        t.Fatalf("prep: expected temperature omitted when -prep-top-p is set")
-    }
-    if seenTopP == nil || *seenTopP != 0.9 {
-        if seenTopP == nil { t.Fatalf("prep: expected top_p present") }
-        t.Fatalf("prep: expected top_p=0.9, got %v", *seenTopP)
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 2 * time.Second, httpRetries: 0}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	cfg.prepTopP = 0.9
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
+		t.Fatalf("runPreStage error: %v", err)
+	}
+	if seenTemp != nil {
+		t.Fatalf("prep: expected temperature omitted when -prep-top-p is set")
+	}
+	if seenTopP == nil || *seenTopP != 0.9 {
+		if seenTopP == nil {
+			t.Fatalf("prep: expected top_p present")
+		}
+		t.Fatalf("prep: expected top_p=0.9, got %v", *seenTopP)
+	}
 }
 
 // Pre-stage should include temperature when -prep-top-p is not set and model supports it.
 func TestPrepIncludesTemperatureWhenSupported(t *testing.T) {
-    var seenTemp *float64
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        seenTemp = req.Temperature
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	var seenTemp *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		seenTemp = req.Temperature
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
-    cfg.temperature = 1.0
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
-    if seenTemp == nil || *seenTemp != 1.0 {
-        t.Fatalf("prep: expected temperature=1.0 included; got %v", func() any { if seenTemp==nil { return nil }; return *seenTemp }())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+	cfg.temperature = 1.0
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
+		t.Fatalf("runPreStage: %v", err)
+	}
+	if seenTemp == nil || *seenTemp != 1.0 {
+		t.Fatalf("prep: expected temperature=1.0 included; got %v", func() any {
+			if seenTemp == nil {
+				return nil
+			}
+			return *seenTemp
+		}())
+	}
 }
 
 // When -prep-profile deterministic is set and temperature is supported, pre-stage
 // should include temperature=0.1 unless -prep-top-p is also provided.
 func TestPrepProfileDeterministic_SetsTemperature(t *testing.T) {
-    var seenTemp *float64
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        seenTemp = req.Temperature
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	var seenTemp *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		seenTemp = req.Temperature
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
-    cfg.prepProfile = oai.ProfileDeterministic
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
-    if seenTemp == nil || *seenTemp != 0.1 {
-        t.Fatalf("prep-profile deterministic: expected temperature=0.1; got %v", func() any { if seenTemp==nil { return nil }; return *seenTemp }())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+	cfg.prepProfile = oai.ProfileDeterministic
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
+		t.Fatalf("runPreStage: %v", err)
+	}
+	if seenTemp == nil || *seenTemp != 0.1 {
+		t.Fatalf("prep-profile deterministic: expected temperature=0.1; got %v", func() any {
+			if seenTemp == nil {
+				return nil
+			}
+			return *seenTemp
+		}())
+	}
 }
 
 // If -prep-top-p is set, it wins over -prep-profile by one-knob rule, omitting temperature.
 func TestPrepProfile_IgnoredWhenTopPSet(t *testing.T) {
-    var seenTemp *float64
-    var seenTopP *float64
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        seenTemp = req.Temperature
-        seenTopP = req.TopP
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	var seenTemp *float64
+	var seenTopP *float64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		seenTemp = req.Temperature
+		seenTopP = req.TopP
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
-    cfg.prepProfile = oai.ProfileDeterministic
-    cfg.prepTopP = 0.8
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
-    if seenTemp != nil {
-        t.Fatalf("expected temperature omitted when -prep-top-p is set, got %v", *seenTemp)
-    }
-    if seenTopP == nil || *seenTopP != 0.8 {
-        t.Fatalf("expected top_p=0.8 present; got %v", func() any { if seenTopP==nil { return nil }; return *seenTopP }())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+	cfg.prepProfile = oai.ProfileDeterministic
+	cfg.prepTopP = 0.8
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
+		t.Fatalf("runPreStage: %v", err)
+	}
+	if seenTemp != nil {
+		t.Fatalf("expected temperature omitted when -prep-top-p is set, got %v", *seenTemp)
+	}
+	if seenTopP == nil || *seenTopP != 0.8 {
+		t.Fatalf("expected top_p=0.8 present; got %v", func() any {
+			if seenTopP == nil {
+				return nil
+			}
+			return *seenTopP
+		}())
+	}
 }
 
 // Pre-stage should omit temperature for unsupported models even when not using -prep-top-p,
 // and the client must recover on 400 mentioning temperature by retrying without temperature.
 func TestPrep_TemperatureUnsupported_400Recovery(t *testing.T) {
-    var calls int
-    var seenTemps []bool
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        calls++
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        seenTemps = append(seenTemps, req.Temperature != nil)
-        if calls == 1 {
-            // Simulate 400 mentioning unsupported temperature to trigger param recovery
-            w.WriteHeader(http.StatusBadRequest)
-            _, _ = w.Write([]byte(`{"error":{"message":"parameter 'temperature' is unsupported for this model"}}`))
-            return
-        }
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	var calls int
+	var seenTemps []bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		seenTemps = append(seenTemps, req.Temperature != nil)
+		if calls == 1 {
+			// Simulate 400 mentioning unsupported temperature to trigger param recovery
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"parameter 'temperature' is unsupported for this model"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    // Use a model that declares SupportsTemperature==true, but we will include temp initially
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
-    cfg.temperature = 0.7
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, msgs, &errBuf); err != nil { t.Fatalf("runPreStage: %v", err) }
-    if calls != 2 {
-        t.Fatalf("prep: expected exactly one recovery retry; calls=%d", calls)
-    }
-    if !(seenTemps[0] && !seenTemps[1]) {
-        t.Fatalf("prep: expected temp present on first attempt and omitted on retry; got %v", seenTemps)
-    }
+	// Use a model that declares SupportsTemperature==true, but we will include temp initially
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", prepHTTPTimeout: time.Second, httpRetries: 0}
+	cfg.temperature = 0.7
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, msgs, &errBuf); err != nil {
+		t.Fatalf("runPreStage: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("prep: expected exactly one recovery retry; calls=%d", calls)
+	}
+	if !(seenTemps[0] && !seenTemps[1]) {
+		t.Fatalf("prep: expected temp present on first attempt and omitted on retry; got %v", seenTemps)
+	}
 }
 
 // TestPrepCache_HitAndBust verifies pre-stage caching returns cached messages
 // when inputs match and TTL is valid, and that -prep-cache-bust bypasses cache.
 func TestPrepCache_HitAndBust(t *testing.T) {
-    t.Setenv("GOAGENT_PREP_CACHE_TTL", "1h")
-    // Clean cache dir at repo root
-    root := testFindRepoRoot(t)
-    _ = os.RemoveAll(filepath.Join(root, ".goagent", "cache", "prep"))
+	t.Setenv("GOAGENT_PREP_CACHE_TTL", "1h")
+	// Clean cache dir at repo root
+	root := testFindRepoRoot(t)
+	_ = os.RemoveAll(filepath.Join(root, ".goagent", "cache", "prep"))
 
-    // Mock server that returns no tool calls so output == input messages
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
-    }))
-    defer srv.Close()
+	// Mock server that returns no tool calls so output == input messages
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
+	}))
+	defer srv.Close()
 
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "sys"}, {Role: oai.RoleUser, Content: "u"}}
-    cfg := cliConfig{prompt: "u", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "sys"}, {Role: oai.RoleUser, Content: "u"}}
+	cfg := cliConfig{prompt: "u", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
 
-    var errBuf bytes.Buffer
-    // First run populates cache
-    out1, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage first: %v", err) }
-    if len(out1) != len(msgs) { t.Fatalf("unexpected out len=%d", len(out1)) }
+	var errBuf bytes.Buffer
+	// First run populates cache
+	out1, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage first: %v", err)
+	}
+	if len(out1) != len(msgs) {
+		t.Fatalf("unexpected out len=%d", len(out1))
+	}
 
-    // Second run should hit cache and not call server; simulate by closing server
-    srv.CloseClientConnections()
-    out2, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage cached: %v", err) }
-    if got, want := len(out2), len(msgs); got != want { t.Fatalf("cached out len=%d want %d", got, want) }
+	// Second run should hit cache and not call server; simulate by closing server
+	srv.CloseClientConnections()
+	out2, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage cached: %v", err)
+	}
+	if got, want := len(out2), len(msgs); got != want {
+		t.Fatalf("cached out len=%d want %d", got, want)
+	}
 
-    // Bust should bypass cache; point to a server that returns content to distinguish
-    srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","channel":"final","content":"ok"}}]}`)
-    }))
-    defer srv2.Close()
-    cfg2 := cfg
-    cfg2.baseURL = srv2.URL
-    cfg2.prepCacheBust = true
-    out3, err := runPreStage(cfg2, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage bust: %v", err) }
-    if len(out3) != len(msgs) { t.Fatalf("bust out len=%d want %d", len(out3), len(msgs)) }
+	// Bust should bypass cache; point to a server that returns content to distinguish
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","channel":"final","content":"ok"}}]}`)
+	}))
+	defer srv2.Close()
+	cfg2 := cfg
+	cfg2.baseURL = srv2.URL
+	cfg2.prepCacheBust = true
+	out3, err := runPreStage(cfg2, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage bust: %v", err)
+	}
+	if len(out3) != len(msgs) {
+		t.Fatalf("bust out len=%d want %d", len(out3), len(msgs))
+	}
 }
 
 // TestPrepCache_TTLExpiry verifies that expired cache entries are ignored.
 func TestPrepCache_TTLExpiry(t *testing.T) {
-    t.Setenv("GOAGENT_PREP_CACHE_TTL", "1ms")
-    root := testFindRepoRoot(t)
-    cacheDir := filepath.Join(root, ".goagent", "cache", "prep")
-    _ = os.RemoveAll(cacheDir)
+	t.Setenv("GOAGENT_PREP_CACHE_TTL", "1ms")
+	root := testFindRepoRoot(t)
+	cacheDir := filepath.Join(root, ".goagent", "cache", "prep")
+	_ = os.RemoveAll(cacheDir)
 
-    // Stable server that yields empty assistant message (no tool calls)
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
-    }))
-    defer srv.Close()
-    msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
-    cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
-    var errBuf bytes.Buffer
-    out, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage: %v", err) }
-    if len(out) != len(msgs) { t.Fatalf("unexpected out len=%d", len(out)) }
-    // Wait for TTL to expire
-    time.Sleep(10 * time.Millisecond)
-    // Fully close server to force a network error on new request after TTL expiry
-    srv.Close()
-    if _, err := runPreStage(cfg, msgs, &errBuf); err == nil {
-        t.Fatalf("expected error after TTL expiry when server closed; cache should be ignored")
-    }
+	// Stable server that yields empty assistant message (no tool calls)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id":"x","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":""}}]}`)
+	}))
+	defer srv.Close()
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+	var errBuf bytes.Buffer
+	out, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage: %v", err)
+	}
+	if len(out) != len(msgs) {
+		t.Fatalf("unexpected out len=%d", len(out))
+	}
+	// Wait for TTL to expire
+	time.Sleep(10 * time.Millisecond)
+	// Fully close server to force a network error on new request after TTL expiry
+	srv.Close()
+	if _, err := runPreStage(cfg, msgs, &errBuf); err == nil {
+		t.Fatalf("expected error after TTL expiry when server closed; cache should be ignored")
+	}
 }
 
 // Fail-open: when pre-stage returns an error, agent logs a WARN once and proceeds.
 func TestPrepFailOpen_WarnsAndProceeds(t *testing.T) {
-    // Server that always errors (simulate network error)
-    cl := &http.Client{}
-    _ = cl // silence unused in case
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Close connection abruptly to simulate failure
-        hj, ok := w.(http.Hijacker)
-        if !ok {
-            http.Error(w, "no hijack", http.StatusInternalServerError)
-            return
-        }
-        conn, _, _ := hj.Hijack()
-        _ = conn.Close()
-    }))
-    defer srv.Close()
+	// Server that always errors (simulate network error)
+	cl := &http.Client{}
+	_ = cl // silence unused in case
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Close connection abruptly to simulate failure
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "no hijack", http.StatusInternalServerError)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		_ = conn.Close()
+	}))
+	defer srv.Close()
 
-    // Configure CLI to call failing pre-stage, then main call uses a working server
-    // For main call, we need a different server that returns a final message
-    mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
-    }))
-    defer mainSrv.Close()
+	// Configure CLI to call failing pre-stage, then main call uses a working server
+	// For main call, we need a different server that returns a final message
+	mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+	}))
+	defer mainSrv.Close()
 
-    cfg := cliConfig{
-        prompt:          "u",
-        systemPrompt:    "s",
-        baseURL:         mainSrv.URL, // used for main call
-        model:           "m",
-        prepHTTPTimeout: 200 * time.Millisecond,
-        httpRetries:     0,
-        maxSteps:        1,
-        prepEnabled:     true,
-    }
-    // Force pre-stage to use failing server via env override for prep base URL
-    t.Setenv("OAI_PREP_BASE_URL", srv.URL)
+	cfg := cliConfig{
+		prompt:          "u",
+		systemPrompt:    "s",
+		baseURL:         mainSrv.URL, // used for main call
+		model:           "m",
+		prepHTTPTimeout: 200 * time.Millisecond,
+		httpRetries:     0,
+		maxSteps:        1,
+		prepEnabled:     true,
+	}
+	// Force pre-stage to use failing server via env override for prep base URL
+	t.Setenv("OAI_PREP_BASE_URL", srv.URL)
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
-    }
-    if !strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
-        t.Fatalf("expected WARN about pre-stage failure; got: %q", errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
+		t.Fatalf("expected WARN about pre-stage failure; got: %q", errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
+	}
 }
 
 // Disabling pre-stage should skip it entirely and not log WARN.
 func TestPrepEnabled_False_SkipsPreStage(t *testing.T) {
-    // Pre-stage would point to a non-routable address if used; but we disable it
-    t.Setenv("OAI_PREP_BASE_URL", "http://127.0.0.1:1")
-    // Main server returns final content
-    mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
-    }))
-    defer mainSrv.Close()
+	// Pre-stage would point to a non-routable address if used; but we disable it
+	t.Setenv("OAI_PREP_BASE_URL", "http://127.0.0.1:1")
+	// Main server returns final content
+	mainSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+	}))
+	defer mainSrv.Close()
 
-    cfg := cliConfig{
-        prompt:       "u",
-        systemPrompt: "s",
-        baseURL:      mainSrv.URL,
-        model:        "m",
-        prepEnabled:  false, // disable pre-stage
-        prepEnabledSet: true,
-        maxSteps:     1,
-    }
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
-        t.Fatalf("did not expect WARN when pre-stage is disabled; got: %q", errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
-    }
+	cfg := cliConfig{
+		prompt:         "u",
+		systemPrompt:   "s",
+		baseURL:        mainSrv.URL,
+		model:          "m",
+		prepEnabled:    false, // disable pre-stage
+		prepEnabledSet: true,
+		maxSteps:       1,
+	}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("runAgent exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.Contains(errBuf.String(), "WARN: pre-stage failed; skipping") {
+		t.Fatalf("did not expect WARN when pre-stage is disabled; got: %q", errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("expected main final output 'ok'; got %q", outBuf.String())
+	}
 }
 
 // testFindRepoRoot is a helper for tests to locate the repo root using the prod helper.
@@ -536,139 +602,171 @@ func testFindRepoRoot(t *testing.T) string { t.Helper(); return findRepoRoot() }
 // Pre-stage validator: a stray role:"tool" in the pre-stage input must be rejected
 // before sending the prep HTTP call, mirroring the main-loop validator behavior.
 func TestPrepValidator_BlocksStrayTool_NoHTTPCall(t *testing.T) {
-    called := false
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        called = true
-        t.Fatal("prep server should not be called when pre-stage validation fails")
-    }))
-    defer srv.Close()
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		t.Fatal("prep server should not be called when pre-stage validation fails")
+	}))
+	defer srv.Close()
 
-    // Messages contain a stray tool message without a prior assistant tool_calls
-    msgs := []oai.Message{
-        {Role: oai.RoleUser, Content: "hi"},
-        {Role: oai.RoleTool, Name: "echo", ToolCallID: "1", Content: "{\"echo\":\"hi\"}"},
-    }
+	// Messages contain a stray tool message without a prior assistant tool_calls
+	msgs := []oai.Message{
+		{Role: oai.RoleUser, Content: "hi"},
+		{Role: oai.RoleTool, Name: "echo", ToolCallID: "1", Content: "{\"echo\":\"hi\"}"},
+	}
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 200 * time.Millisecond, httpRetries: 0}
-    var errBuf bytes.Buffer
-    _, err := runPreStage(cfg, msgs, &errBuf)
-    if err == nil {
-        t.Fatalf("expected error due to pre-stage validation failure; stderr=%q", errBuf.String())
-    }
-    if called {
-        t.Fatalf("HTTP server was contacted despite pre-stage validation failure")
-    }
-    if !strings.Contains(errBuf.String(), "prep invalid message sequence") {
-        t.Fatalf("stderr should mention prep invalid message sequence; got: %q", errBuf.String())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 200 * time.Millisecond, httpRetries: 0}
+	var errBuf bytes.Buffer
+	_, err := runPreStage(cfg, msgs, &errBuf)
+	if err == nil {
+		t.Fatalf("expected error due to pre-stage validation failure; stderr=%q", errBuf.String())
+	}
+	if called {
+		t.Fatalf("HTTP server was contacted despite pre-stage validation failure")
+	}
+	if !strings.Contains(errBuf.String(), "prep invalid message sequence") {
+		t.Fatalf("stderr should mention prep invalid message sequence; got: %q", errBuf.String())
+	}
 }
 
 // Parallel tool-calls in pre-stage: when the pre-stage response returns multiple
 // tool_calls and a tools manifest is provided, the helper must execute tools
 // concurrently and append exactly one tool message per id.
 func TestPrep_ParallelToolCalls_ExecutesConcurrently(t *testing.T) {
-    // Build a sleeper tool that respects sleepMs
-    dir := t.TempDir()
-    helper := filepath.Join(dir, "sleeper.go")
-    if err := os.WriteFile(helper, []byte(`package main
+	// Build a sleeper tool that respects sleepMs
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "sleeper.go")
+	if err := os.WriteFile(helper, []byte(`package main
 import ("encoding/json"; "io"; "os"; "time"; "fmt")
 func main(){b,_:=io.ReadAll(os.Stdin); var m map[string]any; _=json.Unmarshal(b,&m); ms:=0; if v,ok:=m["sleepMs"].(float64); ok { ms=int(v) }; if ms>0 { time.Sleep(time.Duration(ms)*time.Millisecond) }; _=json.NewEncoder(os.Stdout).Encode(map[string]any{"sleptMs":ms}); fmt.Print("")}
-`), 0o644); err != nil { t.Fatalf("write tool: %v", err) }
-    bin := filepath.Join(dir, "sleeper")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil { t.Fatalf("build tool: %v: %s", err, string(out)) }
+`), 0o644); err != nil {
+		t.Fatalf("write tool: %v", err)
+	}
+	bin := filepath.Join(dir, "sleeper")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+		t.Fatalf("build tool: %v: %s", err, string(out))
+	}
 
-    // Write a tools.json manifest referencing the sleeper
-    manifestPath := filepath.Join(dir, "tools.json")
-    m := map[string]any{
-        "tools": []map[string]any{{
-            "name": "sleeper",
-            "description": "sleep tool",
-            "schema": map[string]any{"type":"object","properties":map[string]any{"sleepMs":map[string]any{"type":"integer"}}},
-            "command": []string{bin},
-            "timeoutSec": 3,
-        }},
-    }
-    b, err := json.Marshal(m)
-    if err != nil { t.Fatalf("marshal manifest: %v", err) }
-    if err := os.WriteFile(manifestPath, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+	// Write a tools.json manifest referencing the sleeper
+	manifestPath := filepath.Join(dir, "tools.json")
+	m := map[string]any{
+		"tools": []map[string]any{{
+			"name":        "sleeper",
+			"description": "sleep tool",
+			"schema":      map[string]any{"type": "object", "properties": map[string]any{"sleepMs": map[string]any{"type": "integer"}}},
+			"command":     []string{bin},
+			"timeoutSec":  3,
+		}},
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if err := os.WriteFile(manifestPath, b, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
-    // Fake server returns a single response with two tool_calls
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
-                {ID:"a", Type:"function", Function:oai.ToolCallFunction{Name:"sleeper", Arguments:"{\"sleepMs\":600}"}},
-                {ID:"b", Type:"function", Function:oai.ToolCallFunction{Name:"sleeper", Arguments:"{\"sleepMs\":600}"}},
-            }},
-        }}}
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer srv.Close()
+	// Fake server returns a single response with two tool_calls
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
+				{ID: "a", Type: "function", Function: oai.ToolCallFunction{Name: "sleeper", Arguments: "{\"sleepMs\":600}"}},
+				{ID: "b", Type: "function", Function: oai.ToolCallFunction{Name: "sleeper", Arguments: "{\"sleepMs\":600}"}},
+			}},
+		}}}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
 
-    // Measure elapsed around runPreStage and ensure it's < sequential time (~1200ms)
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manifestPath, prepToolsAllowExternal: true}
-    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
-    var errBuf bytes.Buffer
-    start := time.Now()
-    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
-    elapsed := time.Since(start)
-    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
-    // Expect original messages + assistant tool_calls + two tool outputs
-    var toolCount int
-    for _, m := range outMsgs { if m.Role == oai.RoleTool { toolCount++ } }
-    if toolCount != 2 { t.Fatalf("expected 2 tool messages, got %d", toolCount) }
-    if elapsed >= 1100*time.Millisecond { t.Fatalf("pre-stage tool calls not parallel; elapsed=%v", elapsed) }
+	// Measure elapsed around runPreStage and ensure it's < sequential time (~1200ms)
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 3 * time.Second, httpRetries: 0, toolsPath: manifestPath, prepToolsAllowExternal: true}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	start := time.Now()
+	outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String())
+	}
+	// Expect original messages + assistant tool_calls + two tool outputs
+	var toolCount int
+	for _, m := range outMsgs {
+		if m.Role == oai.RoleTool {
+			toolCount++
+		}
+	}
+	if toolCount != 2 {
+		t.Fatalf("expected 2 tool messages, got %d", toolCount)
+	}
+	if elapsed >= 1100*time.Millisecond {
+		t.Fatalf("pre-stage tool calls not parallel; elapsed=%v", elapsed)
+	}
 }
 
 // Pre-stage built-ins: disallow external execs by default and allow read-only adapters.
 func TestPrep_Builtins_ReadOnlyAndNoExecByDefault(t *testing.T) {
-    // Fake server returning a tool_calls for two tools: fs.read_file and a disallowed external tool "echo"
-    dir := t.TempDir()
-    // Create a file to read
-    target := filepath.Join(dir, "note.txt")
-    if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil { t.Fatalf("write: %v", err) }
+	// Fake server returning a tool_calls for two tools: fs.read_file and a disallowed external tool "echo"
+	dir := t.TempDir()
+	// Create a file to read
+	target := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        // Return assistant with tool_calls to fs.read_file and echo
-        payload := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
-                {ID:"a", Type:"function", Function:oai.ToolCallFunction{Name:"fs.read_file", Arguments: fmt.Sprintf(`{"path":"%s"}`, strings.TrimPrefix(target, dir+string(os.PathSeparator)))}},
-                {ID:"b", Type:"function", Function:oai.ToolCallFunction{Name:"echo", Arguments:`{"text":"hi"}`}},
-            }},
-        }} }
-        _ = json.NewEncoder(w).Encode(payload)
-    }))
-    defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		// Return assistant with tool_calls to fs.read_file and echo
+		payload := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{
+				{ID: "a", Type: "function", Function: oai.ToolCallFunction{Name: "fs.read_file", Arguments: fmt.Sprintf(`{"path":"%s"}`, strings.TrimPrefix(target, dir+string(os.PathSeparator)))}},
+				{ID: "b", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: `{"text":"hi"}`}},
+			}},
+		}}}
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
 
-    // Run with CWD at dir so repo-relative path enforcement applies
-    cwd, _ := os.Getwd()
-    defer func() { _ = os.Chdir(cwd) }()
-    if err := os.Chdir(dir); err != nil { t.Fatalf("chdir: %v", err) }
+	// Run with CWD at dir so repo-relative path enforcement applies
+	cwd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(cwd) }()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
 
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: time.Second, httpRetries: 0}
-    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
-    var errBuf bytes.Buffer
-    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
-    // Expect two tool messages appended; fs.read_file returns content, echo returns error unknown tool
-    var gotRead, gotEchoErr bool
-    for _, m := range outMsgs {
-        if m.Role == oai.RoleTool && m.Name == "fs.read_file" {
-            if !strings.Contains(m.Content, "\"content\":\"hello\"") { t.Fatalf("fs.read_file content missing; got %s", m.Content) }
-            gotRead = true
-        }
-        if m.Role == oai.RoleTool && m.Name == "echo" {
-            if !strings.Contains(m.Content, "unknown tool") { t.Fatalf("echo should be unknown under built-ins; got %s", m.Content) }
-            gotEchoErr = true
-        }
-    }
-    if !gotRead || !gotEchoErr { t.Fatalf("expected fs.read_file success and echo unknown error; gotRead=%v gotEchoErr=%v", gotRead, gotEchoErr) }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String())
+	}
+	// Expect two tool messages appended; fs.read_file returns content, echo returns error unknown tool
+	var gotRead, gotEchoErr bool
+	for _, m := range outMsgs {
+		if m.Role == oai.RoleTool && m.Name == "fs.read_file" {
+			if !strings.Contains(m.Content, "\"content\":\"hello\"") {
+				t.Fatalf("fs.read_file content missing; got %s", m.Content)
+			}
+			gotRead = true
+		}
+		if m.Role == oai.RoleTool && m.Name == "echo" {
+			if !strings.Contains(m.Content, "unknown tool") {
+				t.Fatalf("echo should be unknown under built-ins; got %s", m.Content)
+			}
+			gotEchoErr = true
+		}
+	}
+	if !gotRead || !gotEchoErr {
+		t.Fatalf("expected fs.read_file success and echo unknown error; gotRead=%v gotEchoErr=%v", gotRead, gotEchoErr)
+	}
 }
 
 // If -prep-tools-allow-external is enabled, the pre-stage must reuse manifest rules:
@@ -676,216 +774,280 @@ func TestPrep_Builtins_ReadOnlyAndNoExecByDefault(t *testing.T) {
 // - require ./tools/bin/* (Windows .exe honored)
 // - enforce escape/.. rejection and cross-platform path normalization
 func TestPrep_Manifest_ResolvesRelativeAgainstManifestDir(t *testing.T) {
-    // Create nested manifest directory
-    repo := t.TempDir()
-    nested := filepath.Join(repo, "sub", "manifest")
-    if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+	// Create nested manifest directory
+	repo := t.TempDir()
+	nested := filepath.Join(repo, "sub", "manifest")
+	if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
 
-    // Build a tiny tool binary under the manifest's tools/bin
-    src := filepath.Join(repo, "hello_tool.go")
-    if err := os.WriteFile(src, []byte(`package main
+	// Build a tiny tool binary under the manifest's tools/bin
+	src := filepath.Join(repo, "hello_tool.go")
+	if err := os.WriteFile(src, []byte(`package main
 import ("encoding/json"; "io"; "os")
 func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok":true})}
-`), 0o644); err != nil { t.Fatalf("write src: %v", err) }
-    bin := filepath.Join(nested, "tools", "bin", "hello_tool")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
-        t.Fatalf("build tool: %v: %s", err, string(out))
-    }
+`), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	bin := filepath.Join(nested, "tools", "bin", "hello_tool")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
+		t.Fatalf("build tool: %v: %s", err, string(out))
+	}
 
-    // Write manifest that references ./tools/bin/hello_tool relative to the manifest dir
-    manPath := filepath.Join(nested, "tools.json")
-    manifest := map[string]any{
-        "tools": []map[string]any{{
-            "name": "hello_tool",
-            "description": "say ok",
-            "schema": map[string]any{"type":"object","additionalProperties":false},
-            "command": []string{"./tools/bin/hello_tool"},
-            "timeoutSec": 2,
-        }},
-    }
-    b, err := json.Marshal(manifest)
-    if err != nil { t.Fatalf("marshal manifest: %v", err) }
-    if err := os.WriteFile(manPath, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+	// Write manifest that references ./tools/bin/hello_tool relative to the manifest dir
+	manPath := filepath.Join(nested, "tools.json")
+	manifest := map[string]any{
+		"tools": []map[string]any{{
+			"name":        "hello_tool",
+			"description": "say ok",
+			"schema":      map[string]any{"type": "object", "additionalProperties": false},
+			"command":     []string{"./tools/bin/hello_tool"},
+			"timeoutSec":  2,
+		}},
+	}
+	b, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if err := os.WriteFile(manPath, b, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
-    // Fake server returning a tool_calls to hello_tool
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        var req oai.ChatCompletionsRequest
-        _ = json.NewDecoder(r.Body).Decode(&req)
-        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t1", Type:"function", Function:oai.ToolCallFunction{Name:"hello_tool", Arguments:"{}"}}}},
-        }}}
-        _ = json.NewEncoder(w).Encode(resp)
-    }))
-    defer srv.Close()
+	// Fake server returning a tool_calls to hello_tool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req oai.ChatCompletionsRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message:      oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "t1", Type: "function", Function: oai.ToolCallFunction{Name: "hello_tool", Arguments: "{}"}}}},
+		}}}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 3*time.Second, httpRetries: 0, toolsPath: manPath, prepToolsAllowExternal: true}
-    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
-    var errBuf bytes.Buffer
-    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
-    // Expect a tool message from hello_tool with {"ok":true}
-    var found bool
-    for _, m := range outMsgs {
-        if m.Role == oai.RoleTool && m.Name == "hello_tool" {
-            var obj map[string]any
-            _ = json.Unmarshal([]byte(m.Content), &obj)
-            if v, ok := obj["ok"].(bool); ok && v {
-                found = true
-                break
-            }
-        }
-    }
-    if !found { t.Fatalf("expected hello_tool tool output; stderr=%s", errBuf.String()) }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 3 * time.Second, httpRetries: 0, toolsPath: manPath, prepToolsAllowExternal: true}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String())
+	}
+	// Expect a tool message from hello_tool with {"ok":true}
+	var found bool
+	for _, m := range outMsgs {
+		if m.Role == oai.RoleTool && m.Name == "hello_tool" {
+			var obj map[string]any
+			_ = json.Unmarshal([]byte(m.Content), &obj)
+			if v, ok := obj["ok"].(bool); ok && v {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected hello_tool tool output; stderr=%s", errBuf.String())
+	}
 }
 
 func TestPrep_Manifest_RejectsEscapeAndNonToolsBin(t *testing.T) {
-    dir := t.TempDir()
+	dir := t.TempDir()
 
-    // Case 1: escape via .. in command[0]
-    man1 := filepath.Join(dir, "tools_escape.json")
-    m1 := map[string]any{"tools": []map[string]any{{"name":"x","command": []string{"../bin/x"}}}}
-    b1, _ := json.Marshal(m1)
-    if err := os.WriteFile(man1, b1, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+	// Case 1: escape via .. in command[0]
+	man1 := filepath.Join(dir, "tools_escape.json")
+	m1 := map[string]any{"tools": []map[string]any{{"name": "x", "command": []string{"../bin/x"}}}}
+	b1, _ := json.Marshal(m1)
+	if err := os.WriteFile(man1, b1, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t", Type:"function", Function:oai.ToolCallFunction{Name:"x", Arguments:"{}"}}}},
-        }}})
-    }))
-    defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message:      oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "t", Type: "function", Function: oai.ToolCallFunction{Name: "x", Arguments: "{}"}}}},
+		}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: time.Second, httpRetries: 0, toolsPath: man1, prepToolsAllowExternal: true}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}, &errBuf); err == nil {
-        t.Fatalf("expected error due to manifest escape; stderr=%s", errBuf.String())
-    }
-    if !strings.Contains(errBuf.String(), "read manifest") && !strings.Contains(errBuf.String(), "command[0] must not start with '..'") {
-        t.Fatalf("stderr should mention escape rejection; got %s", errBuf.String())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0, toolsPath: man1, prepToolsAllowExternal: true}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}, &errBuf); err == nil {
+		t.Fatalf("expected error due to manifest escape; stderr=%s", errBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "read manifest") && !strings.Contains(errBuf.String(), "command[0] must not start with '..'") {
+		t.Fatalf("stderr should mention escape rejection; got %s", errBuf.String())
+	}
 
-    // Case 2: missing ./tools/bin prefix
-    man2 := filepath.Join(dir, "tools_bad_prefix.json")
-    m2 := map[string]any{"tools": []map[string]any{{"name":"y","command": []string{"bin/y"}}}}
-    b2, _ := json.Marshal(m2)
-    if err := os.WriteFile(man2, b2, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
-    cfg.toolsPath = man2
-    errBuf.Reset()
-    if _, err := runPreStage(cfg, []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}, &errBuf); err == nil {
-        t.Fatalf("expected error due to missing ./tools/bin prefix; stderr=%s", errBuf.String())
-    }
-    if !strings.Contains(errBuf.String(), "relative command[0] must start with ./tools/bin/") {
-        t.Fatalf("stderr should mention ./tools/bin requirement; got %s", errBuf.String())
-    }
+	// Case 2: missing ./tools/bin prefix
+	man2 := filepath.Join(dir, "tools_bad_prefix.json")
+	m2 := map[string]any{"tools": []map[string]any{{"name": "y", "command": []string{"bin/y"}}}}
+	b2, _ := json.Marshal(m2)
+	if err := os.WriteFile(man2, b2, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	cfg.toolsPath = man2
+	errBuf.Reset()
+	if _, err := runPreStage(cfg, []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}, &errBuf); err == nil {
+		t.Fatalf("expected error due to missing ./tools/bin prefix; stderr=%s", errBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "relative command[0] must start with ./tools/bin/") {
+		t.Fatalf("stderr should mention ./tools/bin requirement; got %s", errBuf.String())
+	}
 }
 
 func TestPrep_Manifest_NormalizesWindowsBackslashes(t *testing.T) {
-    // This test uses a manifest command with backslashes; loader should normalize and accept it.
-    repo := t.TempDir()
-    nested := filepath.Join(repo, "nest")
-    if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
+	// This test uses a manifest command with backslashes; loader should normalize and accept it.
+	repo := t.TempDir()
+	nested := filepath.Join(repo, "nest")
+	if err := os.MkdirAll(filepath.Join(nested, "tools", "bin"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
 
-    // Build a tiny tool
-    src := filepath.Join(repo, "ok.go")
-    if err := os.WriteFile(src, []byte(`package main
+	// Build a tiny tool
+	src := filepath.Join(repo, "ok.go")
+	if err := os.WriteFile(src, []byte(`package main
 import ("encoding/json"; "io"; "os")
 func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok":true})}
-`), 0o644); err != nil { t.Fatalf("write src: %v", err) }
-    bin := filepath.Join(nested, "tools", "bin", "ok")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
-        t.Fatalf("build tool: %v: %s", err, string(out))
-    }
+`), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	bin := filepath.Join(nested, "tools", "bin", "ok")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
+		t.Fatalf("build tool: %v: %s", err, string(out))
+	}
 
-    // Use Windows-style path in manifest
-    man := filepath.Join(nested, "tools_backslashes.json")
-    cmd0 := ".\\tools\\bin\\ok"
-    manifest := map[string]any{"tools": []map[string]any{{"name":"ok","command": []string{cmd0}, "schema": map[string]any{"type":"object"}}}}
-    b, _ := json.Marshal(manifest)
-    if err := os.WriteFile(man, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+	// Use Windows-style path in manifest
+	man := filepath.Join(nested, "tools_backslashes.json")
+	cmd0 := ".\\tools\\bin\\ok"
+	manifest := map[string]any{"tools": []map[string]any{{"name": "ok", "command": []string{cmd0}, "schema": map[string]any{"type": "object"}}}}
+	b, _ := json.Marshal(manifest)
+	if err := os.WriteFile(man, b, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t", Type:"function", Function:oai.ToolCallFunction{Name:"ok", Arguments:"{}"}}}},
-        }}})
-    }))
-    defer srv.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message:      oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "t", Type: "function", Function: oai.ToolCallFunction{Name: "ok", Arguments: "{}"}}}},
+		}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt:"x", systemPrompt:"sys", baseURL:srv.URL, model:"m", prepHTTPTimeout: 2*time.Second, httpRetries: 0, toolsPath: man, prepToolsAllowExternal: true}
-    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
-    var errBuf bytes.Buffer
-    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
-    // Expect one tool output
-    var found bool
-    for _, m := range outMsgs { if m.Role == oai.RoleTool && m.Name == "ok" { found = true } }
-    if !found { t.Fatalf("expected ok tool output; stderr=%s", errBuf.String()) }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", prepHTTPTimeout: 2 * time.Second, httpRetries: 0, toolsPath: man, prepToolsAllowExternal: true}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String())
+	}
+	// Expect one tool output
+	var found bool
+	for _, m := range outMsgs {
+		if m.Role == oai.RoleTool && m.Name == "ok" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected ok tool output; stderr=%s", errBuf.String())
+	}
 }
 
 // When -prep-tools-allow-external is set and -prep-tools is provided, the pre-stage
 // must use the pre-stage manifest instead of -tools.
 func TestPrep_UsesPrepToolsWhenProvided(t *testing.T) {
-    repo := t.TempDir()
-    // Build two tiny tools under separate manifest dirs
-    // Tool A under manifest A
-    manADir := filepath.Join(repo, "A")
-    if err := os.MkdirAll(filepath.Join(manADir, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
-    srcA := filepath.Join(repo, "a.go")
-    if err := os.WriteFile(srcA, []byte(`package main
+	repo := t.TempDir()
+	// Build two tiny tools under separate manifest dirs
+	// Tool A under manifest A
+	manADir := filepath.Join(repo, "A")
+	if err := os.MkdirAll(filepath.Join(manADir, "tools", "bin"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	srcA := filepath.Join(repo, "a.go")
+	if err := os.WriteFile(srcA, []byte(`package main
 import ("encoding/json"; "io"; "os")
 func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"which":"A"})}
-`), 0o644); err != nil { t.Fatalf("write srcA: %v", err) }
-    binA := filepath.Join(manADir, "tools", "bin", "which")
-    if runtime.GOOS == "windows" { binA += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", binA, srcA).CombinedOutput(); err != nil { t.Fatalf("build A: %v: %s", err, string(out)) }
-    manA := filepath.Join(manADir, "tools.json")
-    mA := map[string]any{"tools": []map[string]any{{"name":"which","command": []string{"./tools/bin/which"}, "schema": map[string]any{"type":"object"}}}}
-    if b, err := json.Marshal(mA); err != nil { t.Fatalf("marshal A: %v", err) } else if err := os.WriteFile(manA, b, 0o644); err != nil { t.Fatalf("write manA: %v", err) }
+`), 0o644); err != nil {
+		t.Fatalf("write srcA: %v", err)
+	}
+	binA := filepath.Join(manADir, "tools", "bin", "which")
+	if runtime.GOOS == "windows" {
+		binA += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", binA, srcA).CombinedOutput(); err != nil {
+		t.Fatalf("build A: %v: %s", err, string(out))
+	}
+	manA := filepath.Join(manADir, "tools.json")
+	mA := map[string]any{"tools": []map[string]any{{"name": "which", "command": []string{"./tools/bin/which"}, "schema": map[string]any{"type": "object"}}}}
+	if b, err := json.Marshal(mA); err != nil {
+		t.Fatalf("marshal A: %v", err)
+	} else if err := os.WriteFile(manA, b, 0o644); err != nil {
+		t.Fatalf("write manA: %v", err)
+	}
 
-    // Tool B under manifest B
-    manBDir := filepath.Join(repo, "B")
-    if err := os.MkdirAll(filepath.Join(manBDir, "tools", "bin"), 0o755); err != nil { t.Fatalf("mkdir: %v", err) }
-    srcB := filepath.Join(repo, "b.go")
-    if err := os.WriteFile(srcB, []byte(`package main
+	// Tool B under manifest B
+	manBDir := filepath.Join(repo, "B")
+	if err := os.MkdirAll(filepath.Join(manBDir, "tools", "bin"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	srcB := filepath.Join(repo, "b.go")
+	if err := os.WriteFile(srcB, []byte(`package main
 import ("encoding/json"; "io"; "os")
 func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"which":"B"})}
-`), 0o644); err != nil { t.Fatalf("write srcB: %v", err) }
-    binB := filepath.Join(manBDir, "tools", "bin", "which")
-    if runtime.GOOS == "windows" { binB += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", binB, srcB).CombinedOutput(); err != nil { t.Fatalf("build B: %v: %s", err, string(out)) }
-    manB := filepath.Join(manBDir, "tools.json")
-    mB := map[string]any{"tools": []map[string]any{{"name":"which","command": []string{"./tools/bin/which"}, "schema": map[string]any{"type":"object"}}}}
-    if b, err := json.Marshal(mB); err != nil { t.Fatalf("marshal B: %v", err) } else if err := os.WriteFile(manB, b, 0o644); err != nil { t.Fatalf("write manB: %v", err) }
+`), 0o644); err != nil {
+		t.Fatalf("write srcB: %v", err)
+	}
+	binB := filepath.Join(manBDir, "tools", "bin", "which")
+	if runtime.GOOS == "windows" {
+		binB += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", binB, srcB).CombinedOutput(); err != nil {
+		t.Fatalf("build B: %v: %s", err, string(out))
+	}
+	manB := filepath.Join(manBDir, "tools.json")
+	mB := map[string]any{"tools": []map[string]any{{"name": "which", "command": []string{"./tools/bin/which"}, "schema": map[string]any{"type": "object"}}}}
+	if b, err := json.Marshal(mB); err != nil {
+		t.Fatalf("marshal B: %v", err)
+	} else if err := os.WriteFile(manB, b, 0o644); err != nil {
+		t.Fatalf("write manB: %v", err)
+	}
 
-    // Mock model returns a tool_call to function name "which"
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "tool_calls",
-            Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t1", Type:"function", Function:oai.ToolCallFunction{Name:"which", Arguments:"{}"}}}},
-        }}})
-    }))
-    defer srv.Close()
+	// Mock model returns a tool_call to function name "which"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "tool_calls",
+			Message:      oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "t1", Type: "function", Function: oai.ToolCallFunction{Name: "which", Arguments: "{}"}}}},
+		}}})
+	}))
+	defer srv.Close()
 
-    // Provide both -tools and -prep-tools; expect pre-stage to use manB
-    cfg := cliConfig{prompt:"x", systemPrompt:"s", baseURL:srv.URL, model:"m", prepHTTPTimeout: 2*time.Second, httpRetries: 0, toolTimeout: 2*time.Second, debug: true,
-        toolsPath: manA, prepToolsPath: manB, prepToolsAllowExternal: true}
-    msgs := []oai.Message{{Role:oai.RoleSystem, Content:"s"},{Role:oai.RoleUser, Content:"u"}}
-    var errBuf bytes.Buffer
-    outMsgs, err := runPreStage(cfg, msgs, &errBuf)
-    if err != nil { t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String()) }
-    // Find tool output and assert it came from B
-    var which string
-    for _, m := range outMsgs {
-        if m.Role == oai.RoleTool && m.Name == "which" {
-            var obj map[string]any
-            _ = json.Unmarshal([]byte(m.Content), &obj)
-            if s, ok := obj["which"].(string); ok { which = s }
-        }
-    }
-    if which != "B" { t.Fatalf("expected pre-stage to use -prep-tools manifest; got which=%q stderr=%s", which, errBuf.String()) }
+	// Provide both -tools and -prep-tools; expect pre-stage to use manB
+	cfg := cliConfig{prompt: "x", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: 2 * time.Second, httpRetries: 0, toolTimeout: 2 * time.Second, debug: true,
+		toolsPath: manA, prepToolsPath: manB, prepToolsAllowExternal: true}
+	msgs := []oai.Message{{Role: oai.RoleSystem, Content: "s"}, {Role: oai.RoleUser, Content: "u"}}
+	var errBuf bytes.Buffer
+	outMsgs, err := runPreStage(cfg, msgs, &errBuf)
+	if err != nil {
+		t.Fatalf("runPreStage: %v (stderr=%s)", err, errBuf.String())
+	}
+	// Find tool output and assert it came from B
+	var which string
+	for _, m := range outMsgs {
+		if m.Role == oai.RoleTool && m.Name == "which" {
+			var obj map[string]any
+			_ = json.Unmarshal([]byte(m.Content), &obj)
+			if s, ok := obj["which"].(string); ok {
+				which = s
+			}
+		}
+	}
+	if which != "B" {
+		t.Fatalf("expected pre-stage to use -prep-tools manifest; got which=%q stderr=%s", which, errBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/289
@@ -929,214 +1091,270 @@ func TestOneKnobRule_TopPOmitsTemperatureAndWarns(t *testing.T) {
 
 // Channel printing harmonization: default prints only final to stdout; -verbose prints critic/confidence to stderr; -quiet still prints final only
 func TestChannelPrinting_DefaultVerboseQuiet(t *testing.T) {
-    mkServer := func() *httptest.Server {
-        steps := 0
-        return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            var req oai.ChatCompletionsRequest
-            _ = json.NewDecoder(r.Body).Decode(&req)
-            steps++
-            switch steps {
-            case 1:
-                // Return a non-final channel message with content
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
-                }}})
-            default:
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
-                }}})
-            }
-        }))
-    }
+	mkServer := func() *httptest.Server {
+		steps := 0
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req oai.ChatCompletionsRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			steps++
+			switch steps {
+			case 1:
+				// Return a non-final channel message with content
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+					Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
+				}}})
+			default:
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+					Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
+				}}})
+			}
+		}))
+	}
 
-    run := func(args ...string) (string, string, int) {
-        srv := mkServer()
-        defer srv.Close()
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m"}, args...), &outBuf, &errBuf)
-        return outBuf.String(), errBuf.String(), code
-    }
+	run := func(args ...string) (string, string, int) {
+		srv := mkServer()
+		defer srv.Close()
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m"}, args...), &outBuf, &errBuf)
+		return outBuf.String(), errBuf.String(), code
+	}
 
-    // Default: only final to stdout, no critic on stderr
-    out, errS, code := run()
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final only; got %q", strings.TrimSpace(out)) }
-    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under default; got %q", errS) }
+	// Default: only final to stdout, no critic on stderr
+	out, errS, code := run()
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if strings.TrimSpace(out) != "done" {
+		t.Fatalf("stdout should be final only; got %q", strings.TrimSpace(out))
+	}
+	if strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should not include critic under default; got %q", errS)
+	}
 
-    // Verbose: critic to stderr, final to stdout
-    out, errS, code = run("-verbose")
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if !strings.Contains(errS, "c1") { t.Fatalf("stderr should include critic under -verbose; got %q", errS) }
-    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out)) }
+	// Verbose: critic to stderr, final to stdout
+	out, errS, code = run("-verbose")
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if !strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should include critic under -verbose; got %q", errS)
+	}
+	if strings.TrimSpace(out) != "done" {
+		t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out))
+	}
 
-    // Quiet: still prints final to stdout, no critic to stderr
-    out, errS, code = run("-quiet")
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if strings.TrimSpace(out) != "done" { t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out)) }
-    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
+	// Quiet: still prints final to stdout, no critic to stderr
+	out, errS, code = run("-quiet")
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if strings.TrimSpace(out) != "done" {
+		t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out))
+	}
+	if strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should not include critic under -quiet; got %q", errS)
+	}
 }
 
 // FEATURE_CHECKLIST L27: Harmony normalizer — roles validation and channel normalization
 func TestHarmonyNormalizer_RoleValidationAndChannelNormalization(t *testing.T) {
-    // Unknown role should cause pre-stage to fail before HTTP call
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        t.Fatalf("server should not be called when role is invalid")
-    }))
-    defer srv.Close()
-    cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
-    // Inject initMessages to include an invalid role
-    cfg.initMessages = []oai.Message{{Role: "System ", Content: "s"}, {Role: "User", Content: "u"}, {Role: "DEVELOPER", Content: "d"}, {Role: "assistant", Channel: "Critic!", Content: "c"}, {Role: "weird", Content: "x"}}
-    var errBuf bytes.Buffer
-    if _, err := runPreStage(cfg, cfg.initMessages, &errBuf); err == nil {
-        t.Fatalf("expected error for invalid role; stderr=%q", errBuf.String())
-    }
+	// Unknown role should cause pre-stage to fail before HTTP call
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("server should not be called when role is invalid")
+	}))
+	defer srv.Close()
+	cfg := cliConfig{prompt: "u", systemPrompt: "s", baseURL: srv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+	// Inject initMessages to include an invalid role
+	cfg.initMessages = []oai.Message{{Role: "System ", Content: "s"}, {Role: "User", Content: "u"}, {Role: "DEVELOPER", Content: "d"}, {Role: "assistant", Channel: "Critic!", Content: "c"}, {Role: "weird", Content: "x"}}
+	var errBuf bytes.Buffer
+	if _, err := runPreStage(cfg, cfg.initMessages, &errBuf); err == nil {
+		t.Fatalf("expected error for invalid role; stderr=%q", errBuf.String())
+	}
 
-    // Valid roles with messy casing/whitespace should normalize; assistant channel cleaned
-    steps := 0
-    okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        steps++
-        var req oai.ChatCompletionsRequest
-        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { t.Fatalf("decode: %v", err) }
-        if len(req.Messages) < 4 {
-            t.Fatalf("expected at least 4 normalized messages; got %d", len(req.Messages))
-        }
-        if req.Messages[0].Role != oai.RoleSystem { t.Fatalf("role[0]=%q want system", req.Messages[0].Role) }
-        if req.Messages[1].Role != oai.RoleDeveloper { t.Fatalf("role[1]=%q want developer", req.Messages[1].Role) }
-        if req.Messages[2].Role != oai.RoleUser { t.Fatalf("role[2]=%q want user", req.Messages[2].Role) }
-        if req.Messages[3].Role != oai.RoleAssistant { t.Fatalf("role[3]=%q want assistant", req.Messages[3].Role) }
-        if req.Messages[3].Channel != "critic" { t.Fatalf("assistant channel normalized=%q want 'critic'", req.Messages[3].Channel) }
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer okSrv.Close()
-    cfg2 := cliConfig{prompt: "u", systemPrompt: "s", baseURL: okSrv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
-    msgs := []oai.Message{{Role: " System\t", Content: "s"}, {Role: "DEVELOPER ", Content: "d"}, {Role: " user", Content: "u"}, {Role: "assistant", Channel: " Critic!!! ", Content: "c"}}
-    var buf bytes.Buffer
-    if _, err := runPreStage(cfg2, msgs, &buf); err != nil {
-        t.Fatalf("unexpected error: %v stderr=%q", err, buf.String())
-    }
+	// Valid roles with messy casing/whitespace should normalize; assistant channel cleaned
+	steps := 0
+	okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		steps++
+		var req oai.ChatCompletionsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(req.Messages) < 4 {
+			t.Fatalf("expected at least 4 normalized messages; got %d", len(req.Messages))
+		}
+		if req.Messages[0].Role != oai.RoleSystem {
+			t.Fatalf("role[0]=%q want system", req.Messages[0].Role)
+		}
+		if req.Messages[1].Role != oai.RoleDeveloper {
+			t.Fatalf("role[1]=%q want developer", req.Messages[1].Role)
+		}
+		if req.Messages[2].Role != oai.RoleUser {
+			t.Fatalf("role[2]=%q want user", req.Messages[2].Role)
+		}
+		if req.Messages[3].Role != oai.RoleAssistant {
+			t.Fatalf("role[3]=%q want assistant", req.Messages[3].Role)
+		}
+		if req.Messages[3].Channel != "critic" {
+			t.Fatalf("assistant channel normalized=%q want 'critic'", req.Messages[3].Channel)
+		}
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer okSrv.Close()
+	cfg2 := cliConfig{prompt: "u", systemPrompt: "s", baseURL: okSrv.URL, model: "m", prepHTTPTimeout: time.Second, httpRetries: 0}
+	msgs := []oai.Message{{Role: " System\t", Content: "s"}, {Role: "DEVELOPER ", Content: "d"}, {Role: " user", Content: "u"}, {Role: "assistant", Channel: " Critic!!! ", Content: "c"}}
+	var buf bytes.Buffer
+	if _, err := runPreStage(cfg2, msgs, &buf); err != nil {
+		t.Fatalf("unexpected error: %v stderr=%q", err, buf.String())
+	}
 }
 
 // FEATURE_CHECKLIST L24: Custom channel routing via -channel-route name=stdout|stderr|omit
 func TestChannelRoute_FlagParsingAndRouting(t *testing.T) {
-    // Invalid channel name
-    {
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain([]string{"-prompt", "x", "-channel-route", "unknown=stdout"}, &outBuf, &errBuf)
-        if code == 0 {
-            t.Fatalf("expected non-zero exit for invalid channel; stderr=%s", errBuf.String())
-        }
-        if !strings.Contains(errBuf.String(), "invalid -channel-route channel") {
-            t.Fatalf("expected invalid channel error; got %q", errBuf.String())
-        }
-    }
+	// Invalid channel name
+	{
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain([]string{"-prompt", "x", "-channel-route", "unknown=stdout"}, &outBuf, &errBuf)
+		if code == 0 {
+			t.Fatalf("expected non-zero exit for invalid channel; stderr=%s", errBuf.String())
+		}
+		if !strings.Contains(errBuf.String(), "invalid -channel-route channel") {
+			t.Fatalf("expected invalid channel error; got %q", errBuf.String())
+		}
+	}
 
-    // Invalid destination
-    {
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain([]string{"-prompt", "x", "-channel-route", "critic=somewhere"}, &outBuf, &errBuf)
-        if code == 0 {
-            t.Fatalf("expected non-zero exit for invalid destination; stderr=%s", errBuf.String())
-        }
-        if !strings.Contains(errBuf.String(), "invalid -channel-route destination") {
-            t.Fatalf("expected invalid destination error; got %q", errBuf.String())
-        }
-    }
+	// Invalid destination
+	{
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain([]string{"-prompt", "x", "-channel-route", "critic=somewhere"}, &outBuf, &errBuf)
+		if code == 0 {
+			t.Fatalf("expected non-zero exit for invalid destination; stderr=%s", errBuf.String())
+		}
+		if !strings.Contains(errBuf.String(), "invalid -channel-route destination") {
+			t.Fatalf("expected invalid destination error; got %q", errBuf.String())
+		}
+	}
 
-    // Routing behavior: route critic to stdout, final to stderr, and omit confidence
-    {
-        steps := 0
-        srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            steps++
-            switch steps {
-            case 1:
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
-                }}})
-            case 2:
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "confidence", Content: "p=0.9"},
-                }}})
-            default:
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                    Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
-                }}})
-            }
-        }))
-        defer srv.Close()
+	// Routing behavior: route critic to stdout, final to stderr, and omit confidence
+	{
+		steps := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			steps++
+			switch steps {
+			case 1:
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+					Message: oai.Message{Role: oai.RoleAssistant, Channel: "critic", Content: "c1"},
+				}}})
+			case 2:
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+					Message: oai.Message{Role: oai.RoleAssistant, Channel: "confidence", Content: "p=0.9"},
+				}}})
+			default:
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+					Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "done"},
+				}}})
+			}
+		}))
+		defer srv.Close()
 
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-channel-route", "critic=stdout", "-channel-route", "final=stderr", "-channel-route", "confidence=omit", "-verbose"}, &outBuf, &errBuf)
-        if code != 0 {
-            t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-        }
-        // critic goes to stdout under routing
-        if !strings.Contains(outBuf.String(), "c1") {
-            t.Fatalf("stdout should include critic due to routing; got %q", outBuf.String())
-        }
-        // final goes to stderr under routing
-        if !strings.Contains(errBuf.String(), "done") {
-            t.Fatalf("stderr should include final due to routing; got %q", errBuf.String())
-        }
-        // confidence omitted entirely
-        if strings.Contains(outBuf.String(), "p=0.9") || strings.Contains(errBuf.String(), "p=0.9") {
-            t.Fatalf("confidence should be omitted by routing")
-        }
-    }
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-channel-route", "critic=stdout", "-channel-route", "final=stderr", "-channel-route", "confidence=omit", "-verbose"}, &outBuf, &errBuf)
+		if code != 0 {
+			t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+		}
+		// critic goes to stdout under routing
+		if !strings.Contains(outBuf.String(), "c1") {
+			t.Fatalf("stdout should include critic due to routing; got %q", outBuf.String())
+		}
+		// final goes to stderr under routing
+		if !strings.Contains(errBuf.String(), "done") {
+			t.Fatalf("stderr should include final due to routing; got %q", errBuf.String())
+		}
+		// confidence omitted entirely
+		if strings.Contains(outBuf.String(), "p=0.9") || strings.Contains(errBuf.String(), "p=0.9") {
+			t.Fatalf("confidence should be omitted by routing")
+		}
+	}
 }
 
 // FEATURE_CHECKLIST L22: Streaming for assistant[final]. If server supports streaming,
 // stream only assistant{channel:"final"} to stdout; buffer other channels for -verbose.
 // -quiet still prints just the streamed final.
 func TestStreaming_FinalChannelOnly_WithVerboseBuffersNonFinal(t *testing.T) {
-    // SSE server that streams when req.Stream is true; otherwise returns minimal JSON
-    mkServer := func() *httptest.Server {
-        return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            var req oai.ChatCompletionsRequest
-            if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                t.Fatalf("bad json: %v", err)
-            }
-            if !req.Stream {
-                _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: ""}}}})
-                return
-            }
-            w.Header().Set("Content-Type", "text/event-stream")
-            flusher, _ := w.(http.Flusher)
-            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"critic\",\"content\":\"c1\"}}]}\n\n")
-            if flusher != nil { flusher.Flush() }
-            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"final\",\"content\":\"he\"}}]}\n\n")
-            if flusher != nil { flusher.Flush() }
-            _, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"llo\"}}]}\n\n")
-            if flusher != nil { flusher.Flush() }
-            _, _ = io.WriteString(w, "data: [DONE]\n\n")
-            if flusher != nil { flusher.Flush() }
-        }))
-    }
+	// SSE server that streams when req.Stream is true; otherwise returns minimal JSON
+	mkServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req oai.ChatCompletionsRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("bad json: %v", err)
+			}
+			if !req.Stream {
+				_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: ""}}}})
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			flusher, _ := w.(http.Flusher)
+			_, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"critic\",\"content\":\"c1\"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			_, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"channel\":\"final\",\"content\":\"he\"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			_, _ = io.WriteString(w, "data: {\"id\":\"s1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"llo\"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			_, _ = io.WriteString(w, "data: [DONE]\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}))
+	}
 
-    run := func(args ...string) (string, string, int) {
-        srv := mkServer()
-        defer srv.Close()
-        var outBuf, errBuf bytes.Buffer
-        code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-stream-final"}, args...), &outBuf, &errBuf)
-        return outBuf.String(), errBuf.String(), code
-    }
+	run := func(args ...string) (string, string, int) {
+		srv := mkServer()
+		defer srv.Close()
+		var outBuf, errBuf bytes.Buffer
+		code := cliMain(append([]string{"-prompt", "x", "-base-url", srv.URL, "-model", "m", "-prep-enabled=false", "-stream-final"}, args...), &outBuf, &errBuf)
+		return outBuf.String(), errBuf.String(), code
+	}
 
-    // Default: only final streamed to stdout; critic buffered and not printed
-    out, errS, code := run()
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be streamed final only; got %q", strings.TrimSpace(out)) }
-    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under default; got %q", errS) }
+	// Default: only final streamed to stdout; critic buffered and not printed
+	out, errS, code := run()
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if strings.TrimSpace(out) != "hello" {
+		t.Fatalf("stdout should be streamed final only; got %q", strings.TrimSpace(out))
+	}
+	if strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should not include critic under default; got %q", errS)
+	}
 
-    // Verbose: critic printed to stderr after stream completes; final to stdout
-    out, errS, code = run("-verbose")
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out)) }
-    if !strings.Contains(errS, "c1") { t.Fatalf("stderr should include critic under -verbose; got %q", errS) }
+	// Verbose: critic printed to stderr after stream completes; final to stdout
+	out, errS, code = run("-verbose")
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if strings.TrimSpace(out) != "hello" {
+		t.Fatalf("stdout should be final; got %q", strings.TrimSpace(out))
+	}
+	if !strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should include critic under -verbose; got %q", errS)
+	}
 
-    // Quiet: still prints final to stdout; no critic to stderr
-    out, errS, code = run("-quiet")
-    if code != 0 { t.Fatalf("exit=%d stderr=%s", code, errS) }
-    if strings.TrimSpace(out) != "hello" { t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out)) }
-    if strings.Contains(errS, "c1") { t.Fatalf("stderr should not include critic under -quiet; got %q", errS) }
+	// Quiet: still prints final to stdout; no critic to stderr
+	out, errS, code = run("-quiet")
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errS)
+	}
+	if strings.TrimSpace(out) != "hello" {
+		t.Fatalf("stdout should be final under -quiet; got %q", strings.TrimSpace(out))
+	}
+	if strings.Contains(errS, "c1") {
+		t.Fatalf("stderr should not include critic under -quiet; got %q", errS)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/285
@@ -1245,39 +1463,39 @@ func TestHelp_PrintsUsageAndExitsZero(t *testing.T) {
 // clear "needs human review" message and a non-zero exit. The loop should
 // perform exactly cfg.maxSteps HTTP calls in this case.
 func TestAgentLoop_MaxStepsCap_HumanReviewMessage(t *testing.T) {
-    var calls int
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        calls++
-        // Return an assistant message with empty content and no tool_calls
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "stop",
-            Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
-        }}})
-    }))
-    defer srv.Close()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		// Return an assistant message with empty content and no tool_calls
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "stop",
+			Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+		}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       "x",
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "m",
-        maxSteps:     3,
-        httpTimeout:  2 * time.Second,
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-    }
+	cfg := cliConfig{
+		prompt:       "x",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "m",
+		maxSteps:     3,
+		httpTimeout:  2 * time.Second,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code == 0 {
-        t.Fatalf("expected non-zero exit when step cap is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
-    }
-    if calls != 3 {
-        t.Fatalf("expected exactly 3 HTTP calls (one per step), got %d", calls)
-    }
-    if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
-        t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit when step cap is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+	if calls != 3 {
+		t.Fatalf("expected exactly 3 HTTP calls (one per step), got %d", calls)
+	}
+	if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
+		t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/350
@@ -1285,38 +1503,38 @@ func TestAgentLoop_MaxStepsCap_HumanReviewMessage(t *testing.T) {
 // Verify that with an excessively large maxSteps, we perform exactly 15 calls and
 // emit the human review message.
 func TestAgentLoop_HardCeilingOf15(t *testing.T) {
-    var calls int
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        calls++
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "stop",
-            Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
-        }}})
-    }))
-    defer srv.Close()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "stop",
+			Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+		}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       "x",
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "m",
-        maxSteps:     100, // should be clamped to 15
-        httpTimeout:  2 * time.Second,
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-    }
+	cfg := cliConfig{
+		prompt:       "x",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "m",
+		maxSteps:     100, // should be clamped to 15
+		httpTimeout:  2 * time.Second,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code == 0 {
-        t.Fatalf("expected non-zero exit when hard ceiling is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
-    }
-    if calls != 15 {
-        t.Fatalf("expected exactly 15 HTTP calls due to hard ceiling; got %d", calls)
-    }
-    if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
-        t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit when hard ceiling is reached; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+	if calls != 15 {
+		t.Fatalf("expected exactly 15 HTTP calls due to hard ceiling; got %d", calls)
+	}
+	if !strings.Contains(strings.ToLower(errBuf.String()), "needs human review") {
+		t.Fatalf("stderr must contain 'needs human review'; got: %q", errBuf.String())
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/262
@@ -1393,20 +1611,20 @@ func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
 	}
 	// Validate JSON contains fields and sources
 	got := outBuf.String()
-    for _, substr := range []string{
+	for _, substr := range []string{
 		"\"model\": \"m\"",
 		"\"baseURL\": \"http://example\"",
 		"\"httpTimeout\": \"100ms\"",
 		"\"httpTimeoutSource\": \"env\"",
-        "\"prepHTTPTimeout\": ",
-        "\"prepHTTPTimeoutSource\": ",
-        "\"prep\": ",
-        "\"enabled\": ",
+		"\"prepHTTPTimeout\": ",
+		"\"prepHTTPTimeoutSource\": ",
+		"\"prep\": ",
+		"\"enabled\": ",
 		"\"toolTimeout\": ",
 		"\"timeout\": ",
 		"\"timeoutSource\": ",
-        "\"httpRetries\": ",
-        "\"httpRetryBackoff\": ",
+		"\"httpRetries\": ",
+		"\"httpRetryBackoff\": ",
 	} {
 		if !strings.Contains(got, substr) {
 			t.Fatalf("print-config missing %q; got:\n%s", substr, got)
@@ -1415,67 +1633,75 @@ func TestPrintConfig_EmitsResolvedConfigJSONAndExitsZero(t *testing.T) {
 }
 
 func TestPrepOverrides_Precedence_FlagThenEnvThenInherit(t *testing.T) {
-    t.Setenv("OAI_PREP_MODEL", "env-model")
-    t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
-    t.Setenv("OAI_PREP_API_KEY", "env-key")
-    t.Setenv("OAI_PREP_HTTP_RETRIES", "5")
-    t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "750ms")
+	t.Setenv("OAI_PREP_MODEL", "env-model")
+	t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
+	t.Setenv("OAI_PREP_API_KEY", "env-key")
+	t.Setenv("OAI_PREP_HTTP_RETRIES", "5")
+	t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "750ms")
 
-    orig := os.Args
-    defer func(){ os.Args = orig }()
-    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base", "-api-key", "k",
-        "-prep-model", "flag-model", "-prep-base-url", "http://flag-base", "-prep-api-key", "flag-key",
-        "-prep-http-retries", "7", "-prep-http-retry-backoff", "900ms"}
+	orig := os.Args
+	defer func() { os.Args = orig }()
+	os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base", "-api-key", "k",
+		"-prep-model", "flag-model", "-prep-base-url", "http://flag-base", "-prep-api-key", "flag-key",
+		"-prep-http-retries", "7", "-prep-http-retry-backoff", "900ms"}
 
-    cfg, code := parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
 
-    var out bytes.Buffer
-    if exit := printResolvedConfig(cfg, &out); exit != 0 { t.Fatalf("exit %d", exit) }
-    got := out.String()
-    for _, want := range []string{
-        "\"prep\": ",
-        "\"model\": \"flag-model\"",
-        "\"baseURL\": \"http://flag-base\"",
-        "\"apiKeyPresent\": true",
-        "\"httpRetries\": 7",
-        "\"httpRetryBackoff\": \"900ms\"",
-    } {
-        if !strings.Contains(got, want) {
-            t.Fatalf("print-config missing %q; got:\n%s", want, got)
-        }
-    }
+	var out bytes.Buffer
+	if exit := printResolvedConfig(cfg, &out); exit != 0 {
+		t.Fatalf("exit %d", exit)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"\"prep\": ",
+		"\"model\": \"flag-model\"",
+		"\"baseURL\": \"http://flag-base\"",
+		"\"apiKeyPresent\": true",
+		"\"httpRetries\": 7",
+		"\"httpRetryBackoff\": \"900ms\"",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("print-config missing %q; got:\n%s", want, got)
+		}
+	}
 }
 
 func TestPrepOverrides_EnvWhenNoFlags(t *testing.T) {
-    t.Setenv("OAI_PREP_MODEL", "env-model")
-    t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
-    t.Setenv("OAI_PREP_API_KEY", "env-key")
-    t.Setenv("OAI_PREP_HTTP_RETRIES", "4")
-    t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "550ms")
+	t.Setenv("OAI_PREP_MODEL", "env-model")
+	t.Setenv("OAI_PREP_BASE_URL", "http://env-base")
+	t.Setenv("OAI_PREP_API_KEY", "env-key")
+	t.Setenv("OAI_PREP_HTTP_RETRIES", "4")
+	t.Setenv("OAI_PREP_HTTP_RETRY_BACKOFF", "550ms")
 
-    orig := os.Args
-    defer func(){ os.Args = orig }()
-    os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base"}
-    cfg, code := parseFlags()
-    if code != 0 { t.Fatalf("parse exit: %d", code) }
-    var out bytes.Buffer
-    if exit := printResolvedConfig(cfg, &out); exit != 0 { t.Fatalf("exit %d", exit) }
-    got := out.String()
-    for _, want := range []string{
-        "\"prep\": ",
-        "\"modelSource\": \"env\"",
-        "\"baseURLSource\": \"env\"",
-        "\"apiKeySource\": \"env:OAI_PREP_API_KEY\"",
-        "\"httpRetriesSource\": \"env\"",
-        "\"httpRetryBackoffSource\": \"env\"",
-        "\"httpRetries\": 4",
-        "\"httpRetryBackoff\": \"550ms\"",
-    } {
-        if !strings.Contains(got, want) {
-            t.Fatalf("print-config missing %q; got:\n%s", want, got)
-        }
-    }
+	orig := os.Args
+	defer func() { os.Args = orig }()
+	os.Args = []string{"agentcli.test", "-print-config", "-model", "m", "-base-url", "http://base"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parse exit: %d", code)
+	}
+	var out bytes.Buffer
+	if exit := printResolvedConfig(cfg, &out); exit != 0 {
+		t.Fatalf("exit %d", exit)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"\"prep\": ",
+		"\"modelSource\": \"env\"",
+		"\"baseURLSource\": \"env\"",
+		"\"apiKeySource\": \"env:OAI_PREP_API_KEY\"",
+		"\"httpRetriesSource\": \"env\"",
+		"\"httpRetryBackoffSource\": \"env\"",
+		"\"httpRetries\": 4",
+		"\"httpRetryBackoff\": \"550ms\"",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("print-config missing %q; got:\n%s", want, got)
+		}
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/1
@@ -1828,7 +2054,7 @@ func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
 	// Use flags so sources are "flag"
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
-    os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "4s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
+	os.Args = []string{"agentcli.test", "-prompt", "x", "-http-timeout", "5s", "-prep-http-timeout", "4s", "-tool-timeout", "7s", "-timeout", "10s", "-base-url", srv.URL, "-model", "m"}
 	cfg, code := parseFlags()
 	if code != 0 {
 		t.Fatalf("parse exit: %d", code)
@@ -1841,7 +2067,7 @@ func TestDebug_EffectiveTimeoutsAndSources(t *testing.T) {
 		t.Fatalf("expected exit code 0; stderr=%s", errBuf.String())
 	}
 	got := errBuf.String()
-    if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; prep-http-timeout=4s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
+	if !strings.Contains(got, "effective timeouts: http-timeout=5s source=flag; prep-http-timeout=4s source=flag; tool-timeout=7s source=flag; timeout=10s source=flag") {
 		t.Fatalf("missing effective timeouts line; got:\n%s", got)
 	}
 }
@@ -2185,47 +2411,47 @@ func TestHTTPTimeout_NotClampedByGlobal(t *testing.T) {
 // https://github.com/hyperifyio/goagent/issues/318
 // When completionCap defaults to 0, request must omit max_tokens entirely.
 func TestRequest_OmitsMaxTokensWhenCapZero(t *testing.T) {
-    var captured []byte
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        b, err := io.ReadAll(r.Body)
-        if err != nil {
-            t.Fatalf("read body: %v", err)
-        }
-        captured = append([]byte(nil), b...)
-        // Respond with a minimal valid assistant message to terminate
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-            }},
-        }
-        if err := json.NewEncoder(w).Encode(resp); err != nil {
-            t.Fatalf("encode resp: %v", err)
-        }
-    }))
-    defer srv.Close()
+	var captured []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		captured = append([]byte(nil), b...)
+		// Respond with a minimal valid assistant message to terminate
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       "x",
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "m",
-        maxSteps:     1,
-        httpTimeout:  2 * time.Second,
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-    }
+	cfg := cliConfig{
+		prompt:       "x",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "m",
+		maxSteps:     1,
+		httpTimeout:  2 * time.Second,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if len(captured) == 0 {
-        t.Fatalf("no request captured")
-    }
-    if strings.Contains(string(captured), "\"max_tokens\"") {
-        t.Fatalf("request must omit max_tokens when completionCap=0; got body: %s", string(captured))
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if len(captured) == 0 {
+		t.Fatalf("no request captured")
+	}
+	if strings.Contains(string(captured), "\"max_tokens\"") {
+		t.Fatalf("request must omit max_tokens when completionCap=0; got body: %s", string(captured))
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/318
@@ -2233,262 +2459,264 @@ func TestRequest_OmitsMaxTokensWhenCapZero(t *testing.T) {
 // exactly one in-step retry with a completion cap of at least 256 tokens by
 // setting max_tokens=256 on the retry while omitting it on the first attempt.
 func TestLengthBackoff_OneRetrySetsMaxTokens256(t *testing.T) {
-    // Capture bodies of successive requests
-    var bodies [][]byte
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        b, err := io.ReadAll(r.Body)
-        if err != nil {
-            t.Fatalf("read body: %v", err)
-        }
-        bodies = append(bodies, append([]byte(nil), b...))
-        // Respond with length on first call, stop on second
-        if len(bodies) == 1 {
-            resp := oai.ChatCompletionsResponse{
-                Choices: []oai.ChatCompletionsResponseChoice{{
-                    FinishReason: "length",
-                    Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
-                }},
-            }
-            if err := json.NewEncoder(w).Encode(resp); err != nil {
-                t.Fatalf("encode resp1: %v", err)
-            }
-            return
-        }
-        // Second call returns final content
-        resp := oai.ChatCompletionsResponse{
-            Choices: []oai.ChatCompletionsResponseChoice{{
-                FinishReason: "stop",
-                Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
-            }},
-        }
-        if err := json.NewEncoder(w).Encode(resp); err != nil {
-            t.Fatalf("encode resp2: %v", err)
-        }
-    }))
-    defer srv.Close()
+	// Capture bodies of successive requests
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		bodies = append(bodies, append([]byte(nil), b...))
+		// Respond with length on first call, stop on second
+		if len(bodies) == 1 {
+			resp := oai.ChatCompletionsResponse{
+				Choices: []oai.ChatCompletionsResponseChoice{{
+					FinishReason: "length",
+					Message:      oai.Message{Role: oai.RoleAssistant, Content: ""},
+				}},
+			}
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode resp1: %v", err)
+			}
+			return
+		}
+		// Second call returns final content
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				FinishReason: "stop",
+				Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
+			}},
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp2: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       "x",
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "m",
-        maxSteps:     1,
-        httpTimeout:  2 * time.Second,
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-        debug:        false,
-    }
+	cfg := cliConfig{
+		prompt:       "x",
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "m",
+		maxSteps:     1,
+		httpTimeout:  2 * time.Second,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+		debug:        false,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "done" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
-    if len(bodies) != 2 {
-        t.Fatalf("expected two requests (initial + retry), got %d", len(bodies))
-    }
-    // First body must omit max_tokens
-    if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
-        t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
-    }
-    // Second body must include max_tokens:256
-    if !strings.Contains(string(bodies[1]), "\"max_tokens\":256") {
-        t.Fatalf("second attempt must include max_tokens=256; body=%s", string(bodies[1]))
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "done" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected two requests (initial + retry), got %d", len(bodies))
+	}
+	// First body must omit max_tokens
+	if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
+		t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
+	}
+	// Second body must include max_tokens:256
+	if !strings.Contains(string(bodies[1]), "\"max_tokens\":256") {
+		t.Fatalf("second attempt must include max_tokens=256; body=%s", string(bodies[1]))
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/318
 // On length backoff, the completion cap must be clamped to the remaining
 // context so that max_tokens does not exceed window - estimated_prompt - margin.
 func TestLengthBackoff_ClampDoesNotExceedWindow(t *testing.T) {
-    // Build a prompt large enough that remaining context < 256 for oss-gpt-20b (8192 window).
-    // We will set model to oss-gpt-20b so ContextWindowForModel returns 8192.
-    // Choose a prompt size that forces remaining context < 256 for window=8192.
-    // Roughly EstimateTokens ~= ceil(len/4) + overhead; len=40000 -> ~10000 tokens.
-    large := strings.Repeat("x", 40000)
+	// Build a prompt large enough that remaining context < 256 for oss-gpt-20b (8192 window).
+	// We will set model to oss-gpt-20b so ContextWindowForModel returns 8192.
+	// Choose a prompt size that forces remaining context < 256 for window=8192.
+	// Roughly EstimateTokens ~= ceil(len/4) + overhead; len=40000 -> ~10000 tokens.
+	large := strings.Repeat("x", 40000)
 
-    // Capture bodies to inspect max_tokens of the retry
-    var bodies [][]byte
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        b, err := io.ReadAll(r.Body)
-        if err != nil {
-            t.Fatalf("read body: %v", err)
-        }
-        bodies = append(bodies, append([]byte(nil), b...))
-        // First call yields finish_reason==length to trigger the retry
-        if len(bodies) == 1 {
-            resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}}
-            if err := json.NewEncoder(w).Encode(resp); err != nil {
-                t.Fatalf("encode resp1: %v", err)
-            }
-            return
-        }
-        // Second call returns stop to finish
-        resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}}
-        if err := json.NewEncoder(w).Encode(resp); err != nil {
-            t.Fatalf("encode resp2: %v", err)
-        }
-    }))
-    defer srv.Close()
+	// Capture bodies to inspect max_tokens of the retry
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		bodies = append(bodies, append([]byte(nil), b...))
+		// First call yields finish_reason==length to trigger the retry
+		if len(bodies) == 1 {
+			resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}}
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode resp1: %v", err)
+			}
+			return
+		}
+		// Second call returns stop to finish
+		resp := oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode resp2: %v", err)
+		}
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{
-        prompt:       large,
-        systemPrompt: "sys",
-        baseURL:      srv.URL,
-        model:        "oss-gpt-20b",
-        maxSteps:     1,
-        httpTimeout:  2 * time.Second,
-        toolTimeout:  1 * time.Second,
-        temperature:  0,
-        debug:        false,
-    }
+	cfg := cliConfig{
+		prompt:       large,
+		systemPrompt: "sys",
+		baseURL:      srv.URL,
+		model:        "oss-gpt-20b",
+		maxSteps:     1,
+		httpTimeout:  2 * time.Second,
+		toolTimeout:  1 * time.Second,
+		temperature:  0,
+		debug:        false,
+	}
 
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
-    if len(bodies) != 2 {
-        t.Fatalf("expected two requests, got %d", len(bodies))
-    }
-    // First body must omit max_tokens
-    if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
-        t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
-    }
-    // Second body must include max_tokens and it must be less than or equal to remaining.
-    // Compute an upper bound by parsing the JSON to extract max_tokens.
-    var payload map[string]any
-    if err := json.Unmarshal(bodies[1], &payload); err != nil {
-        t.Fatalf("unmarshal second body: %v", err)
-    }
-    v, ok := payload["max_tokens"].(float64)
-    if !ok {
-        t.Fatalf("second body missing max_tokens; body=%s", string(bodies[1]))
-    }
-    gotCap := int(v)
-    if gotCap <= 0 {
-        t.Fatalf("clamped cap must be > 0; got %d", gotCap)
-    }
-    // Sanity: clamped value must be strictly less than 256 for our large prompt.
-    if gotCap >= 256 {
-        t.Fatalf("clamp failed: expected retry cap < 256 due to large prompt; got %d", gotCap)
-    }
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected two requests, got %d", len(bodies))
+	}
+	// First body must omit max_tokens
+	if strings.Contains(string(bodies[0]), "\"max_tokens\"") {
+		t.Fatalf("first attempt must omit max_tokens; body=%s", string(bodies[0]))
+	}
+	// Second body must include max_tokens and it must be less than or equal to remaining.
+	// Compute an upper bound by parsing the JSON to extract max_tokens.
+	var payload map[string]any
+	if err := json.Unmarshal(bodies[1], &payload); err != nil {
+		t.Fatalf("unmarshal second body: %v", err)
+	}
+	v, ok := payload["max_tokens"].(float64)
+	if !ok {
+		t.Fatalf("second body missing max_tokens; body=%s", string(bodies[1]))
+	}
+	gotCap := int(v)
+	if gotCap <= 0 {
+		t.Fatalf("clamped cap must be > 0; got %d", gotCap)
+	}
+	// Sanity: clamped value must be strictly less than 256 for our large prompt.
+	if gotCap >= 256 {
+		t.Fatalf("clamp failed: expected retry cap < 256 due to large prompt; got %d", gotCap)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/318
 // On length backoff, an NDJSON audit line with event=="length_backoff" must be
 // written under the repository root's .goagent/audit with expected fields.
 func TestLengthBackoff_AuditEmitted(t *testing.T) {
-    // Clean audit dir at repo root
-    root := testFindRepoRoot(t)
-    _ = os.RemoveAll(filepath.Join(root, ".goagent"))
+	// Clean audit dir at repo root
+	root := testFindRepoRoot(t)
+	_ = os.RemoveAll(filepath.Join(root, ".goagent"))
 
-    // Minimal two-attempt server to trigger length backoff
-    var calls int
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        calls++
-        if calls == 1 {
-            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
-            return
-        }
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	// Minimal two-attempt server to trigger length backoff
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "stop", Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "oss-gpt-20b", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
 
-    // Locate today's audit file under repo root and read it
-    auditDir := filepath.Join(root, ".goagent", "audit")
-    logFile := waitForAuditFile(t, auditDir, 2*time.Second)
-    data, err := os.ReadFile(logFile)
-    if err != nil {
-        t.Fatalf("read audit: %v", err)
-    }
-    s := string(data)
-    if !strings.Contains(s, "\"event\":\"length_backoff\"") {
-        t.Fatalf("missing length_backoff event; got:\n%s", truncate(s, 1000))
-    }
-    // Basic field presence checks
-    if !strings.Contains(s, "\"model\":\"") || !strings.Contains(s, "\"prev_cap\":") || !strings.Contains(s, "\"new_cap\":") || !strings.Contains(s, "\"window\":") || !strings.Contains(s, "\"estimated_prompt_tokens\":") {
-        t.Fatalf("missing expected fields in length_backoff audit; got:\n%s", truncate(s, 1000))
-    }
+	// Locate today's audit file under repo root and read it
+	auditDir := filepath.Join(root, ".goagent", "audit")
+	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read audit: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, "\"event\":\"length_backoff\"") {
+		t.Fatalf("missing length_backoff event; got:\n%s", truncate(s, 1000))
+	}
+	// Basic field presence checks
+	if !strings.Contains(s, "\"model\":\"") || !strings.Contains(s, "\"prev_cap\":") || !strings.Contains(s, "\"new_cap\":") || !strings.Contains(s, "\"window\":") || !strings.Contains(s, "\"estimated_prompt_tokens\":") {
+		t.Fatalf("missing expected fields in length_backoff audit; got:\n%s", truncate(s, 1000))
+	}
 }
 
 // FEATURE_CHECKLIST L8
 // Audit for pre-stage must include stage:"prep" and idempotency_key on http_timing/attempt.
 func TestPreStage_AuditIncludesStageAndIdempotency(t *testing.T) {
-    // Clean audit dir at repo root
-    root := testFindRepoRoot(t)
-    _ = os.RemoveAll(filepath.Join(root, ".goagent"))
+	// Clean audit dir at repo root
+	root := testFindRepoRoot(t)
+	_ = os.RemoveAll(filepath.Join(root, ".goagent"))
 
-    // Server returns an assistant with no tool calls to keep it simple
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Respond minimal success
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	// Server returns an assistant with no tool calls to keep it simple
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Respond minimal success
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: time.Second, toolTimeout: time.Second, prepHTTPTimeout: time.Second}
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    // Locate today's audit file under repo root and read it
-    auditDir := filepath.Join(root, ".goagent", "audit")
-    logFile := waitForAuditFile(t, auditDir, 2*time.Second)
-    data, err := os.ReadFile(logFile)
-    if err != nil { t.Fatalf("read audit: %v", err) }
-    s := string(data)
-    // Expect at least one timing or attempt line with stage prep and idempotency_key
-    if !strings.Contains(s, "\"stage\":\"prep\"") {
-        t.Fatalf("missing stage prep in audit; got:\n%s", truncate(s, 1000))
-    }
-    if !strings.Contains(s, "\"idempotency_key\":") {
-        t.Fatalf("missing idempotency_key in audit; got:\n%s", truncate(s, 1000))
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: time.Second, toolTimeout: time.Second, prepHTTPTimeout: time.Second}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	// Locate today's audit file under repo root and read it
+	auditDir := filepath.Join(root, ".goagent", "audit")
+	logFile := waitForAuditFile(t, auditDir, 2*time.Second)
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read audit: %v", err)
+	}
+	s := string(data)
+	// Expect at least one timing or attempt line with stage prep and idempotency_key
+	if !strings.Contains(s, "\"stage\":\"prep\"") {
+		t.Fatalf("missing stage prep in audit; got:\n%s", truncate(s, 1000))
+	}
+	if !strings.Contains(s, "\"idempotency_key\":") {
+		t.Fatalf("missing idempotency_key in audit; got:\n%s", truncate(s, 1000))
+	}
 }
 
 // Deprecated local helper retained earlier in file; remove duplicate definition to avoid redeclare.
 
 // waitForAuditFile polls the audit directory until a file appears or timeout elapses.
 func waitForAuditFile(t *testing.T, auditDir string, timeout time.Duration) string {
-    t.Helper()
-    deadline := time.Now().Add(timeout)
-    for time.Now().Before(deadline) {
-        entries, err := os.ReadDir(auditDir)
-        if err == nil {
-            for _, e := range entries {
-                if !e.IsDir() {
-                    return filepath.Join(auditDir, e.Name())
-                }
-            }
-        }
-        time.Sleep(10 * time.Millisecond)
-    }
-    t.Fatalf("audit log not created in %s", auditDir)
-    return ""
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		entries, err := os.ReadDir(auditDir)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					return filepath.Join(auditDir, e.Name())
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("audit log not created in %s", auditDir)
+	return ""
 }
 
 func truncate(s string, n int) string {
-    if len(s) <= n {
-        return s
-    }
-    return s[:n]
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
 
 // https://github.com/hyperifyio/goagent/issues/300
@@ -2564,148 +2792,152 @@ func TestHelpToken_PositionIndependence(t *testing.T) {
 // FEATURE_CHECKLIST L21: -prep-dry-run should run pre-stage only (or skip if disabled),
 // print refined messages to stdout, and exit 0.
 func TestPrepDryRun_PrintsMessages(t *testing.T) {
-    args := []string{"-prompt", "hello", "-prep-enabled=false", "-prep-dry-run"}
-    var out, errBuf strings.Builder
-    code := cliMain(args, &out, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit code=%d; want 0; stderr=%s", code, errBuf.String())
-    }
-    s := strings.TrimSpace(out.String())
-    if !strings.HasPrefix(s, "[") || !strings.Contains(s, "\"role\"") {
-        t.Fatalf("unexpected -prep-dry-run output: %s", s)
-    }
+	args := []string{"-prompt", "hello", "-prep-enabled=false", "-prep-dry-run"}
+	var out, errBuf strings.Builder
+	code := cliMain(args, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code=%d; want 0; stderr=%s", code, errBuf.String())
+	}
+	s := strings.TrimSpace(out.String())
+	if !strings.HasPrefix(s, "[") || !strings.Contains(s, "\"role\"") {
+		t.Fatalf("unexpected -prep-dry-run output: %s", s)
+	}
 }
 
 // FEATURE_CHECKLIST L21: -print-messages should pretty-print the final merged
 // message array to stderr before the main call.
 func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {
-    // Disable pre-stage to avoid network and set max-steps=0 to bypass HTTP.
-    args := []string{"-prompt", "p", "-print-messages", "-max-steps", "0", "-prep-enabled=false"}
-    var out, errBuf strings.Builder
-    code := cliMain(args, &out, &errBuf)
-    if code != 1 && code != 0 { // may exit 1 due to max-steps==0
-        t.Fatalf("unexpected exit: %d; stderr=%s", code, errBuf.String())
-    }
-    if !strings.Contains(errBuf.String(), "[") || !strings.Contains(errBuf.String(), "\"role\"") {
-        t.Fatalf("stderr missing messages JSON; got=%q", errBuf.String())
-    }
+	// Disable pre-stage to avoid network and set max-steps=0 to bypass HTTP.
+	args := []string{"-prompt", "p", "-print-messages", "-max-steps", "0", "-prep-enabled=false"}
+	var out, errBuf strings.Builder
+	code := cliMain(args, &out, &errBuf)
+	if code != 1 && code != 0 { // may exit 1 due to max-steps==0
+		t.Fatalf("unexpected exit: %d; stderr=%s", code, errBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), "[") || !strings.Contains(errBuf.String(), "\"role\"") {
+		t.Fatalf("stderr missing messages JSON; got=%q", errBuf.String())
+	}
 }
 
 // FEATURE_CHECKLIST L46: Enforce transcript hygiene — when -debug is off,
 // truncate any tool message content over 8KB before sending to the API.
 func TestPreflight_TruncatesLargeToolContent_WhenDebugOff(t *testing.T) {
-    t.Parallel()
-    // Build transcript: assistant tool_call, then tool with oversized content
-    big := strings.Repeat("A", 9000)
-    msgs := []oai.Message{
-        {Role: oai.RoleSystem, Content: "s"},
-        {Role: oai.RoleUser, Content: "u"},
-        {Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "call_1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: "{}"}}}},
-        {Role: oai.RoleTool, ToolCallID: "call_1", Name: "echo", Content: big},
-    }
+	t.Parallel()
+	// Build transcript: assistant tool_call, then tool with oversized content
+	big := strings.Repeat("A", 9000)
+	msgs := []oai.Message{
+		{Role: oai.RoleSystem, Content: "s"},
+		{Role: oai.RoleUser, Content: "u"},
+		{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "call_1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: "{}"}}}},
+		{Role: oai.RoleTool, ToolCallID: "call_1", Name: "echo", Content: big},
+	}
 
-    // Capture the outgoing request
-    var seen oai.ChatCompletionsRequest
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        defer r.Body.Close()
-        if err := json.NewDecoder(r.Body).Decode(&seen); err != nil { t.Fatalf("decode: %v", err) }
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
-    }))
-    defer srv.Close()
+	// Capture the outgoing request
+	var seen oai.ChatCompletionsRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+	}))
+	defer srv.Close()
 
-    var outBuf, errBuf bytes.Buffer
-    cfg := cliConfig{
-        baseURL: srv.URL,
-        model:   "m",
-        maxSteps: 1,
-        httpTimeout: 2 * time.Second,
-        toolTimeout: 1 * time.Second,
-        debug: false, // important: hygiene applies only when debug is off
-        initMessages: msgs,
-        prepEnabled: false,
-        prepEnabledSet: true,
-    }
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, truncate(errBuf.String(), 400))
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
-    // Assert truncation took place in the sent request
-    var found bool
-    for _, m := range seen.Messages {
-        if m.Role == oai.RoleTool && m.ToolCallID == "call_1" {
-            found = true
-            if strings.TrimSpace(m.Content) != `{"truncated":true,"reason":"large-tool-output"}` {
-                t.Fatalf("tool content not truncated; got=%q", truncate(m.Content, 120))
-            }
-            break
-        }
-    }
-    if !found { t.Fatalf("tool message not found in request") }
+	var outBuf, errBuf bytes.Buffer
+	cfg := cliConfig{
+		baseURL:        srv.URL,
+		model:          "m",
+		maxSteps:       1,
+		httpTimeout:    2 * time.Second,
+		toolTimeout:    1 * time.Second,
+		debug:          false, // important: hygiene applies only when debug is off
+		initMessages:   msgs,
+		prepEnabled:    false,
+		prepEnabledSet: true,
+	}
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, truncate(errBuf.String(), 400))
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
+	// Assert truncation took place in the sent request
+	var found bool
+	for _, m := range seen.Messages {
+		if m.Role == oai.RoleTool && m.ToolCallID == "call_1" {
+			found = true
+			if strings.TrimSpace(m.Content) != `{"truncated":true,"reason":"large-tool-output"}` {
+				t.Fatalf("tool content not truncated; got=%q", truncate(m.Content, 120))
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("tool message not found in request")
+	}
 }
 
 // FEATURE_CHECKLIST L23: Save/load refined messages. Round-trip test writes the
 // merged Harmony messages to JSON and loads them back to bypass pre-stage and prompt.
 func TestSaveLoadMessages_RoundTrip(t *testing.T) {
-    dir := t.TempDir()
-    path := filepath.Join(dir, "msgs.json")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "msgs.json")
 
-    // First run: disable HTTP by setting max-steps=0 and pre-stage off; save messages.
-    // Expect exit code 1 due to max-steps==0, but file should be written with a valid array.
-    args1 := []string{"-prompt", "hello", "-prep-enabled=false", "-max-steps", "0", "-save-messages", path}
-    var out1, err1 strings.Builder
-    _ = cliMain(args1, &out1, &err1) // exit code may be 1; we only care about file
+	// First run: disable HTTP by setting max-steps=0 and pre-stage off; save messages.
+	// Expect exit code 1 due to max-steps==0, but file should be written with a valid array.
+	args1 := []string{"-prompt", "hello", "-prep-enabled=false", "-max-steps", "0", "-save-messages", path}
+	var out1, err1 strings.Builder
+	_ = cliMain(args1, &out1, &err1) // exit code may be 1; we only care about file
 
-    b, rerr := os.ReadFile(path)
-    if rerr != nil {
-        t.Fatalf("read saved messages: %v", rerr)
-    }
-    if !strings.HasPrefix(strings.TrimSpace(string(b)), "[") {
-        t.Fatalf("saved file not JSON array: %s", truncate(string(b), 100))
-    }
-    // Quick schema sniff: must include at least one role field
-    if !strings.Contains(string(b), "\"role\"") {
-        t.Fatalf("saved messages missing role fields: %s", truncate(string(b), 100))
-    }
+	b, rerr := os.ReadFile(path)
+	if rerr != nil {
+		t.Fatalf("read saved messages: %v", rerr)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(string(b)), "[") {
+		t.Fatalf("saved file not JSON array: %s", truncate(string(b), 100))
+	}
+	// Quick schema sniff: must include at least one role field
+	if !strings.Contains(string(b), "\"role\"") {
+		t.Fatalf("saved messages missing role fields: %s", truncate(string(b), 100))
+	}
 
-    // Second run: load messages from file; should parse and validate without requiring -prompt.
-    args2 := []string{"-load-messages", path, "-max-steps", "0", "-prep-enabled=false"}
-    var out2, err2 strings.Builder
-    code2 := cliMain(args2, &out2, &err2)
-    if code2 != 1 && code2 != 0 { // may exit 1 due to max-steps==0
-        t.Fatalf("unexpected exit on load: %d; stderr=%s", code2, err2.String())
-    }
+	// Second run: load messages from file; should parse and validate without requiring -prompt.
+	args2 := []string{"-load-messages", path, "-max-steps", "0", "-prep-enabled=false"}
+	var out2, err2 strings.Builder
+	code2 := cliMain(args2, &out2, &err2)
+	if code2 != 1 && code2 != 0 { // may exit 1 due to max-steps==0
+		t.Fatalf("unexpected exit on load: %d; stderr=%s", code2, err2.String())
+	}
 }
 
 // FEATURE_CHECKLIST L23: Conflicts and errors for save/load flags.
 func TestSaveLoadMessages_FlagConflictsAndErrors(t *testing.T) {
-    // load+save together should exit 2
-    dir := t.TempDir()
-    p := filepath.Join(dir, "x.json")
-    args := []string{"-load-messages", p, "-save-messages", p, "-prompt", "x"}
-    cfg, code := func() (cliConfig, int) {
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = append([]string{"agentcli.test"}, args...)
-        return parseFlags()
-    }()
-    if code == 0 {
-        t.Fatalf("expected parse error for conflicting flags; cfg=%+v", cfg)
-    }
+	// load+save together should exit 2
+	dir := t.TempDir()
+	p := filepath.Join(dir, "x.json")
+	args := []string{"-load-messages", p, "-save-messages", p, "-prompt", "x"}
+	cfg, code := func() (cliConfig, int) {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = append([]string{"agentcli.test"}, args...)
+		return parseFlags()
+	}()
+	if code == 0 {
+		t.Fatalf("expected parse error for conflicting flags; cfg=%+v", cfg)
+	}
 
-    // load-messages conflicts with -prompt/-prompt-file
-    args2 := []string{"-load-messages", p, "-prompt", "x"}
-    cfg2, code2 := func() (cliConfig, int) {
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = append([]string{"agentcli.test"}, args2...)
-        return parseFlags()
-    }()
-    if code2 == 0 {
-        t.Fatalf("expected parse error for load+prompt; cfg=%+v", cfg2)
-    }
+	// load-messages conflicts with -prompt/-prompt-file
+	args2 := []string{"-load-messages", p, "-prompt", "x"}
+	cfg2, code2 := func() (cliConfig, int) {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = append([]string{"agentcli.test"}, args2...)
+		return parseFlags()
+	}()
+	if code2 == 0 {
+		t.Fatalf("expected parse error for load+prompt; cfg=%+v", cfg2)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/244
@@ -2791,63 +3023,63 @@ func TestDurationFlags_FlexibleParsing(t *testing.T) {
 // https://github.com/hyperifyio/goagent/issues/318
 // Edge case: when finish_reason!="length", there must be no retry.
 func TestLengthBackoff_NoRetryWhenFinishReasonNotLength(t *testing.T) {
-    var calls int
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        calls++
-        // Always return a final assistant message with stop
-        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-            FinishReason: "stop",
-            Message:      oai.Message{Role: oai.RoleAssistant, Content: "ok"},
-        }}})
-    }))
-    defer srv.Close()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		// Always return a final assistant message with stop
+		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+			FinishReason: "stop",
+			Message:      oai.Message{Role: oai.RoleAssistant, Content: "ok"},
+		}}})
+	}))
+	defer srv.Close()
 
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "ok" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
-    if calls != 1 {
-        t.Fatalf("expected exactly one HTTP call when not length; got %d", calls)
-    }
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "ok" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
+	if calls != 1 {
+		t.Fatalf("expected exactly one HTTP call when not length; got %d", calls)
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/318
 // Edge case: only one in-step retry even if the second response is also "length".
 func TestLengthBackoff_OnlyOneRetryWhenSecondIsAlsoLength(t *testing.T) {
-    var bodies [][]byte
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        b, err := io.ReadAll(r.Body)
-        if err != nil {
-            t.Fatalf("read body: %v", err)
-        }
-        bodies = append(bodies, append([]byte(nil), b...))
-        switch len(bodies) {
-        case 1:
-            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
-        case 2:
-            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
-        default:
-            // If a third in-step retry occurs, fail deterministically
-            t.Fatalf("unexpected extra in-step retry; total bodies=%d", len(bodies))
-        }
-    }))
-    defer srv.Close()
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		bodies = append(bodies, append([]byte(nil), b...))
+		switch len(bodies) {
+		case 1:
+			_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+		case 2:
+			_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{FinishReason: "length", Message: oai.Message{Role: oai.RoleAssistant}}}})
+		default:
+			// If a third in-step retry occurs, fail deterministically
+			t.Fatalf("unexpected extra in-step retry; total bodies=%d", len(bodies))
+		}
+	}))
+	defer srv.Close()
 
-    // Limit to a single agent step so no additional step-level requests are made.
-    cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code == 0 {
-        t.Fatalf("expected non-zero exit since no final content; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
-    }
-    if len(bodies) != 2 {
-        t.Fatalf("expected exactly two requests (initial + one retry), got %d", len(bodies))
-    }
+	// Limit to a single agent step so no additional step-level requests are made.
+	cfg := cliConfig{prompt: "x", systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 1, httpTimeout: 2 * time.Second, toolTimeout: 1 * time.Second, temperature: 0}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit since no final content; stdout=%q stderr=%q", outBuf.String(), errBuf.String())
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected exactly two requests (initial + one retry), got %d", len(bodies))
+	}
 }
 
 // https://github.com/hyperifyio/goagent/issues/318
@@ -2855,79 +3087,85 @@ func TestLengthBackoff_OnlyOneRetryWhenSecondIsAlsoLength(t *testing.T) {
 // When the model returns tool_calls, no max_tokens should be injected and
 // the conversation should proceed with two HTTP calls (tool step + final).
 func TestLengthBackoff_DoesNotInterfereWithToolCalls(t *testing.T) {
-    // Build a helper tool that echoes JSON and succeeds quickly
-    dir := t.TempDir()
-    helper := filepath.Join(dir, "echo.go")
-    if err := os.WriteFile(helper, []byte(`package main
+	// Build a helper tool that echoes JSON and succeeds quickly
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "echo.go")
+	if err := os.WriteFile(helper, []byte(`package main
 import ("io"; "os"; "fmt")
 func main(){b,_:=io.ReadAll(os.Stdin); fmt.Print(string(b))}
 `), 0o644); err != nil {
-        t.Fatalf("write tool: %v", err)
-    }
-    bin := filepath.Join(dir, "echo")
-    if runtime.GOOS == "windows" { bin += ".exe" }
-    if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
-        t.Fatalf("build tool: %v: %s", err, string(out))
-    }
+		t.Fatalf("write tool: %v", err)
+	}
+	bin := filepath.Join(dir, "echo")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", bin, helper).CombinedOutput(); err != nil {
+		t.Fatalf("build tool: %v: %s", err, string(out))
+	}
 
-    // Capture two sequential requests and ensure no max_tokens present in either
-    var bodies [][]byte
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        b, err := io.ReadAll(r.Body)
-        if err != nil {
-            t.Fatalf("read body: %v", err)
-        }
-        bodies = append(bodies, append([]byte(nil), b...))
-        switch len(bodies) {
-        case 1:
-            // Return a tool_calls response
-            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                FinishReason: "tool_calls",
-                Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{
-                    ID: "1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: `{"x":1}`},
-                }}},
-            }}})
-        case 2:
-            // Final content
-            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
-                FinishReason: "stop",
-                Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
-            }}})
-        default:
-            t.Fatalf("unexpected extra HTTP request; bodies=%d", len(bodies))
-        }
-    }))
-    defer srv.Close()
+	// Capture two sequential requests and ensure no max_tokens present in either
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		bodies = append(bodies, append([]byte(nil), b...))
+		switch len(bodies) {
+		case 1:
+			// Return a tool_calls response
+			_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+				FinishReason: "tool_calls",
+				Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{
+					ID: "1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: `{"x":1}`},
+				}}},
+			}}})
+		case 2:
+			// Final content
+			_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+				FinishReason: "stop",
+				Message:      oai.Message{Role: oai.RoleAssistant, Content: "done"},
+			}}})
+		default:
+			t.Fatalf("unexpected extra HTTP request; bodies=%d", len(bodies))
+		}
+	}))
+	defer srv.Close()
 
-    // Register tool manifest through in-memory registry path
-    manifestPath := filepath.Join(dir, "tools.json")
-    m := map[string]any{
-        "tools": []map[string]any{{
-            "name": "echo",
-            "description": "echo",
-            "schema": map[string]any{"type": "object"},
-            "command": []string{bin},
-            "timeoutSec": 5,
-        }},
-    }
-    data, err := json.Marshal(m)
-    if err != nil { t.Fatalf("marshal manifest: %v", err) }
-    if err := os.WriteFile(manifestPath, data, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+	// Register tool manifest through in-memory registry path
+	manifestPath := filepath.Join(dir, "tools.json")
+	m := map[string]any{
+		"tools": []map[string]any{{
+			"name":        "echo",
+			"description": "echo",
+			"schema":      map[string]any{"type": "object"},
+			"command":     []string{bin},
+			"timeoutSec":  5,
+		}},
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
-    cfg := cliConfig{prompt: "x", toolsPath: manifestPath, systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 2 * time.Second, temperature: 0}
-    var outBuf, errBuf bytes.Buffer
-    code := runAgent(cfg, &outBuf, &errBuf)
-    if code != 0 {
-        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
-    }
-    if strings.TrimSpace(outBuf.String()) != "done" {
-        t.Fatalf("unexpected stdout: %q", outBuf.String())
-    }
-    if len(bodies) != 2 {
-        t.Fatalf("expected exactly two HTTP calls (tool step + final), got %d", len(bodies))
-    }
-    // Neither request should include max_tokens
-    if strings.Contains(string(bodies[0]), "\"max_tokens\"") || strings.Contains(string(bodies[1]), "\"max_tokens\"") {
-        t.Fatalf("max_tokens must be omitted for tool_call flow; got bodies: %s | %s", string(bodies[0]), string(bodies[1]))
-    }
+	cfg := cliConfig{prompt: "x", toolsPath: manifestPath, systemPrompt: "sys", baseURL: srv.URL, model: "m", maxSteps: 3, httpTimeout: 2 * time.Second, toolTimeout: 2 * time.Second, temperature: 0}
+	var outBuf, errBuf bytes.Buffer
+	code := runAgent(cfg, &outBuf, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+	}
+	if strings.TrimSpace(outBuf.String()) != "done" {
+		t.Fatalf("unexpected stdout: %q", outBuf.String())
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected exactly two HTTP calls (tool step + final), got %d", len(bodies))
+	}
+	// Neither request should include max_tokens
+	if strings.Contains(string(bodies[0]), "\"max_tokens\"") || strings.Contains(string(bodies[1]), "\"max_tokens\"") {
+		t.Fatalf("max_tokens must be omitted for tool_call flow; got bodies: %s | %s", string(bodies[0]), string(bodies[1]))
+	}
 }

@@ -1,6 +1,7 @@
 package oai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -8,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"bufio"
 	"io"
 	mathrand "math/rand"
 	"net"
@@ -31,29 +31,29 @@ type Client struct {
 type auditCtxKey string
 
 const (
-    auditCtxKeyStage auditCtxKey = "audit_stage"
+	auditCtxKeyStage auditCtxKey = "audit_stage"
 )
 
 // WithAuditStage returns a child context that carries an audit stage label
 // (e.g., "prep") that will be included in HTTP audit entries.
 func WithAuditStage(parent context.Context, stage string) context.Context {
-    stage = strings.TrimSpace(stage)
-    if stage == "" {
-        return parent
-    }
-    return context.WithValue(parent, auditCtxKeyStage, stage)
+	stage = strings.TrimSpace(stage)
+	if stage == "" {
+		return parent
+	}
+	return context.WithValue(parent, auditCtxKeyStage, stage)
 }
 
 func auditStageFromContext(ctx context.Context) string {
-    if ctx == nil {
-        return ""
-    }
-    if v := ctx.Value(auditCtxKeyStage); v != nil {
-        if s, ok := v.(string); ok {
-            return s
-        }
-    }
-    return ""
+	if ctx == nil {
+		return ""
+	}
+	if v := ctx.Value(auditCtxKeyStage); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 // RetryPolicy controls HTTP retry behavior for transient failures.
@@ -62,10 +62,10 @@ func auditStageFromContext(ctx context.Context) string {
 // JitterFraction specifies the +/- fractional jitter applied to each computed backoff.
 // When Rand is non-nil, it is used to sample jitter for deterministic tests.
 type RetryPolicy struct {
-	MaxRetries int
-	Backoff    time.Duration
-    JitterFraction float64
-    Rand           *mathrand.Rand
+	MaxRetries     int
+	Backoff        time.Duration
+	JitterFraction float64
+	Rand           *mathrand.Rand
 }
 
 // NewClient creates a client without retries (single attempt only).
@@ -105,7 +105,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		req.Temperature = nil
 	}
 	var zero ChatCompletionsResponse
-    body, err := json.Marshal(req)
+	body, err := json.Marshal(req)
 	if err != nil {
 		return zero, fmt.Errorf("marshal request: %w", err)
 	}
@@ -119,12 +119,12 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 	var lastErr error
 	// Allow a single parameter-recovery retry without consuming the normal retry budget
 	recoveryGranted := false
-    // Emit a meta audit entry capturing observability fields derived from the request
+	// Emit a meta audit entry capturing observability fields derived from the request
 	emitChatMetaAudit(req)
 	// Generate a stable Idempotency-Key used across all attempts
 	idemKey := generateIdempotencyKey()
-    // Capture any stage label from context for audit enrichment
-    stage := auditStageFromContext(ctx)
+	// Capture any stage label from context for audit enrichment
+	stage := auditStageFromContext(ctx)
 	for attempt := 0; attempt < attempts; attempt++ {
 		// Per-attempt timing capture using httptrace
 		attemptStart := time.Now()
@@ -154,7 +154,7 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		// Since httptrace.TLSHandshakeDone requires crypto/tls type, replicate using any to avoid import on older Go.
 		// Note: we will compute tlsDur as zero unless supported; acceptable for audit purposes.
 
-        httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+		httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 		if nerr != nil {
 			return zero, fmt.Errorf("new request: %w", nerr)
 		}
@@ -165,18 +165,18 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 		httpReq.Header.Set("Idempotency-Key", idemKey)
 		httpReq = httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace))
 
-        resp, derr := c.httpClient.Do(httpReq)
+		resp, derr := c.httpClient.Do(httpReq)
 		if derr != nil {
 			lastErr = derr
 			// Log attempt with error
 			logHTTPAttempt(stage, idemKey, attempt+1, attempts, 0, 0, endpoint, derr.Error())
 			// Emit timing audit for error case
 			logHTTPTiming(stage, idemKey, attempt+1, endpoint, 0, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, derr), userHintForCause(ctx, derr))
-            if attempt < attempts-1 && isRetryableError(derr) {
-                // compute backoff (with jitter) for audit then sleep
-                back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
+			if attempt < attempts-1 && isRetryableError(derr) {
+				// compute backoff (with jitter) for audit then sleep
+				back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 				logHTTPAttempt(stage, idemKey, attempt+1, attempts, 0, back.Milliseconds(), endpoint, derr.Error())
-                sleepFunc(back)
+				sleepFunc(back)
 				continue
 			}
 			// Upgrade error with base URL, configured timeout, and actionable hint
@@ -189,15 +189,14 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			return zero, fmt.Errorf("chat POST failed: %v (base=%s, http-timeout=%s)", derr, c.baseURL, tmo)
 		}
 
-        // When streaming is requested, the server should respond with SSE. We do not
-        // support streaming in this method. Return 400 guidance to call StreamChat.
-        if req.Stream {
-            // Read a small portion to include in error, then return
-            _, _ = io.CopyN(io.Discard, resp.Body, 0)
-            _ = resp.Body.Close()
-            return zero, fmt.Errorf("stream=true not supported in CreateChatCompletion; use StreamChat")
-        }
-        respBody, readErr := io.ReadAll(resp.Body)
+		// When streaming is requested, the server should respond with SSE. We do not
+		// support streaming in this method. Return 400 guidance to call StreamChat.
+		if req.Stream {
+			// Streaming is not supported in this method; close body and return guidance.
+			_ = resp.Body.Close() //nolint:errcheck // best-effort close
+			return zero, fmt.Errorf("stream=true not supported in CreateChatCompletion; use StreamChat")
+		}
+		respBody, readErr := io.ReadAll(resp.Body)
 		if cerr := resp.Body.Close(); cerr != nil {
 			// best-effort: record close error as lastErr if none
 			if lastErr == nil {
@@ -210,10 +209,10 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 			logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, 0, endpoint, readErr.Error())
 			// Emit timing audit including read duration up to error
 			logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), classifyHTTPCause(ctx, readErr), userHintForCause(ctx, readErr))
-            if attempt < attempts-1 && isRetryableError(readErr) {
-                back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
+			if attempt < attempts-1 && isRetryableError(readErr) {
+				back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 				logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, readErr.Error())
-                sleepFunc(back)
+				sleepFunc(back)
 				continue
 			}
 			return zero, fmt.Errorf("read response body: %w", readErr)
@@ -244,16 +243,16 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 				}
 			}
 			// Retry on 429 and 5xx; otherwise return immediately
-            if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
+			if attempt < attempts-1 && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
 				// Respect Retry-After when present; otherwise use exponential backoff
 				if ra, ok := retryAfterDuration(resp.Header.Get("Retry-After"), time.Now()); ok {
 					// Log with Retry-After derived backoff
 					logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, ra.Milliseconds(), endpoint, "")
-                    sleepFunc(ra)
+					sleepFunc(ra)
 				} else {
-                    back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
+					back := backoffWithJitter(c.retry.Backoff, attempt, c.retry.JitterFraction, c.retry.Rand)
 					logHTTPAttempt(stage, idemKey, attempt+1, attempts, resp.StatusCode, back.Milliseconds(), endpoint, "")
-                    sleepFunc(back)
+					sleepFunc(back)
 				}
 				// Emit timing audit for non-2xx attempt
 				logHTTPTiming(stage, idemKey, attempt+1, endpoint, resp.StatusCode, attemptStart, dnsDur, connDur, 0, wroteAt, firstByteAt, time.Now(), "http_status", "")
@@ -283,85 +282,89 @@ func (c *Client) CreateChatCompletion(ctx context.Context, req ChatCompletionsRe
 // fast and non-blocking. The function returns when the stream completes or an
 // error occurs. Retries are not applied in streaming mode.
 func (c *Client) StreamChat(ctx context.Context, req ChatCompletionsRequest, onChunk func(StreamChunk) error) error {
-    // Encoder guard: omit temperature when unsupported
-    if !SupportsTemperature(req.Model) {
-        req.Temperature = nil
-    }
-    req.Stream = true
-    body, err := json.Marshal(req)
-    if err != nil {
-        return fmt.Errorf("marshal request: %w", err)
-    }
-    endpoint := c.baseURL + "/chat/completions"
-    httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-    if nerr != nil {
-        return fmt.Errorf("new request: %w", nerr)
-    }
-    httpReq.Header.Set("Content-Type", "application/json")
-    if c.apiKey != "" {
-        httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-    }
-    // Idempotency not relevant for streaming; still set for consistency
-    httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
+	// Encoder guard: omit temperature when unsupported
+	if !SupportsTemperature(req.Model) {
+		req.Temperature = nil
+	}
+	req.Stream = true
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	endpoint := c.baseURL + "/chat/completions"
+	httpReq, nerr := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if nerr != nil {
+		return fmt.Errorf("new request: %w", nerr)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+	// Idempotency not relevant for streaming; still set for consistency
+	httpReq.Header.Set("Idempotency-Key", generateIdempotencyKey())
 
-    resp, derr := c.httpClient.Do(httpReq)
-    if derr != nil {
-        return derr
-    }
-    defer func(){ _ = resp.Body.Close() }()
-    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-        b, _ := io.ReadAll(resp.Body)
-        return fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(b), 2000))
-    }
-    // Require SSE content type for streaming
-    ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
-    if !strings.Contains(ct, "text/event-stream") {
-        // Not a streaming response; signal caller to fallback
-        b, _ := io.ReadAll(resp.Body)
-        _ = b
-        return fmt.Errorf("server does not support streaming (content-type=%q)", ct)
-    }
-    // Simple SSE parser: read lines; handle "data: ..." and [DONE]
-    dec := newLineReader(resp.Body)
-    for {
-        line, err := dec()
-        if err != nil {
-            if errors.Is(err, io.EOF) {
-                return nil
-            }
-            return fmt.Errorf("stream read: %w", err)
-        }
-        s := strings.TrimSpace(line)
-        if s == "" { continue }
-        if strings.HasPrefix(s, "data:") {
-            payload := strings.TrimSpace(strings.TrimPrefix(s, "data:"))
-            if payload == "[DONE]" {
-                return nil
-            }
-            var chunk StreamChunk
-            if jerr := json.Unmarshal([]byte(payload), &chunk); jerr != nil {
-                // Skip malformed chunk
-                continue
-            }
-            if onChunk != nil {
-                if err := onChunk(chunk); err != nil {
-                    return err
-                }
-            }
-        }
-    }
+	resp, derr := c.httpClient.Do(httpReq)
+	if derr != nil {
+		return derr
+	}
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // best-effort close
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, rerr := io.ReadAll(resp.Body)
+		if rerr != nil {
+			return fmt.Errorf("chat API %s: %d: <read error>", endpoint, resp.StatusCode)
+		}
+		return fmt.Errorf("chat API %s: %d: %s", endpoint, resp.StatusCode, truncate(string(b), 2000))
+	}
+	// Require SSE content type for streaming
+	ct := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	if !strings.Contains(ct, "text/event-stream") {
+		// Not a streaming response; signal caller to fallback
+		_, _ = io.ReadAll(resp.Body) //nolint:errcheck // ignore read error; fallback remains informative
+		return fmt.Errorf("server does not support streaming (content-type=%q)", ct)
+	}
+	// Simple SSE parser: read lines; handle "data: ..." and [DONE]
+	dec := newLineReader(resp.Body)
+	for {
+		line, err := dec()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("stream read: %w", err)
+		}
+		s := strings.TrimSpace(line)
+		if s == "" {
+			continue
+		}
+		if strings.HasPrefix(s, "data:") {
+			payload := strings.TrimSpace(strings.TrimPrefix(s, "data:"))
+			if payload == "[DONE]" {
+				return nil
+			}
+			var chunk StreamChunk
+			if jerr := json.Unmarshal([]byte(payload), &chunk); jerr != nil {
+				// Skip malformed chunk
+				continue
+			}
+			if onChunk != nil {
+				if err := onChunk(chunk); err != nil {
+					return err
+				}
+			}
+		}
+	}
 }
 
 // newLineReader returns a closure that reads one line (terminated by \n) from r each call.
 func newLineReader(r io.Reader) func() (string, error) {
-    br := bufio.NewReader(r)
-    return func() (string, error) {
-        b, err := br.ReadBytes('\n')
-        if err != nil {
-            return "", err
-        }
-        return string(b), nil
-    }
+	br := bufio.NewReader(r)
+	return func() (string, error) {
+		b, err := br.ReadBytes('\n')
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
 }
 
 func truncate(s string, n int) string {
@@ -411,27 +414,27 @@ func backoffDuration(base time.Duration, attempt int) time.Duration {
 // When jitterFraction <= 0, this falls back to backoffDuration. When r is nil,
 // a time-seeded RNG is used for production randomness.
 func backoffWithJitter(base time.Duration, attempt int, jitterFraction float64, r *mathrand.Rand) time.Duration {
-    d := backoffDuration(base, attempt)
-    if jitterFraction <= 0 {
-        return d
-    }
-    if jitterFraction > 0.9 { // prevent extreme factors
-        jitterFraction = 0.9
-    }
-    if r == nil {
-        // Seed with current time for production; tests can pass a custom Rand
-        r = mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-    }
-    // factor in [1 - f, 1 + f]
-    minF := 1.0 - jitterFraction
-    maxF := 1.0 + jitterFraction
-    factor := minF + r.Float64()*(maxF-minF)
-    // Guard against rounding to zero
-    jittered := time.Duration(float64(d) * factor)
-    if jittered < time.Millisecond {
-        return time.Millisecond
-    }
-    return jittered
+	d := backoffDuration(base, attempt)
+	if jitterFraction <= 0 {
+		return d
+	}
+	if jitterFraction > 0.9 { // prevent extreme factors
+		jitterFraction = 0.9
+	}
+	if r == nil {
+		// Seed with current time for production; tests can pass a custom Rand
+		r = mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
+	}
+	// factor in [1 - f, 1 + f]
+	minF := 1.0 - jitterFraction
+	maxF := 1.0 + jitterFraction
+	factor := minF + r.Float64()*(maxF-minF)
+	// Guard against rounding to zero
+	jittered := time.Duration(float64(d) * factor)
+	if jittered < time.Millisecond {
+		return time.Millisecond
+	}
+	return jittered
 }
 
 // retryAfterDuration parses the Retry-After header which may be seconds or HTTP-date.
@@ -480,28 +483,28 @@ func generateIdempotencyKey() string {
 // logHTTPAttempt appends an NDJSON line describing an HTTP attempt and planned backoff.
 func logHTTPAttempt(stage, idemKey string, attempt, maxAttempts, status int, backoffMs int64, endpoint, errStr string) {
 	type audit struct {
-		TS        string `json:"ts"`
-		Event     string `json:"event"`
-		Stage     string `json:"stage,omitempty"`
+		TS             string `json:"ts"`
+		Event          string `json:"event"`
+		Stage          string `json:"stage,omitempty"`
 		IdempotencyKey string `json:"idempotency_key,omitempty"`
-		Attempt   int    `json:"attempt"`
-		Max       int    `json:"max"`
-		Status    int    `json:"status"`
-		BackoffMs int64  `json:"backoffMs"`
-		Endpoint  string `json:"endpoint"`
-		Error     string `json:"error,omitempty"`
+		Attempt        int    `json:"attempt"`
+		Max            int    `json:"max"`
+		Status         int    `json:"status"`
+		BackoffMs      int64  `json:"backoffMs"`
+		Endpoint       string `json:"endpoint"`
+		Error          string `json:"error,omitempty"`
 	}
 	entry := audit{
-		TS:        time.Now().UTC().Format(time.RFC3339Nano),
-		Event:     "http_attempt",
-		Stage:     stage,
+		TS:             time.Now().UTC().Format(time.RFC3339Nano),
+		Event:          "http_attempt",
+		Stage:          stage,
 		IdempotencyKey: idemKey,
-		Attempt:   attempt,
-		Max:       maxAttempts,
-		Status:    status,
-		BackoffMs: backoffMs,
-		Endpoint:  endpoint,
-		Error:     truncate(errStr, 500),
+		Attempt:        attempt,
+		Max:            maxAttempts,
+		Status:         status,
+		BackoffMs:      backoffMs,
+		Endpoint:       endpoint,
+		Error:          truncate(errStr, 500),
 	}
 	if err := appendAuditLog(entry); err != nil {
 		_ = err
@@ -511,22 +514,22 @@ func logHTTPAttempt(stage, idemKey string, attempt, maxAttempts, status int, bac
 // logHTTPTiming appends detailed HTTP timing metrics to the audit log.
 func logHTTPTiming(stage, idemKey string, attempt int, endpoint string, status int, start time.Time, dnsDur, connDur, tlsDur time.Duration, wroteAt, firstByteAt, end time.Time, cause, hint string) {
 	type timing struct {
-		TS        string `json:"ts"`
-		Event     string `json:"event"`
-		Stage     string `json:"stage,omitempty"`
+		TS             string `json:"ts"`
+		Event          string `json:"event"`
+		Stage          string `json:"stage,omitempty"`
 		IdempotencyKey string `json:"idempotency_key,omitempty"`
-		Attempt   int    `json:"attempt"`
-		Endpoint  string `json:"endpoint"`
-		Status    int    `json:"status"`
-		DNSMs     int64  `json:"dnsMs"`
-		ConnectMs int64  `json:"connectMs"`
-		TLSMs     int64  `json:"tlsMs"`
-		WroteMs   int64  `json:"wroteMs"`
-		TTFBMs    int64  `json:"ttfbMs"`
-		ReadMs    int64  `json:"readMs"`
-		TotalMs   int64  `json:"totalMs"`
-		Cause     string `json:"cause"`
-		Hint      string `json:"hint,omitempty"`
+		Attempt        int    `json:"attempt"`
+		Endpoint       string `json:"endpoint"`
+		Status         int    `json:"status"`
+		DNSMs          int64  `json:"dnsMs"`
+		ConnectMs      int64  `json:"connectMs"`
+		TLSMs          int64  `json:"tlsMs"`
+		WroteMs        int64  `json:"wroteMs"`
+		TTFBMs         int64  `json:"ttfbMs"`
+		ReadMs         int64  `json:"readMs"`
+		TotalMs        int64  `json:"totalMs"`
+		Cause          string `json:"cause"`
+		Hint           string `json:"hint,omitempty"`
 	}
 	var wroteMs, ttfbMs, readMs int64
 	if !wroteAt.IsZero() {
@@ -543,22 +546,22 @@ func logHTTPTiming(stage, idemKey string, attempt int, endpoint string, status i
 		}
 	}
 	entry := timing{
-		TS:        time.Now().UTC().Format(time.RFC3339Nano),
-		Event:     "http_timing",
-		Stage:     stage,
+		TS:             time.Now().UTC().Format(time.RFC3339Nano),
+		Event:          "http_timing",
+		Stage:          stage,
 		IdempotencyKey: idemKey,
-		Attempt:   attempt,
-		Endpoint:  endpoint,
-		Status:    status,
-		DNSMs:     dnsDur.Milliseconds(),
-		ConnectMs: connDur.Milliseconds(),
-		TLSMs:     tlsDur.Milliseconds(),
-		WroteMs:   wroteMs,
-		TTFBMs:    ttfbMs,
-		ReadMs:    readMs,
-		TotalMs:   end.Sub(start).Milliseconds(),
-		Cause:     cause,
-		Hint:      hint,
+		Attempt:        attempt,
+		Endpoint:       endpoint,
+		Status:         status,
+		DNSMs:          dnsDur.Milliseconds(),
+		ConnectMs:      connDur.Milliseconds(),
+		TLSMs:          tlsDur.Milliseconds(),
+		WroteMs:        wroteMs,
+		TTFBMs:         ttfbMs,
+		ReadMs:         readMs,
+		TotalMs:        end.Sub(start).Milliseconds(),
+		Cause:          cause,
+		Hint:           hint,
 	}
 	if err := appendAuditLog(entry); err != nil {
 		_ = err
@@ -570,27 +573,27 @@ func logHTTPTiming(stage, idemKey string, attempt int, endpoint string, status i
 // pass the model identifier, the previous and new completion caps, the
 // effective model context window, and the estimated prompt token count.
 func LogLengthBackoff(model string, prevCap, newCap, window, estimatedPromptTokens int) {
-    type audit struct {
-        TS                     string `json:"ts"`
-        Event                  string `json:"event"`
-        Model                  string `json:"model"`
-        PrevCap                int    `json:"prev_cap"`
-        NewCap                 int    `json:"new_cap"`
-        Window                 int    `json:"window"`
-        EstimatedPromptTokens  int    `json:"estimated_prompt_tokens"`
-    }
-    entry := audit{
-        TS:                    time.Now().UTC().Format(time.RFC3339Nano),
-        Event:                 "length_backoff",
-        Model:                 model,
-        PrevCap:               prevCap,
-        NewCap:                newCap,
-        Window:                window,
-        EstimatedPromptTokens: estimatedPromptTokens,
-    }
-    if err := appendAuditLog(entry); err != nil {
-        _ = err
-    }
+	type audit struct {
+		TS                    string `json:"ts"`
+		Event                 string `json:"event"`
+		Model                 string `json:"model"`
+		PrevCap               int    `json:"prev_cap"`
+		NewCap                int    `json:"new_cap"`
+		Window                int    `json:"window"`
+		EstimatedPromptTokens int    `json:"estimated_prompt_tokens"`
+	}
+	entry := audit{
+		TS:                    time.Now().UTC().Format(time.RFC3339Nano),
+		Event:                 "length_backoff",
+		Model:                 model,
+		PrevCap:               prevCap,
+		NewCap:                newCap,
+		Window:                window,
+		EstimatedPromptTokens: estimatedPromptTokens,
+	}
+	if err := appendAuditLog(entry); err != nil {
+		_ = err
+	}
 }
 
 // emitChatMetaAudit writes a one-line NDJSON entry describing request-level
