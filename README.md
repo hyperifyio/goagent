@@ -2,14 +2,14 @@
 
 [![CI (lint+test+build)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml/badge.svg)](https://github.com/hyperifyio/goagent/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/hyperifyio/goagent)](https://github.com/hyperifyio/goagent/blob/main/go.mod)
+[![Go Reference](https://pkg.go.dev/badge/github.com/hyperifyio/goagent.svg)](https://pkg.go.dev/github.com/hyperifyio/goagent)
 [![Release](https://img.shields.io/github/v/release/hyperifyio/goagent?sort=semver)](https://github.com/hyperifyio/goagent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-goagent is a compact, vendor‑agnostic command‑line tool for running non‑interactive, tool‑using agents against any OpenAI‑compatible Chat Completions API.
+goagent is a compact, vendor‑agnostic command‑line tool for running non‑interactive, tool‑using agents against any OpenAI‑compatible Chat Completions API. It executes a small, auditable allowlist of local tools (argv only; no shell), streams JSON in/out, and prints a concise final answer.
 
-- **What it does**: Executes a small, auditable allowlist of local tools (argv only; no shell), streams JSON in/out, and prints the model’s final answer.
-- **Why use it**: Deterministic, portable, and safe by default. Works with hosted providers and local endpoints like `http://localhost:1234/v1`.
-- **Who it’s for**: Engineers who want a minimal agent runner with clear guarantees and zero vendor lock‑in.
+- Why use it: deterministic, portable, and safe by default. Works with hosted providers and with local endpoints like `http://localhost:1234/v1`.
+- Who it’s for: engineers who want a minimal agent runner with clear guarantees and zero vendor lock‑in.
 
 ## Table of contents
 - [Why goagent?](#why-goagent)
@@ -19,15 +19,17 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
-  - [Why you usually don’t need to change knobs](#why-you-usually-don’t-need-to-change-knobs)
+  - [Why you usually don’t need to change knobs](#why-you-usually-dont-need-to-change-knobs)
   - [Capabilities](#capabilities)
 - [Examples](#examples)
   - [Zero-config with GPT-5](#zero-config-with-gpt-5)
   - [Tool calls transcript](#tool-calls-transcript)
   - [Worked example: tool calls and transcript](#worked-example-tool-calls-and-transcript)
+  - [View refined messages (pre-stage and final)](#view-refined-messages-pre-stage-and-final)
   - [Exec tool](#exec-tool)
   - [Filesystem tools](#filesystem-tools)
   - [Image generation tool (img_create)](#image-generation-tool-img_create)
+  - [fs_search](#fs_search)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Tests](#tests)
@@ -56,13 +58,16 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - Minimal process environment for tools; audit logging with redaction
 
 ## Installation
-- **Requirements**: Go 1.24+, Linux/macOS/Windows. For development: `ripgrep` (rg) and `golangci-lint`. Network access to an OpenAI‑compatible API.
 
-Choose one:
+### Requirements
+- Go 1.24+ on Linux, macOS, or Windows
+- Network access to an OpenAI‑compatible API
+- For development: `ripgrep` (rg) and `golangci-lint`
 
-1) Download a binary from the [Releases](https://github.com/hyperifyio/goagent/releases) page (if available for your platform).
+### Install options
+1) Download a binary: see [Releases](https://github.com/hyperifyio/goagent/releases)
 
-2) Install with Go (adds `agentcli` to your `GOBIN`):
+2) With Go (adds `agentcli` to your `GOBIN`):
 ```bash
 go install github.com/hyperifyio/goagent/cmd/agentcli@latest
 ```
@@ -74,7 +79,7 @@ cd goagent
 make bootstrap tidy build build-tools
 ```
 
-Helpful developer prerequisites (examples):
+Developer prerequisites (examples):
 ```bash
 # ripgrep
 # - Ubuntu/Debian
@@ -153,7 +158,7 @@ Run the agent:
 Expected behavior: the model may call `get_time`; the CLI executes `./tools/bin/get_time` (or `get_time.exe` on Windows) with JSON on stdin, appends the result as a `tool` message, calls the API again, then prints a concise final answer.
 
 ## Usage
-Flags are order-insensitive. You can place `-prompt` and other flags in any order; precedence remains flag > environment > default.
+Flags are order‑insensitive. You can place `-prompt` and other flags in any order; precedence remains flag > environment > default.
 ### Common flags
 ```text
 -prompt string         User prompt (required)
@@ -197,7 +202,7 @@ Run `./bin/agentcli -h` to see the built‑in help.
 ### Why you usually don’t need to change knobs
 - The default `-temp 1.0` is standardized for broad provider/model parity and GPT‑5 compatibility.
 - The one‑knob rule applies: if you set `-top-p`, the agent omits `temperature`; otherwise it sends `temperature` (default 1.0) and leaves `top_p` unset.
-- The one‑knob rule applies for both stages: if you set `-top-p` (or `-prep-top-p`), the agent omits `temperature` for that stage; otherwise it sends `temperature` (default 1.0) when supported. Pre-stage profiles are available via `-prep-profile`, e.g. `deterministic` sets temperature to 0.1 when supported.
+- The one‑knob rule applies for both stages: if you set `-top-p` (or `-prep-top-p`), the agent omits `temperature` for that stage; otherwise it sends `temperature` (default 1.0) when supported. Pre‑stage profiles are available via `-prep-profile`, e.g. `deterministic` sets temperature to 0.1 when supported.
 - See the policy for details and rationale: [ADR‑0004: Default LLM policy](docs/adr/0004-default-llm-policy.md).
 
 ### Capabilities
