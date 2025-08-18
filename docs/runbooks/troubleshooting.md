@@ -2,6 +2,76 @@
 
 This runbook covers common errors and deterministic fixes for `goagent`.
 
+## Troubleshooting research tools
+
+This section covers common issues for the web research toolbelt (`searxng_search`, `http_fetch`, `robots_check`, `readability_extract`, `metadata_extract`, `pdf_extract`, `rss_fetch`, `wayback_lookup`, `wiki_query`, `openalex_search`, `crossref_search`). All examples are offline-friendly except where noted; avoid real network calls in CI.
+
+### Missing environment variables
+- **`SEARXNG_BASE_URL` (required by `searxng_search`)**
+  - Symptom: stderr JSON like `{"error":"missing SEARXNG_BASE_URL"}` or bad base URL error.
+  - Fix:
+    ```bash
+    export SEARXNG_BASE_URL=http://localhost:8888
+    echo '{"q":"golang"}' | ./tools/bin/searxng_search | jq .query
+    ```
+
+- **`CROSSREF_MAILTO` (required by `crossref_search`)**
+  - Symptom: stderr JSON `{"error":"missing CROSSREF_MAILTO"}` or polite header warning/rate limit.
+  - Fix:
+    ```bash
+    export CROSSREF_MAILTO=you@example.com
+    echo '{"q":"test"}' | ./tools/bin/crossref_search | jq '.results|length'
+    ```
+
+- **`HTTP_TIMEOUT_MS` (optional global for HTTP-based tools)**
+  - Use to increase per-request timeouts deterministically for tools that support it (e.g., `http_fetch`, `searxng_search`).
+  - Example:
+    ```bash
+    export HTTP_TIMEOUT_MS=20000
+    echo '{"url":"https://example.com"}' | ./tools/bin/http_fetch | jq .status
+    ```
+
+### SSRF guard blocks request
+- Behavior: Tools that perform outbound HTTP enforce an SSRF denylist (loopback, RFC1918/4193, link-local, IPv6 ::1, DNS rebinding).
+- Symptom: stderr JSON contains an error like `SSRF_BLOCKED` or message indicating private/loopback address blocked.
+- Fix: Use only public `http`/`https` origins. If testing, run fixtures on a non-loopback address and allow only via explicit test server. Example expected block:
+  ```bash
+  echo '{"url":"http://127.0.0.1:80"}' | ./tools/bin/http_fetch || true
+  ```
+
+### HTTP 429 with Retry-After handling
+- Behavior: Tools such as `searxng_search` and some API clients retry on 429/5xx with capped attempts and will respect `Retry-After` when present.
+- Symptom: stderr JSON shows rate limit; audit logs include retry attempts.
+- Fix: Reduce query rate, honor backoff, and use authentication when available.
+  ```bash
+  # Inspect retry behavior in audit logs (example path)
+  rg -n "searxng_search" .goagent/audit || true
+  ```
+
+### Robots disallow
+- Use `robots_check` to preflight crawl permission for an origin.
+- Example:
+  ```bash
+  echo '{"url":"https://example.com/some-path","user_agent":"agentcli"}' | ./tools/bin/robots_check | jq .allowed
+  # If false, do not crawl with automated tools.
+  ```
+
+### Response truncation (max_bytes)
+- `http_fetch` enforces a hard byte cap to prevent unbounded responses.
+- Symptom: stdout JSON has `truncated:true` and possibly `body_base64` shortened.
+- Fix: Raise `max_bytes` within safe limits when needed.
+  ```bash
+  echo '{"url":"https://example.com/large","max_bytes":262144}' | ./tools/bin/http_fetch | jq .truncated
+  ```
+
+### Network timeouts
+- Symptom: stderr JSON indicates timeout or the CLI reports `context deadline exceeded`.
+- Fix: Increase tool timeout deterministically via `HTTP_TIMEOUT_MS` (for tools that support it) or tool-specific flags, and reduce payload sizes.
+  ```bash
+  export HTTP_TIMEOUT_MS=30000
+  echo '{"url":"https://example.com/slow"}' | ./tools/bin/http_fetch | jq .status || true
+  ```
+
 ## Missing tool binaries
 - Symptom: `exec: "./tools/<name>": file does not exist` or tool not found in `tools.json` command path.
 - Fix:
