@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -112,6 +114,96 @@ func newTwoStepServer(t *testing.T, targetRelPath, contentB64, model string) *ht
 			t.Fatalf("unexpected extra request step=%d", step)
 		}
 	}))
+}
+
+// Ensures pre-stage honors a nested -prep-tools manifest path and executes the referenced tool.
+// The server verifies that the second request (main stage) includes the tool output produced
+// during pre-stage, proving nested manifest resolution and execution.
+func TestPrep_Integration_NestedManifestResolution(t *testing.T) {
+    tmp := t.TempDir()
+    // Create nested manifest directory with canonical tools/bin layout
+    nested := filepath.Join(tmp, "sub", "manifest")
+    binDir := filepath.Join(nested, "tools", "bin")
+    if err := os.MkdirAll(binDir, 0o755); err != nil {
+        t.Fatalf("mkdir tools/bin: %v", err)
+    }
+
+    // Build a tiny tool that echoes a known JSON to stdout
+    src := filepath.Join(tmp, "prep_ok.go")
+    if err := os.WriteFile(src, []byte(`package main
+import ("encoding/json"; "io"; "os")
+func main(){_,_ = io.ReadAll(os.Stdin); _ = json.NewEncoder(os.Stdout).Encode(map[string]any{"from":"prep","ok":true})}
+`), 0o644); err != nil {
+        t.Fatalf("write src: %v", err)
+    }
+    toolPath := filepath.Join(binDir, "prep_ok")
+    if runtime.GOOS == "windows" { toolPath += ".exe" }
+    if out, err := exec.Command("go", "build", "-o", toolPath, src).CombinedOutput(); err != nil {
+        t.Fatalf("build tool: %v: %s", err, string(out))
+    }
+
+    // Write a manifest that references the tool with a relative ./tools/bin path
+    manPath := filepath.Join(nested, "tools.json")
+    manifest := map[string]any{
+        "tools": []map[string]any{{
+            "name":        "prep_ok",
+            "description": "emit ok json",
+            "schema":      map[string]any{"type": "object", "additionalProperties": false},
+            "command":     []string{"./tools/bin/prep_ok"},
+            "timeoutSec":  5,
+        }},
+    }
+    b, err := json.Marshal(manifest)
+    if err != nil { t.Fatalf("marshal manifest: %v", err) }
+    if err := os.WriteFile(manPath, b, 0o644); err != nil { t.Fatalf("write manifest: %v", err) }
+
+    // Fake server: first response triggers pre-stage tool call; second validates tool output present
+    step := 0
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var req oai.ChatCompletionsRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { t.Fatalf("decode: %v", err) }
+        step++
+        switch step {
+        case 1:
+            // Pre-stage: request tool_calls to our external tool
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                FinishReason: "tool_calls",
+                Message: oai.Message{Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID:"t1", Type:"function", Function:oai.ToolCallFunction{Name:"prep_ok", Arguments:"{}"}}}},
+            }}})
+        case 2:
+            // Main stage: verify tool output is present in messages
+            var saw bool
+            for _, m := range req.Messages {
+                if m.Role == oai.RoleTool && m.Name == "prep_ok" && bytes.Contains([]byte(m.Content), []byte("\"ok\":true")) {
+                    saw = true
+                    break
+                }
+            }
+            if !saw { t.Fatalf("expected prep_ok tool output in main request messages") }
+            _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{
+                Message: oai.Message{Role: oai.RoleAssistant, Content: "done"},
+            }}})
+        default:
+            t.Fatalf("unexpected extra request step=%d", step)
+        }
+    }))
+    defer srv.Close()
+
+    // Run the agent end-to-end with pre-stage external tools enabled and nested -prep-tools manifest
+    var outBuf, errBuf bytes.Buffer
+    code := cliMain([]string{
+        "-prompt", "x",
+        "-base-url", srv.URL,
+        "-model", "m",
+        "-prep-tools-allow-external",
+        "-prep-tools", manPath,
+    }, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, errBuf.String())
+    }
+    if got := outBuf.String(); got != "done\n" {
+        t.Fatalf("unexpected stdout: %q", got)
+    }
 }
 
 // https://github.com/hyperifyio/goagent/issues/89
