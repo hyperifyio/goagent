@@ -44,7 +44,8 @@ TOOLS := \
   robots_check \
   readability_extract \
   metadata_extract \
-  pdf_extract
+  pdf_extract \
+  rss_fetch
 
 .PHONY: tidy build build-tools build-tool test clean clean-logs clean-all test-clean-logs lint lint-precheck fmt fmtcheck verify-manifest-paths bootstrap ensure-rg check-go-version install-golangci
 

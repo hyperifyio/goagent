@@ -371,5 +371,21 @@
       "timeoutSec": 60,
       "envPassthrough": ["ENABLE_OCR"]
     }
+    ,
+    {
+      "name": "rss_fetch",
+      "description": "Fetch and parse RSS/Atom feeds with conditional GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "if_modified_since": {"type": "string"}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/rss_fetch"],
+      "timeoutSec": 10
+    }
   ]
 }
