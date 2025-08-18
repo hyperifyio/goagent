@@ -1,1 +1,1 @@
-Implement S03:image-options-scaffold by adding image.Options and its unit test.
+Blocked: S04 plumb-model-to-options due to missing cmd/agentcli in this repository.
