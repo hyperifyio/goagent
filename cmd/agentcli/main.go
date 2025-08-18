@@ -717,9 +717,11 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
         // Perform at most one in-step retry when finish_reason=="length".
         for {
+            // Apply transcript hygiene before sending to the API when -debug is off
+            hygienic := applyTranscriptHygiene(messages, cfg.debug)
             req := oai.ChatCompletionsRequest{
                 Model:    cfg.model,
-                Messages: messages,
+                Messages: hygienic,
             }
             // One-knob rule: if -top-p is set, set top_p and omit temperature; warn once.
             if cfg.topP > 0 {
@@ -1123,9 +1125,10 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
         safeFprintf(stderr, "error: prep invalid message role: %v\n", normErr)
         return nil, normErr
     }
+    // Apply transcript hygiene before pre-stage call when -debug is off (harmless if no tool messages yet)
     req := oai.ChatCompletionsRequest{
         Model:    prepModel,
-        Messages: normalizedIn,
+        Messages: applyTranscriptHygiene(normalizedIn, cfg.debug),
     }
     // Pre-flight validate message sequence to avoid API 400s for stray tool messages
     if err := oai.ValidateMessageSequence(req.Messages); err != nil {
@@ -1367,6 +1370,29 @@ func oneLine(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	// Collapse repeated spaces
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// applyTranscriptHygiene enforces transcript-size safeguards before requests.
+// When debug is off, any role:"tool" message whose content exceeds 8 KiB is
+// replaced with a compact JSON marker to prevent huge payloads from being sent
+// upstream. Under -debug, no truncation occurs to preserve full visibility.
+func applyTranscriptHygiene(in []oai.Message, debug bool) []oai.Message {
+    if debug || len(in) == 0 {
+        // Preserve exact transcript under -debug or when empty
+        return in
+    }
+    const limit = 8 * 1024
+    out := make([]oai.Message, 0, len(in))
+    for _, m := range in {
+        n := m
+        if n.Role == oai.RoleTool {
+            if len(n.Content) > limit {
+                n.Content = `{"truncated":true,"reason":"large-tool-output"}`
+            }
+        }
+        out = append(out, n)
+    }
+    return out
 }
 
 // helpRequested returns true if any canonical help token is present.

@@ -2591,6 +2591,61 @@ func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {
     }
 }
 
+// FEATURE_CHECKLIST L46: Enforce transcript hygiene — when -debug is off,
+// truncate any tool message content over 8KB before sending to the API.
+func TestPreflight_TruncatesLargeToolContent_WhenDebugOff(t *testing.T) {
+    t.Parallel()
+    // Build transcript: assistant tool_call, then tool with oversized content
+    big := strings.Repeat("A", 9000)
+    msgs := []oai.Message{
+        {Role: oai.RoleSystem, Content: "s"},
+        {Role: oai.RoleUser, Content: "u"},
+        {Role: oai.RoleAssistant, ToolCalls: []oai.ToolCall{{ID: "call_1", Type: "function", Function: oai.ToolCallFunction{Name: "echo", Arguments: "{}"}}}},
+        {Role: oai.RoleTool, ToolCallID: "call_1", Name: "echo", Content: big},
+    }
+
+    // Capture the outgoing request
+    var seen oai.ChatCompletionsRequest
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        defer r.Body.Close()
+        if err := json.NewDecoder(r.Body).Decode(&seen); err != nil { t.Fatalf("decode: %v", err) }
+        _ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Choices: []oai.ChatCompletionsResponseChoice{{Message: oai.Message{Role: oai.RoleAssistant, Channel: "final", Content: "ok"}}}})
+    }))
+    defer srv.Close()
+
+    var outBuf, errBuf bytes.Buffer
+    cfg := cliConfig{
+        baseURL: srv.URL,
+        model:   "m",
+        maxSteps: 1,
+        httpTimeout: 2 * time.Second,
+        toolTimeout: 1 * time.Second,
+        debug: false, // important: hygiene applies only when debug is off
+        initMessages: msgs,
+        prepEnabled: false,
+        prepEnabledSet: true,
+    }
+    code := runAgent(cfg, &outBuf, &errBuf)
+    if code != 0 {
+        t.Fatalf("exit=%d stderr=%s", code, truncate(errBuf.String(), 400))
+    }
+    if strings.TrimSpace(outBuf.String()) != "ok" {
+        t.Fatalf("unexpected stdout: %q", outBuf.String())
+    }
+    // Assert truncation took place in the sent request
+    var found bool
+    for _, m := range seen.Messages {
+        if m.Role == oai.RoleTool && m.ToolCallID == "call_1" {
+            found = true
+            if strings.TrimSpace(m.Content) != `{"truncated":true,"reason":"large-tool-output"}` {
+                t.Fatalf("tool content not truncated; got=%q", truncate(m.Content, 120))
+            }
+            break
+        }
+    }
+    if !found { t.Fatalf("tool message not found in request") }
+}
+
 // FEATURE_CHECKLIST L23: Save/load refined messages. Round-trip test writes the
 // merged Harmony messages to JSON and loads them back to bypass pre-stage and prompt.
 func TestSaveLoadMessages_RoundTrip(t *testing.T) {

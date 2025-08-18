@@ -244,6 +244,7 @@ Minimal JSON transcript showing correct tool‑call sequencing:
 ```
 Notes:
 - For parallel tool calls (multiple entries in `tool_calls`), append one `role:"tool"` message per `id` before calling the API again. Order of tool messages is not significant as long as each `tool_call_id` is present exactly once.
+- Transcript hygiene: when running without `-debug`, the CLI replaces any single tool message content larger than 8 KiB with `{"truncated":true,"reason":"large-tool-output"}` before sending to the API. Use `-debug` to inspect full payloads during troubleshooting.
 
 ### Worked example: tool calls and transcript
 See `examples/tool_calls.md` for a self-contained, test-driven worked example that:
