@@ -42,6 +42,9 @@ type cliConfig struct {
 	temperature      float64
 	topP             float64
 	prepTopP         float64
+	// Pre-stage explicit temperature override and its source
+	prepTemperature       float64
+	prepTemperatureSource string // "flag" | "env" | "inherit"
 	// Pre-stage prompt profile controlling effective temperature when supported
 	prepProfile oai.PromptProfile
 	debug       bool
@@ -67,7 +70,7 @@ type cliConfig struct {
 	globalTimeoutSource   string
 	// Sources for sampling knobs
 	temperatureSource string // "flag" | "env" | "default"
-	prepTopPSource    string // "flag" | "inherit"
+	prepTopPSource    string // "flag" | "env" | "inherit"
 	// Pre-stage explicit overrides
 	prepModel       string
 	prepBaseURL     string
@@ -304,7 +307,14 @@ func parseFlags() (cliConfig, int) {
 	// Nucleus sampling (one-knob with temperature). Not yet sent to API; used to gate temperature.
 	flag.Float64Var(&cfg.topP, "top-p", 0, "Nucleus sampling probability mass (conflicts with temperature)")
 	// Pre-stage nucleus sampling (one-knob with temperature for pre-stage)
-	flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (conflicts with temperature)")
+	flag.Float64Var(&cfg.prepTopP, "prep-top-p", 0, "Nucleus sampling probability mass for pre-stage (env OAI_PREP_TOP_P; conflicts with -prep-temp)")
+	// Pre-stage explicit temperature override (flag > env OAI_PREP_TEMP > inherit -temp)
+	var prepTempSet bool
+	(func() {
+		cfg.prepTemperature = -1 // sentinel to detect unset
+		f := &float64FlexFlag{dst: &cfg.prepTemperature, set: &prepTempSet}
+		flag.CommandLine.Var(f, "prep-temp", "Pre-stage sampling temperature (env OAI_PREP_TEMP; inherits -temp if unset; conflicts with -prep-top-p)")
+	})()
 	// Pre-stage profile selector (deterministic|general|creative|reasoning)
 	var prepProfileRaw string
 	flag.StringVar(&prepProfileRaw, "prep-profile", "", "Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)")
@@ -397,6 +407,31 @@ func parseFlags() (cliConfig, int) {
 		if cfg.temperatureSource == "" {
 			cfg.temperatureSource = "default"
 		}
+	}
+
+	// Resolve pre-stage top_p from env when not set via flag
+	var prepTopPFromEnv bool
+	if cfg.prepTopP <= 0 {
+		if v := strings.TrimSpace(os.Getenv("OAI_PREP_TOP_P")); v != "" {
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil && parsed > 0 {
+				cfg.prepTopP = parsed
+				prepTopPFromEnv = true
+			}
+		}
+	}
+
+	// Resolve pre-stage temperature precedence: flag > env > inherit from -temp
+	if prepTempSet {
+		cfg.prepTemperatureSource = "flag"
+	} else if v := strings.TrimSpace(os.Getenv("OAI_PREP_TEMP")); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			cfg.prepTemperature = parsed
+			cfg.prepTemperatureSource = "env"
+		}
+	}
+	if cfg.prepTemperature < 0 { // still unset
+		cfg.prepTemperature = cfg.temperature
+		cfg.prepTemperatureSource = "inherit"
 	}
 
 	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
@@ -733,7 +768,11 @@ func parseFlags() (cliConfig, int) {
 	}
 	// Prep top_p source labeling for config dump
 	if cfg.prepTopP > 0 {
-		cfg.prepTopPSource = "flag"
+		if prepTopPFromEnv {
+			cfg.prepTopPSource = "env"
+		} else {
+			cfg.prepTopPSource = "flag"
+		}
 	} else {
 		cfg.prepTopPSource = "inherit"
 	}
@@ -1344,16 +1383,24 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		effectiveTopP *float64
 		effectiveTemp *float64
 	)
+	// One-knob: -prep-top-p wins and omits temperature entirely
 	if cfg.prepTopP > 0 {
 		tp := cfg.prepTopP
 		effectiveTopP = &tp
 		// temperature omitted
+	} else if cfg.prepTemperatureSource == "flag" || cfg.prepTemperatureSource == "env" {
+		// Explicit pre-stage temperature override via flag/env, if supported
+		if oai.SupportsTemperature(prepModel) {
+			t := cfg.prepTemperature
+			effectiveTemp = &t
+		}
 	} else if strings.TrimSpace(string(cfg.prepProfile)) != "" {
 		// Apply profile-derived temperature when supported
 		if t, ok := oai.MapProfileToTemperature(prepModel, cfg.prepProfile); ok {
 			effectiveTemp = &t
 		}
 	} else if oai.SupportsTemperature(prepModel) {
+		// Inherit main temperature when supported and no explicit pre-stage override provided
 		t := cfg.temperature
 		effectiveTemp = &t
 	}
@@ -1738,6 +1785,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-api-key string\n    Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)\n")
 	b.WriteString("  -prep-http-retries int\n    Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)\n")
 	b.WriteString("  -prep-http-retry-backoff duration\n    Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)\n")
+	b.WriteString("  -prep-temp float\n    Pre-stage sampling temperature (env OAI_PREP_TEMP; inherits -temp if unset; conflicts with -prep-top-p)\n")
+	b.WriteString("  -prep-top-p float\n    Nucleus sampling probability mass for pre-stage (env OAI_PREP_TOP_P; conflicts with -prep-temp; omits temperature when set)\n")
 	b.WriteString("  -image-n int\n    Number of images to generate (env OAI_IMAGE_N; default 1)\n")
 	b.WriteString("  -image-size string\n    Image size WxH, e.g., 1024x1024 (env OAI_IMAGE_SIZE; default 1024x1024)\n")
 	b.WriteString("  -image-quality string\n    Image quality: standard|hd (env OAI_IMAGE_QUALITY; default standard)\n")
@@ -1854,15 +1903,27 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 		apiKeyPresent = false
 	}
 
-	// Resolve sampling for prep: one-knob behavior
+	// Resolve sampling for prep: one-knob behavior with explicit overrides
 	var prepTempStr, prepTempSource, prepTopPStr, prepTopPSource string
 	if cfg.prepTopP > 0 {
 		prepTopPStr = strconv.FormatFloat(cfg.prepTopP, 'f', -1, 64)
 		prepTopPSource = cfg.prepTopPSource
 		prepTempStr = "(omitted)"
 		prepTempSource = "omitted:one-knob"
+	} else if cfg.prepTemperatureSource == "flag" || cfg.prepTemperatureSource == "env" {
+		if oai.SupportsTemperature(prepModel) {
+			prepTempStr = strconv.FormatFloat(cfg.prepTemperature, 'f', -1, 64)
+			prepTempSource = cfg.prepTemperatureSource
+			prepTopPStr = "(omitted)"
+			prepTopPSource = "inherit"
+		} else {
+			prepTempStr = "(omitted:unsupported)"
+			prepTempSource = "unsupported"
+			prepTopPStr = "(omitted)"
+			prepTopPSource = "inherit"
+		}
 	} else {
-		// Use temperature when supported; else both omitted
+		// Inherit main temperature when supported; else both omitted
 		if oai.SupportsTemperature(prepModel) {
 			prepTempStr = strconv.FormatFloat(cfg.temperature, 'f', -1, 64)
 			prepTempSource = cfg.temperatureSource
