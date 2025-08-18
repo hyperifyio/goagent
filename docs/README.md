@@ -12,6 +12,8 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/adr/0004-default-llm-policy.md](adr/0004-default-llm-policy.md)
 - ADR-0005: Harmony pre-processing and channel-aware output — pre-stage HTTP call, parallel read-only tools, validator/audit with stage tags, and deterministic channel routing.
   - Link: [docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md](adr/0005-harmony-pre-processing-and-channel-aware-output.md)
+ - ADR-0006: Image generation tool (img_create) — minimal Images API integration, repo‑relative saves, env passthrough, and transcript hygiene.
+   - Link: [docs/adr/0006-image-generation-tool-img_create.md](adr/0006-image-generation-tool-img_create.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)

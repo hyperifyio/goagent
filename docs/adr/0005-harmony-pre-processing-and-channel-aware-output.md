@@ -27,6 +27,8 @@ References
 
 - Sequence diagram: [docs/diagrams/harmony-prep-seq.md](../diagrams/harmony-prep-seq.md)
 - Related policy: [ADR-0004: Default LLM Call Policy](0004-default-llm-policy.md)
+ - Related policy: [ADR-0004: Default LLM Call Policy](0004-default-llm-policy.md)
+ - See also: [ADR-0006: Image generation tool (img_create)](0006-image-generation-tool-img_create.md)
 
 Mermaid sequence (summary)
 

@@ -1,5 +1,7 @@
 # Image generation tool (img_create)
 
+See ADR‑0006 for design rationale and links: [../adr/0006-image-generation-tool-img_create.md](../adr/0006-image-generation-tool-img_create.md)
+
 Generate image(s) via an OpenAI‑compatible Images API and either save PNG files into your repository (default) or return base64 on demand. This tool is invoked by the agent as a function tool using JSON over stdin/stdout with strict timeouts and no shell.
 
 ## Contracts

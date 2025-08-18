@@ -59,3 +59,4 @@ Addendum (2025-08-17)
 This addendum clarifies that the project standardizes on a default `temperature=1.0` for API parity and GPT-5 compatibility. Models that do not accept a temperature parameter will receive no `temperature` in the payload; behavior in those cases remains provider-default. The one-knob rule remains in effect: when users specify `top_p`, the agent omits `temperature`; when `top_p` is not provided, the agent sends `temperature` (default 1.0) and leaves `top_p` unset. The docs index now links to this ADR to surface the policy.
 
 See also: [ADR-0005: Harmony pre-processing and channel-aware output](0005-harmony-pre-processing-and-channel-aware-output.md)
+See also: [ADR-0006: Image generation tool (img_create)](0006-image-generation-tool-img_create.md)
