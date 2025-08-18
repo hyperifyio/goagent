@@ -1,1 +1,1 @@
-Blocked: S04 plumb-model-to-options due to missing cmd/agentcli in this repository.
+Update Harmony messages save/load to carry optional image_prompt and ensure loader populates image prompt when flags are unset.

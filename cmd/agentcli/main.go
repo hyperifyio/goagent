@@ -103,6 +103,9 @@ type cliConfig struct {
 	imageStyle                 string // natural|vivid
 	imageResponseFormat        string // url|b64_json
 	imageTransparentBackground bool
+	// Image prompt (optional). Not exposed via flags yet; populated when loading
+	// from a saved messages file that contains an auxiliary "image_prompt" field.
+	imagePrompt string
 	// Message viewing modes
 	prepDryRun    bool // When true, run pre-stage only, print refined messages to stdout, and exit
 	printMessages bool // When true, pretty-print final merged messages to stderr before main call
@@ -872,9 +875,14 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			safeFprintf(stderr, "error: read load-messages file: %v\n", rerr)
 			return 2
 		}
-		if err := json.Unmarshal(data, &messages); err != nil {
+		msgs, imgPrompt, err := parseSavedMessages(data)
+		if err != nil {
 			safeFprintf(stderr, "error: parse load-messages JSON: %v\n", err)
 			return 2
+		}
+		messages = msgs
+		if strings.TrimSpace(cfg.imagePrompt) == "" && strings.TrimSpace(imgPrompt) != "" {
+			cfg.imagePrompt = strings.TrimSpace(imgPrompt)
 		}
 		if err := oai.ValidateMessageSequence(messages); err != nil {
 			safeFprintf(stderr, "error: invalid loaded message sequence: %v\n", err)
@@ -950,13 +958,8 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
 	// Optional: save the final merged messages to a JSON file before main call
 	if strings.TrimSpace(cfg.saveMessagesPath) != "" {
-		b, err := json.MarshalIndent(messages, "", "  ")
-		if err != nil {
-			safeFprintf(stderr, "error: marshal messages: %v\n", err)
-			return 2
-		}
-		if werr := writeFileAtomic(strings.TrimSpace(cfg.saveMessagesPath), b, 0o644); werr != nil {
-			safeFprintf(stderr, "error: write save-messages file: %v\n", werr)
+		if err := writeSavedMessages(strings.TrimSpace(cfg.saveMessagesPath), messages, strings.TrimSpace(cfg.imagePrompt)); err != nil {
+			safeFprintf(stderr, "error: write save-messages file: %v\n", err)
 			return 2
 		}
 	}
@@ -1683,6 +1686,45 @@ func oneLine(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	// Collapse repeated spaces
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// parseSavedMessages accepts either a JSON array of oai.Message (legacy format)
+// or a JSON object {"messages":[...], "image_prompt":"..."} and returns
+// the parsed messages and optional image prompt.
+func parseSavedMessages(data []byte) ([]oai.Message, string, error) {
+	trimmed := strings.TrimSpace(string(data))
+	if strings.HasPrefix(trimmed, "[") {
+		var msgs []oai.Message
+		if err := json.Unmarshal([]byte(trimmed), &msgs); err != nil {
+			return nil, "", err
+		}
+		return msgs, "", nil
+	}
+	var wrapper struct {
+		Messages    []oai.Message `json:"messages"`
+		ImagePrompt string        `json:"image_prompt"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &wrapper); err != nil {
+		return nil, "", err
+	}
+	return wrapper.Messages, strings.TrimSpace(wrapper.ImagePrompt), nil
+}
+
+// writeSavedMessages writes the wrapper JSON with messages and optional image_prompt.
+func writeSavedMessages(path string, messages []oai.Message, imagePrompt string) error {
+	type savedMessagesFile struct {
+		Messages    []oai.Message `json:"messages"`
+		ImagePrompt string        `json:"image_prompt,omitempty"`
+	}
+	out := savedMessagesFile{Messages: messages}
+	if strings.TrimSpace(imagePrompt) != "" {
+		out.ImagePrompt = strings.TrimSpace(imagePrompt)
+	}
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, b, 0o644)
 }
 
 // applyTranscriptHygiene enforces transcript-size safeguards before requests.

@@ -2906,12 +2906,16 @@ func TestSaveLoadMessages_RoundTrip(t *testing.T) {
 	if rerr != nil {
 		t.Fatalf("read saved messages: %v", rerr)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(string(b)), "[") {
-		t.Fatalf("saved file not JSON array: %s", truncate(string(b), 100))
-	}
-	// Quick schema sniff: must include at least one role field
-	if !strings.Contains(string(b), "\"role\"") {
-		t.Fatalf("saved messages missing role fields: %s", truncate(string(b), 100))
+	// Quick schema sniff: support both legacy array and new object wrapper
+	trimmed := strings.TrimSpace(string(b))
+	if strings.HasPrefix(trimmed, "[") {
+		if !strings.Contains(trimmed, "\"role\"") {
+			t.Fatalf("saved messages missing role fields: %s", truncate(trimmed, 100))
+		}
+	} else {
+		if !strings.Contains(trimmed, "\"messages\"") {
+			t.Fatalf("saved wrapper missing messages field: %s", truncate(trimmed, 120))
+		}
 	}
 
 	// Second run: load messages from file; should parse and validate without requiring -prompt.
@@ -2920,6 +2924,62 @@ func TestSaveLoadMessages_RoundTrip(t *testing.T) {
 	code2 := cliMain(args2, &out2, &err2)
 	if code2 != 1 && code2 != 0 { // may exit 1 due to max-steps==0
 		t.Fatalf("unexpected exit on load: %d; stderr=%s", code2, err2.String())
+	}
+}
+
+// FEATURE_CHECKLIST L52: Round-trip with image_prompt metadata.
+func TestSaveLoadMessages_WithImagePrompt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "msgs_with_image.json")
+
+	// First run: inject an image prompt via cfg, save wrapper file.
+	// We call cliMain by setting flags and let parseFlags build cfg; since there's
+	// no flag for image prompt yet, we simulate by running once to produce messages,
+	// then rewrite file to include image_prompt and ensure loader reads it.
+	args1 := []string{"-prompt", "hello", "-prep-enabled=false", "-max-steps", "0", "-save-messages", path}
+	var out1, err1 strings.Builder
+	_ = cliMain(args1, &out1, &err1)
+
+	// Overwrite saved file with wrapper that includes image_prompt
+	data, rerr := os.ReadFile(path)
+	if rerr != nil {
+		t.Fatalf("read saved: %v", rerr)
+	}
+	// Wrap into object if file is an array
+	if strings.HasPrefix(strings.TrimSpace(string(data)), "[") {
+		data = []byte("{\n  \"messages\": " + string(data) + ",\n  \"image_prompt\": \"draw a cat\"\n}")
+		if werr := os.WriteFile(path, data, 0o644); werr != nil {
+			t.Fatalf("rewrite saved: %v", werr)
+		}
+	} else {
+		// Otherwise, inject image_prompt field crudely for test purposes
+		if !strings.Contains(string(data), "\"image_prompt\"") {
+			data = []byte(strings.TrimSuffix(strings.TrimSpace(string(data)), "}") + ",\n  \"image_prompt\": \"draw a cat\"\n}")
+			if werr := os.WriteFile(path, data, 0o644); werr != nil {
+				t.Fatalf("inject saved: %v", werr)
+			}
+		}
+	}
+
+	// Round-trip via helpers since -load and -save cannot be combined in one invocation
+	raw, r1 := os.ReadFile(path)
+	if r1 != nil {
+		t.Fatalf("read raw: %v", r1)
+	}
+	msgs, img, perr := parseSavedMessages(raw)
+	if perr != nil {
+		t.Fatalf("parse saved: %v", perr)
+	}
+	outPath := filepath.Join(dir, "msgs_roundtrip.json")
+	if werr := writeSavedMessages(outPath, msgs, img); werr != nil {
+		t.Fatalf("write roundtrip: %v", werr)
+	}
+	b2, r2 := os.ReadFile(outPath)
+	if r2 != nil {
+		t.Fatalf("read roundtrip: %v", r2)
+	}
+	if !strings.Contains(string(b2), "\"image_prompt\": \"draw a cat\"") {
+		t.Fatalf("round-trip missing image_prompt: %s", truncate(string(b2), 160))
 	}
 }
 
