@@ -201,7 +201,7 @@ Run `./bin/agentcli -h` to see the built‑in help.
 - See the policy for details and rationale: [ADR‑0004: Default LLM policy](docs/adr/0004-default-llm-policy.md).
 
 ### Capabilities
-List enabled tools from a manifest without running the agent:
+List enabled tools from a manifest without running the agent. The output includes a prominent header warning, and certain tools like `img_create` are annotated with an extra warning because they make outbound network calls and can save files:
 ```bash
 ./bin/agentcli -tools ./tools.json -capabilities
 ```

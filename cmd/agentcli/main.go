@@ -1613,7 +1613,7 @@ func printCapabilities(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		safeFprintln(stdout, "No tools enabled in manifest.")
 		return 0
 	}
-	safeFprintln(stdout, "Capabilities (enabled tools):")
+    safeFprintln(stdout, "Capabilities (enabled tools):")
 	// Stable ordering: lexicographic by name for deterministic output
 	names := make([]string, 0, len(registry))
 	for name := range registry {
@@ -1627,14 +1627,19 @@ func printCapabilities(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 			j--
 		}
 	}
-	for _, name := range names {
-		spec := registry[name]
-		desc := strings.TrimSpace(spec.Description)
-		if desc == "" {
-			desc = "(no description)"
-		}
-		safeFprintf(stdout, "- %s: %s\n", name, desc)
-	}
+    for _, name := range names {
+        spec := registry[name]
+        desc := strings.TrimSpace(spec.Description)
+        if desc == "" {
+            desc = "(no description)"
+        }
+        // Add an explicit per-tool warning for img_create since it performs outbound network calls
+        // and can write image files to the repository when configured to save.
+        if name == "img_create" {
+            desc = desc + " [WARNING: makes outbound network calls and can save files]"
+        }
+        safeFprintf(stdout, "- %s: %s\n", name, desc)
+    }
 	return 0
 }
 
