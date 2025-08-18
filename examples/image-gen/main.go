@@ -16,11 +16,11 @@ type SaveSpec struct {
 }
 
 type Request struct {
-	Prompt    string   `json:"prompt"`
-	N         int      `json:"n,omitempty"`
-	Size      string   `json:"size,omitempty"`
-	Model     string   `json:"model,omitempty"`
-	ReturnB64 bool     `json:"return_b64,omitempty"`
+	Prompt    string    `json:"prompt"`
+	N         int       `json:"n,omitempty"`
+	Size      string    `json:"size,omitempty"`
+	Model     string    `json:"model,omitempty"`
+	ReturnB64 bool      `json:"return_b64,omitempty"`
 	Save      *SaveSpec `json:"save,omitempty"`
 }
 

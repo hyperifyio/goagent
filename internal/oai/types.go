@@ -1,9 +1,9 @@
 package oai
 
 import (
-    "encoding/json"
-    "fmt"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"strings"
 )
 
 // Message roles
@@ -12,11 +12,11 @@ const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 	RoleTool      = "tool"
-    // RoleDeveloper is a Harmony role used to convey developer guidance
-    // that is distinct from system and user prompts. Messages with this
-    // role are prepended ahead of user messages and may be merged from
-    // multiple sources (CLI flags and pre-stage refinement).
-    RoleDeveloper = "developer"
+	// RoleDeveloper is a Harmony role used to convey developer guidance
+	// that is distinct from system and user prompts. Messages with this
+	// role are prepended ahead of user messages and may be merged from
+	// multiple sources (CLI flags and pre-stage refinement).
+	RoleDeveloper = "developer"
 )
 
 // Message represents an OpenAI-compatible chat message.
@@ -26,10 +26,10 @@ type Message struct {
 	Content    string `json:"content,omitempty"`
 	Name       string `json:"name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
-    // Channel allows assistants to tag messages with a semantic channel such as
-    // "final", "critic", or "confidence". Unknown or empty channels are
-    // treated as normal assistant messages by the CLI unless routed explicitly.
-    Channel    string `json:"channel,omitempty"`
+	// Channel allows assistants to tag messages with a semantic channel such as
+	// "final", "critic", or "confidence". Unknown or empty channels are
+	// treated as normal assistant messages by the CLI unless routed explicitly.
+	Channel string `json:"channel,omitempty"`
 	// The OpenAI-compatible schema also allows "tool_calls" on assistant messages.
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
@@ -69,13 +69,13 @@ type ChatCompletionsRequest struct {
 	// top_p or temperature is set, but never both.
 	TopP        *float64 `json:"top_p,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"`
-    // MaxTokens limits the number of tokens generated for the completion.
-    // Omitted when zero to preserve backward compatibility.
-    MaxTokens int `json:"max_tokens,omitempty"`
-    // Stream requests server-sent events (SSE) streaming mode when true.
-    // When enabled, the server responds with text/event-stream and emits
-    // incremental deltas under choices[].delta.
-    Stream bool `json:"stream,omitempty"`
+	// MaxTokens limits the number of tokens generated for the completion.
+	// Omitted when zero to preserve backward compatibility.
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// Stream requests server-sent events (SSE) streaming mode when true.
+	// When enabled, the server responds with text/event-stream and emits
+	// incremental deltas under choices[].delta.
+	Stream bool `json:"stream,omitempty"`
 }
 
 // includesTemperature reports whether the request currently has a temperature set.
@@ -101,30 +101,30 @@ func mentionsUnsupportedTemperature(body string) bool {
 // simply pass through after normalization; they may not be auto-printed unless
 // explicitly routed by the CLI.
 func NormalizeHarmonyMessages(in []Message) ([]Message, error) {
-    out := make([]Message, 0, len(in))
-    for _, m := range in {
-        nm := m
-        nm.Role = strings.ToLower(strings.TrimSpace(nm.Role))
-        switch nm.Role {
-        case RoleSystem, RoleDeveloper, RoleUser, RoleAssistant, RoleTool:
-            // ok
-        default:
-            return nil, fmt.Errorf("invalid role: %q", m.Role)
-        }
-        // Normalize channel only for assistant messages
-        if nm.Role == RoleAssistant {
-            ch := strings.ToLower(strings.TrimSpace(nm.Channel))
-            if ch != "" {
-                ch = normalizeAssistantChannel(ch)
-            }
-            nm.Channel = ch
-        } else {
-            // Other roles should not carry a channel
-            nm.Channel = ""
-        }
-        out = append(out, nm)
-    }
-    return out, nil
+	out := make([]Message, 0, len(in))
+	for _, m := range in {
+		nm := m
+		nm.Role = strings.ToLower(strings.TrimSpace(nm.Role))
+		switch nm.Role {
+		case RoleSystem, RoleDeveloper, RoleUser, RoleAssistant, RoleTool:
+			// ok
+		default:
+			return nil, fmt.Errorf("invalid role: %q", m.Role)
+		}
+		// Normalize channel only for assistant messages
+		if nm.Role == RoleAssistant {
+			ch := strings.ToLower(strings.TrimSpace(nm.Channel))
+			if ch != "" {
+				ch = normalizeAssistantChannel(ch)
+			}
+			nm.Channel = ch
+		} else {
+			// Other roles should not carry a channel
+			nm.Channel = ""
+		}
+		out = append(out, nm)
+	}
+	return out, nil
 }
 
 // normalizeAssistantChannel makes channel tokens safe: lowercased, ASCII-only
@@ -132,19 +132,19 @@ func NormalizeHarmonyMessages(in []Message) ([]Message, error) {
 // dropped. If the result is empty after filtering, the empty string is
 // returned, which the CLI treats as an unchannelled assistant message.
 func normalizeAssistantChannel(in string) string {
-    const maxLen = 32
-    // Filter to allowed characters
-    b := make([]byte, 0, len(in))
-    for i := 0; i < len(in); i++ {
-        c := in[i]
-        if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
-            b = append(b, c)
-        }
-        if len(b) >= maxLen {
-            break
-        }
-    }
-    return string(b)
+	const maxLen = 32
+	// Filter to allowed characters
+	b := make([]byte, 0, len(in))
+	for i := 0; i < len(in); i++ {
+		c := in[i]
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
+			b = append(b, c)
+		}
+		if len(b) >= maxLen {
+			break
+		}
+	}
+	return string(b)
 }
 
 // ChatCompletionsResponse represents the response for chat completions.
@@ -165,16 +165,16 @@ type ChatCompletionsResponseChoice struct {
 // StreamChunk models an SSE delta event payload for streaming responses.
 // Only a subset of fields are needed for CLI streaming.
 type StreamChunk struct {
-    ID      string `json:"id"`
-    Object  string `json:"object"`
-    Model   string `json:"model"`
-    Choices []struct {
-        Index int `json:"index"`
-        Delta struct {
-            Role    string `json:"role"`
-            Channel string `json:"channel"`
-            Content string `json:"content"`
-        } `json:"delta"`
-        FinishReason string `json:"finish_reason"`
-    } `json:"choices"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index int `json:"index"`
+		Delta struct {
+			Role    string `json:"role"`
+			Channel string `json:"channel"`
+			Content string `json:"content"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
 }

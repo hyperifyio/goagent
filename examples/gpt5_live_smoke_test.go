@@ -1,12 +1,12 @@
 package examples
 
 import (
-    "bytes"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
 )
 
 // TestGPT5_LiveSmoke_DefaultTemperature runs the CLI against a live GPT-5 endpoint
