@@ -42,6 +42,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Enforce mutual exclusivity between 'titles' and 'search'
+	if (in.Titles == "" && in.Search == "") || (in.Titles != "" && in.Search != "") {
+		return errors.New("provide exactly one of 'titles' or 'search'")
+	}
 	base := os.Getenv("MEDIAWIKI_BASE_URL")
 	if base == "" {
 		base = fmt.Sprintf("https://%s.wikipedia.org", langOrDefault(in.Language))
@@ -53,10 +57,8 @@ func run() error {
 	var pages []page
 	if in.Titles != "" {
 		pages, err = fetchExtracts(client, base, langOrDefault(in.Language), in.Titles)
-	} else if in.Search != "" {
-		pages, err = fetchOpenSearch(client, base, in.Search)
 	} else {
-		return errors.New("missing 'titles' or 'search'")
+		pages, err = fetchOpenSearch(client, base, in.Search)
 	}
 	if err != nil {
 		return err

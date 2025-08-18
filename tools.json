@@ -409,16 +409,22 @@
       "description": "MediaWiki summaries/search",
       "schema": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "titles": {"type": "string"},
-          "search": {"type": "string"},
-          "language": {"type": "string"}
-        },
-        "oneOf": [
-          {"required": ["titles"]},
-          {"required": ["search"]}
-        ],
-        "additionalProperties": false
+          "titles": {
+            "type": "string",
+            "description": "Exact page title to fetch summary for (mutually exclusive with 'search')"
+          },
+          "search": {
+            "type": "string",
+            "description": "Full-text search term to find pages (mutually exclusive with 'titles')"
+          },
+          "language": {
+            "type": "string",
+            "default": "en",
+            "description": "MediaWiki language code, e.g. en, fi"
+          }
+        }
       },
       "command": ["./tools/bin/wiki_query"],
       "timeoutSec": 10

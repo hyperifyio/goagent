@@ -118,3 +118,37 @@ func TestWikiQuery_SearchSuccess(t *testing.T) {
 		t.Fatalf("missing fields in first result: %+v", out.Pages[0])
 	}
 }
+
+func TestWikiQuery_BothParamsError(t *testing.T) {
+	bin := testutil.BuildTool(t, "wiki_query")
+	stdin := []byte(`{"titles":"Go","search":"golang"}`)
+	cmd := exec.Command(bin)
+	// No network needed; validation happens before requests
+	cmd.Stdin = bytes.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatalf("expected error when both 'titles' and 'search' provided; stdout=%s", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("provide exactly one of 'titles' or 'search'")) {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
+func TestWikiQuery_MissingParamsError(t *testing.T) {
+	bin := testutil.BuildTool(t, "wiki_query")
+	stdin := []byte(`{}`)
+	cmd := exec.Command(bin)
+	// No network needed; validation happens before requests
+	cmd.Stdin = bytes.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatalf("expected error when neither 'titles' nor 'search' provided; stdout=%s", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("provide exactly one of 'titles' or 'search'")) {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
