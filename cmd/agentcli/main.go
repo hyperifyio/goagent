@@ -480,27 +480,16 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-	// Resolve global HTTP retry knobs with precedence: flag > env > default
-	if !httpRetriesSet {
-		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRIES")); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-				cfg.httpRetries = n
-			}
-		}
+	// Resolve global HTTP retry knobs using centralized helpers
+	// http-retries: flag > env > default(2)
+	{
+		resolved, _ := oai.ResolveInt(httpRetriesSet, cfg.httpRetries, os.Getenv("OAI_HTTP_RETRIES"), nil, 2)
+		cfg.httpRetries = resolved
 	}
-	if cfg.httpRetries < 0 {
-		cfg.httpRetries = 2
-	}
-	if !httpBackoffSet {
-		if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRY_BACKOFF")); v != "" {
-			if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
-				cfg.httpBackoff = d
-			}
-		}
-	}
-	if cfg.httpBackoff == 0 && !httpBackoffSet {
-		// Only apply default when not explicitly set to 0 via flag
-		cfg.httpBackoff = 500 * time.Millisecond
+	// http-retry-backoff: flag > env > default(500ms)
+	{
+		resolved, _ := oai.ResolveDuration(httpBackoffSet, cfg.httpBackoff, os.Getenv("OAI_HTTP_RETRY_BACKOFF"), nil, 500*time.Millisecond)
+		cfg.httpBackoff = resolved
 	}
 
 	// Resolve prep overrides precedence: flag > env OAI_PREP_* > inherit main-call
@@ -583,50 +572,36 @@ func parseFlags() (cliConfig, int) {
 		cfg.imageAPIKeySource = keySrc
 	}
 
-	// Resolve image HTTP knobs with precedence: flag > env > inherit from main HTTP knobs
-	// Timeout
-	if imageHTTPTimeoutSet {
-		cfg.imageHTTPTimeoutSource = "flag"
-	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_TIMEOUT")); v != "" {
-		if d, err := parseDurationFlexible(v); err == nil && d > 0 {
-			cfg.imageHTTPTimeout = d
-			cfg.imageHTTPTimeoutSource = "env"
+	// Resolve image HTTP knobs using centralized helpers with inheritance from main HTTP knobs
+	// Timeout: flag > env > inherit(http-timeout) > default(unused)
+	{
+		inherit := cfg.httpTimeout
+		resolved, src := oai.ResolveDuration(imageHTTPTimeoutSet, cfg.imageHTTPTimeout, os.Getenv("OAI_IMAGE_HTTP_TIMEOUT"), &inherit, cfg.httpTimeout)
+		cfg.imageHTTPTimeout = resolved
+		cfg.imageHTTPTimeoutSource = src
+		if cfg.imageHTTPTimeout <= 0 && src == "inherit" {
+			// Ensure a positive inherited timeout
+			cfg.imageHTTPTimeout = cfg.httpTimeout
 		}
 	}
-	if cfg.imageHTTPTimeout <= 0 {
-		cfg.imageHTTPTimeout = cfg.httpTimeout
-		if cfg.imageHTTPTimeoutSource == "" {
-			cfg.imageHTTPTimeoutSource = "inherit"
+	// Retries: flag > env > inherit(http-retries) > default(unused)
+	{
+		inherit := cfg.httpRetries
+		resolved, src := oai.ResolveInt(imageHTTPRetriesSet, cfg.imageHTTPRetries, os.Getenv("OAI_IMAGE_HTTP_RETRIES"), &inherit, cfg.httpRetries)
+		cfg.imageHTTPRetries = resolved
+		cfg.imageHTTPRetriesSource = src
+		if cfg.imageHTTPRetries < 0 && src == "inherit" {
+			cfg.imageHTTPRetries = cfg.httpRetries
 		}
 	}
-	// Retries
-	if imageHTTPRetriesSet {
-		cfg.imageHTTPRetriesSource = "flag"
-	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_RETRIES")); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			cfg.imageHTTPRetries = n
-			cfg.imageHTTPRetriesSource = "env"
-		}
-	}
-	if cfg.imageHTTPRetries < 0 {
-		cfg.imageHTTPRetries = cfg.httpRetries
-		if cfg.imageHTTPRetriesSource == "" {
-			cfg.imageHTTPRetriesSource = "inherit"
-		}
-	}
-	// Backoff
-	if imageHTTPBackoffSet {
-		cfg.imageHTTPBackoffSource = "flag"
-	} else if v := strings.TrimSpace(os.Getenv("OAI_IMAGE_HTTP_RETRY_BACKOFF")); v != "" {
-		if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
-			cfg.imageHTTPBackoff = d
-			cfg.imageHTTPBackoffSource = "env"
-		}
-	}
-	if cfg.imageHTTPBackoff == 0 {
-		cfg.imageHTTPBackoff = cfg.httpBackoff
-		if cfg.imageHTTPBackoffSource == "" {
-			cfg.imageHTTPBackoffSource = "inherit"
+	// Backoff: flag > env > inherit(http-retry-backoff) > default(unused)
+	{
+		inherit := cfg.httpBackoff
+		resolved, src := oai.ResolveDuration(imageHTTPBackoffSet, cfg.imageHTTPBackoff, os.Getenv("OAI_IMAGE_HTTP_RETRY_BACKOFF"), &inherit, cfg.httpBackoff)
+		cfg.imageHTTPBackoff = resolved
+		cfg.imageHTTPBackoffSource = src
+		if cfg.imageHTTPBackoff == 0 && src == "inherit" {
+			cfg.imageHTTPBackoff = cfg.httpBackoff
 		}
 	}
 
