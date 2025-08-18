@@ -4,6 +4,8 @@ import (
     "bytes"
     "encoding/base64"
     "encoding/json"
+    "crypto/sha256"
+    "encoding/hex"
     "net/http"
     "net/http/httptest"
     "os"
@@ -11,6 +13,7 @@ import (
     "path/filepath"
     "strings"
     "testing"
+    "runtime"
     
     "github.com/hyperifyio/goagent/tools/testutil"
 )
@@ -238,5 +241,129 @@ func TestAPI400_JSONErrorIsSurfaced(t *testing.T) {
     }
     if !strings.Contains(stderr, "bad prompt") {
         t.Fatalf("expected API error message surfaced, got %q", stderr)
+    }
+}
+
+func TestSaveDir_AbsolutePathRejected(t *testing.T) {
+    bin := buildTool(t)
+    wd, err := os.Getwd()
+    if err != nil {
+        t.Fatalf("getwd: %v", err)
+    }
+    abs := filepath.Join(wd, "imgcreate-abs-out")
+    // Ensure absolute path
+    if !filepath.IsAbs(abs) {
+        t.Fatalf("expected absolute path, got %q", abs)
+    }
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+        "save":   map[string]any{"dir": abs},
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": "http://127.0.0.1:9", // invalid to avoid real network if it would try
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for absolute save.dir")
+    }
+    if !strings.Contains(stderr, "repo-relative") {
+        t.Fatalf("expected repo-relative error, got %q", stderr)
+    }
+}
+
+func TestSaveDir_EscapeOutsideRepoRejected(t *testing.T) {
+    bin := buildTool(t)
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+        "save":   map[string]any{"dir": filepath.Clean(filepath.Join(".."))},
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": "http://127.0.0.1:9",
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for escape path")
+    }
+    if !strings.Contains(stderr, "escapes repository root") {
+        t.Fatalf("expected escape error, got %q", stderr)
+    }
+}
+
+func TestSaveDir_CleansRelativeAndCreatesNested_WithSHA256(t *testing.T) {
+    // 1x1 transparent PNG bytes and known SHA256
+    png1x1 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9cFmgAAAAASUVORK5CYII="
+    wantBytes, _ := base64.StdEncoding.DecodeString(png1x1)
+    sum := sha256.Sum256(wantBytes)
+    wantSHA := hex.EncodeToString(sum[:])
+
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(map[string]any{
+            "data": []map[string]any{{"b64_json": png1x1}},
+            "model": "gpt-image-1",
+        })
+    }))
+    defer srv.Close()
+
+    bin := buildTool(t)
+    base := testutil.MakeRepoRelTempDir(t, "imgcreate-nested-")
+    // Provide a dir that cleans to a simple child (e.g., a/../b -> b)
+    nested := filepath.Join(base, "a", "..", "b")
+    stdout, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny-pixel",
+        "save":   map[string]any{"dir": nested, "basename": "img"},
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": srv.URL,
+        "OAI_API_KEY":        "test-123",
+    })
+    if code != 0 {
+        t.Fatalf("unexpected failure: %s", stderr)
+    }
+    var obj struct{
+        Saved []struct{ Path string `json:"path"`; Bytes int `json:"bytes"`; Sha256 string `json:"sha256"` } `json:"saved"`
+    }
+    if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &obj); err != nil {
+        t.Fatalf("bad stdout json: %v; raw=%q", err, stdout)
+    }
+    if len(obj.Saved) != 1 {
+        t.Fatalf("expected one saved file, got %d", len(obj.Saved))
+    }
+    if obj.Saved[0].Sha256 != wantSHA {
+        t.Fatalf("sha256 mismatch: got %s want %s", obj.Saved[0].Sha256, wantSHA)
+    }
+    // Path should be repo-relative (not absolute)
+    if filepath.IsAbs(obj.Saved[0].Path) {
+        t.Fatalf("expected relative saved path, got absolute: %q", obj.Saved[0].Path)
+    }
+    // Ensure nested directories were created; file exists
+    if _, err := os.Stat(obj.Saved[0].Path); err != nil {
+        t.Fatalf("stat saved file: %v", err)
+    }
+}
+
+func TestBasename_MustNotContainPathSeparators(t *testing.T) {
+    // Need a server so the tool reaches save-path validation after decoding
+    png1x1 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9cFmgAAAAASUVORK5CYII="
+    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        _ = json.NewEncoder(w).Encode(map[string]any{
+            "data": []map[string]any{{"b64_json": png1x1}},
+        })
+    }))
+    defer srv.Close()
+
+    bin := buildTool(t)
+    outDir := testutil.MakeRepoRelTempDir(t, "imgcreate-out-")
+    badBase := "bad/name"
+    // On Windows also try using backslash explicitly
+    if runtime.GOOS == "windows" {
+        badBase = "bad\\name"
+    }
+    _, stderr, code := runTool(t, bin, map[string]any{
+        "prompt": "tiny",
+        "save":   map[string]any{"dir": outDir, "basename": badBase},
+        "return_b64": false,
+    }, map[string]string{
+        "OAI_IMAGE_BASE_URL": srv.URL,
+    })
+    if code == 0 {
+        t.Fatalf("expected non-zero exit for basename with separator")
+    }
+    if !strings.Contains(stderr, "basename must not contain path separators") {
+        t.Fatalf("expected basename separator error, got %q", stderr)
     }
 }
