@@ -1,1 +1,1 @@
-S02: print-config should include image.model; currently blocked because cmd/agentcli/main.go is missing; next step is to add a minimal cmd/agentcli with -print-config and cliConfig.imageModel.
+Implement S03:image-options-scaffold by adding image.Options and its unit test.
