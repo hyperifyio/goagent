@@ -19,9 +19,11 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Quick start](#quick-start)
 - [Usage](#usage)
   - [Common flags](#common-flags)
+  - [Image generation flags](#image-generation-flags)
   - [Why you usually don’t need to change knobs](#why-you-usually-dont-need-to-change-knobs)
   - [Capabilities](#capabilities)
 - [Configuration](#configuration)
+  - [Inheritance and precedence](#inheritance-and-precedence)
 - [Examples](#examples)
   - [Zero-config with GPT-5](#zero-config-with-gpt-5)
   - [Tool calls transcript](#tool-calls-transcript)
@@ -109,6 +111,45 @@ Environment variables:
 - `OAI_API_KEY` — API key when required. The CLI also accepts `OPENAI_API_KEY` for compatibility.
 - `OAI_HTTP_TIMEOUT` — HTTP timeout for chat requests (e.g., `90s`). Mirrors `-http-timeout`.
   `OAI_PREP_HTTP_TIMEOUT` — HTTP timeout for pre-stage; overrides inheritance from `-http-timeout`.
+
+### Inheritance and precedence
+
+The CLI resolves values independently for chat (main), pre-stage, and image flows, with inheritance when explicit values are not provided.
+
+Endpoints and API keys:
+
+| Setting | Resolution order |
+|---|---|
+| Chat base URL | `-base-url` → `OAI_BASE_URL` → default `https://api.openai.com/v1` |
+| Pre-stage base URL | `-prep-base-url` → `OAI_PREP_BASE_URL` → inherit Chat base URL |
+| Image base URL | `-image-base-url` → `OAI_IMAGE_BASE_URL` → inherit Chat base URL |
+| Chat API key | `-api-key` → `OAI_API_KEY` → `OPENAI_API_KEY` |
+| Pre-stage API key | `-prep-api-key` → `OAI_PREP_API_KEY` → inherit Chat API key |
+| Image API key | `-image-api-key` → `OAI_IMAGE_API_KEY` → inherit Chat API key |
+
+Models and sampling:
+
+| Setting | Resolution order |
+|---|---|
+| Chat model | `-model` → `OAI_MODEL` → default `oss-gpt-20b` |
+| Pre-stage model | `-prep-model` → `OAI_PREP_MODEL` → inherit Chat model |
+| Image model | `-image-model` → `OAI_IMAGE_MODEL` → default `gpt-image-1` |
+| Chat temperature vs top-p | One‑knob rule: if `-top-p` is set, omit `temperature`; otherwise send `-temp` (default 1.0) when supported |
+| Pre-stage temperature vs top-p | One‑knob rule applies independently with `-prep-temp`/`-prep-top-p` |
+
+HTTP controls:
+
+| Setting | Resolution order |
+|---|---|
+| Chat HTTP timeout | `-http-timeout` → `OAI_HTTP_TIMEOUT` → fallback to `-timeout` if set |
+| Pre-stage HTTP timeout | `-prep-http-timeout` → `OAI_PREP_HTTP_TIMEOUT` → inherit Chat HTTP timeout |
+| Image HTTP timeout | `-image-http-timeout` → `OAI_IMAGE_HTTP_TIMEOUT` → inherit Chat HTTP timeout |
+| Chat HTTP retries | `-http-retries` → `OAI_HTTP_RETRIES` → default (e.g., 2) |
+| Pre-stage HTTP retries | `-prep-http-retries` → `OAI_PREP_HTTP_RETRIES` → inherit Chat HTTP retries |
+| Image HTTP retries | `-image-http-retries` → `OAI_IMAGE_HTTP_RETRIES` → inherit Chat HTTP retries |
+| Chat HTTP retry backoff | `-http-retry-backoff` → `OAI_HTTP_RETRY_BACKOFF` → default |
+| Pre-stage HTTP retry backoff | `-prep-http-retry-backoff` → `OAI_PREP_HTTP_RETRY_BACKOFF` → inherit Chat backoff |
+| Image HTTP retry backoff | `-image-http-retry-backoff` → `OAI_IMAGE_HTTP_RETRY_BACKOFF` → inherit Chat backoff |
 
 ## Quick start
 Install the CLI and point it to a reachable OpenAI‑compatible API (local or hosted):
@@ -209,6 +250,25 @@ Flags are order‑insensitive. You can place `-prompt` and other flags in any or
 ```
 Run `./bin/agentcli -h` to see the built‑in help.
 
+### Image generation flags
+
+The following flags control the Images API behavior used by the assistant when generating images. Precedence is always: flags > environment > inheritance > default.
+
+| Flag | Environment | Default / Inheritance | Description |
+|---|---|---|---|
+| `-image-base-url string` | `OAI_IMAGE_BASE_URL` | Inherits `-base-url` | Image API base URL |
+| `-image-api-key string` | `OAI_IMAGE_API_KEY` | Inherits `-api-key`; falls back to `OPENAI_API_KEY` | API key for Images API |
+| `-image-model string` | `OAI_IMAGE_MODEL` | `gpt-image-1` | Images model ID |
+| `-image-http-timeout duration` | `OAI_IMAGE_HTTP_TIMEOUT` | Inherits `-http-timeout` | HTTP timeout for image requests |
+| `-image-http-retries int` | `OAI_IMAGE_HTTP_RETRIES` | Inherits `-http-retries` | Retry attempts for transient image HTTP errors |
+| `-image-http-retry-backoff duration` | `OAI_IMAGE_HTTP_RETRY_BACKOFF` | Inherits `-http-retry-backoff` | Base backoff for image HTTP retries |
+| `-image-n int` | `OAI_IMAGE_N` | `1` | Number of images to generate |
+| `-image-size string` | `OAI_IMAGE_SIZE` | `1024x1024` | Size WxH |
+| `-image-quality string` | `OAI_IMAGE_QUALITY` | `standard` | `standard` or `hd` |
+| `-image-style string` | `OAI_IMAGE_STYLE` | `natural` | `natural` or `vivid` |
+| `-image-response-format string` | `OAI_IMAGE_RESPONSE_FORMAT` | `url` | `url` or `b64_json` |
+| `-image-transparent-background` | `OAI_IMAGE_TRANSPARENT_BACKGROUND` | `false` | Request transparent background when supported |
+
 ### Why you usually don’t need to change knobs
 - The default `-temp 1.0` is standardized for broad provider/model parity and GPT‑5 compatibility.
 - The one‑knob rule applies: if you set `-top-p`, the agent omits `temperature`; otherwise it sends `temperature` (default 1.0) and leaves `top_p` unset.
@@ -270,6 +330,23 @@ See `examples/tool_calls.md` for a self-contained, test-driven worked example th
 Run the example test:
 ```bash
 go test ./examples -run TestWorkedExample_ToolCalls_TemperatureOne_Sequencing -v
+```
+
+### Split backends for chat and image
+
+Use one provider for chat and another for image generation by overriding the image backend only:
+
+```bash
+export OAI_BASE_URL=https://api.example-chat.local/v1
+export OAI_API_KEY=chat-key
+
+./bin/agentcli \
+  -prompt "Create a simple logo" \
+  -tools ./tools.json \
+  -image-base-url https://api.openai.com/v1 \
+  -image-api-key "$OPENAI_API_KEY" \
+  -image-model gpt-image-1 \
+  -image-size 1024x1024
 ```
 
 ### View refined messages (pre-stage and final)
