@@ -322,5 +322,21 @@
       "command": ["./tools/bin/robots_check"],
       "timeoutSec": 10
     }
+    ,
+    {
+      "name": "readability_extract",
+      "description": "Extract article content from HTML using go-readability",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "html": {"type": "string"},
+          "base_url": {"type": "string"}
+        },
+        "required": ["html", "base_url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/readability_extract"],
+      "timeoutSec": 10
+    }
   ]
 }
