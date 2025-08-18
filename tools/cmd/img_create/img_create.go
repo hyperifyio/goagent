@@ -49,45 +49,66 @@ func main() {
 }
 
 func run() error {
-	inBytes, err := io.ReadAll(os.Stdin)
+	// Parse and validate input
+	in, err := parseInput(os.Stdin)
 	if err != nil {
-		return fmt.Errorf("read stdin: %w", err)
+		return err
 	}
-	if len(strings.TrimSpace(string(inBytes))) == 0 {
-		return errors.New("missing json input")
+	// Build request body
+	bodyBytes, err := buildRequestBody(in)
+	if err != nil {
+		return err
 	}
+	// Perform HTTP request with limited retries
+	respBody, model, err := doRequest(bodyBytes)
+	if err != nil {
+		return err
+	}
+	// Format output (either save files or return b64)
+	return produceOutput(in, respBody, model)
+}
+
+// parseInput reads JSON from r and returns a validated inputSpec.
+func parseInput(r io.Reader) (inputSpec, error) {
 	var in inputSpec
-	if err := json.Unmarshal(inBytes, &in); err != nil {
-		return fmt.Errorf("bad json: %w", err)
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return in, fmt.Errorf("read stdin: %w", err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return in, errors.New("missing json input")
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return in, fmt.Errorf("bad json: %w", err)
 	}
 	if strings.TrimSpace(in.Prompt) == "" {
-		return errors.New("prompt is required")
+		return in, errors.New("prompt is required")
 	}
 	if in.N == 0 {
 		in.N = 1
 	}
 	if in.N < 1 || in.N > 4 {
-		return errors.New("n must be between 1 and 4")
+		return in, errors.New("n must be between 1 and 4")
 	}
 	if in.Size == "" {
 		in.Size = "1024x1024"
 	}
 	if !sizeRe.MatchString(in.Size) {
-		return errors.New("size must match ^\\d{3,4}x\\d{3,4}$")
+		return in, errors.New("size must match ^\\d{3,4}x\\d{3,4}$")
 	}
 	if in.Model == "" {
 		in.Model = "gpt-image-1"
 	}
 	if !in.ReturnB64 {
 		if in.Save == nil || strings.TrimSpace(in.Save.Dir) == "" {
-			return errors.New("save.dir is required when return_b64=false")
+			return in, errors.New("save.dir is required when return_b64=false")
 		}
 		if filepath.IsAbs(in.Save.Dir) {
-			return errors.New("save.dir must be repo-relative")
+			return in, errors.New("save.dir must be repo-relative")
 		}
 		clean := filepath.Clean(in.Save.Dir)
 		if strings.HasPrefix(clean, "..") {
-			return errors.New("save.dir escapes repository root")
+			return in, errors.New("save.dir escapes repository root")
 		}
 		if in.Save.Basename == "" {
 			in.Save.Basename = "img"
@@ -96,17 +117,14 @@ func run() error {
 			in.Save.Ext = "png"
 		}
 		if in.Save.Ext != "png" {
-			return errors.New("ext must be 'png'")
+			return in, errors.New("ext must be 'png'")
 		}
 	}
+	return in, nil
+}
 
-	// Prepare API URL and headers
-	baseURL := strings.TrimRight(firstNonEmpty(os.Getenv("OAI_IMAGE_BASE_URL"), os.Getenv("OAI_BASE_URL"), ""), "/")
-	if baseURL == "" {
-		return errors.New("missing OAI_IMAGE_BASE_URL or OAI_BASE_URL")
-	}
-	url := baseURL + "/v1/images/generations"
-
+// buildRequestBody creates the JSON body for the Images API.
+func buildRequestBody(in inputSpec) ([]byte, error) {
 	reqBody := map[string]any{
 		"model":           in.Model,
 		"prompt":          in.Prompt,
@@ -114,30 +132,37 @@ func run() error {
 		"size":            in.Size,
 		"response_format": "b64_json",
 	}
-	// Merge sanitized extras without allowing overrides of core keys
 	if len(in.Extras) > 0 {
 		safe := sanitizeExtras(in.Extras)
 		for k, v := range safe {
 			switch k {
 			case "model", "prompt", "n", "size", "response_format":
-				// do not override core keys
 			default:
 				reqBody[k] = v
 			}
 		}
 	}
-	bodyBytes, err := json.Marshal(reqBody)
+	b, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
+	return b, nil
+}
 
+// doRequest posts to the Images API with retries and returns body and model.
+func doRequest(bodyBytes []byte) ([]byte, string, error) {
+	baseURL := strings.TrimRight(firstNonEmpty(os.Getenv("OAI_IMAGE_BASE_URL"), os.Getenv("OAI_BASE_URL"), ""), "/")
+	if baseURL == "" {
+		return nil, "", errors.New("missing OAI_IMAGE_BASE_URL or OAI_BASE_URL")
+	}
+	url := baseURL + "/v1/images/generations"
 	client := &http.Client{Timeout: httpTimeout()}
 	var lastErr error
 	var resp *http.Response
 	for attempt := 0; attempt < 3; attempt++ {
 		req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBytes))
 		if err != nil {
-			return fmt.Errorf("new request: %w", err)
+			return nil, "", fmt.Errorf("new request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if key := strings.TrimSpace(os.Getenv("OAI_API_KEY")); key != "" {
@@ -147,12 +172,10 @@ func run() error {
 		if err != nil {
 			lastErr = err
 		} else {
-			// Read all for reuse if needed
-			// Ensure body is closed for each attempt
-			defer resp.Body.Close() //nolint:errcheck // best-effort close in retry loop
+			// For retry-able statuses, drain and retry
 			if shouldRetryStatus(resp.StatusCode) && attempt < 2 {
-				// drain body
-				_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck // ignore drain error; retry still proceeds
+				_, _ = io.Copy(io.Discard, resp.Body) //nolint:errcheck
+				_ = resp.Body.Close()                 //nolint:errcheck
 				time.Sleep(backoffDelay(attempt))
 				continue
 			}
@@ -163,30 +186,33 @@ func run() error {
 		}
 	}
 	if resp == nil {
-		return fmt.Errorf("http error: %v", lastErr)
+		return nil, "", fmt.Errorf("http error: %v", lastErr)
 	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		return nil, "", fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Try to extract error message from JSON
 		var obj map[string]any
 		if json.Unmarshal(body, &obj) == nil {
 			if msg, ok := obj["error"].(string); ok && msg != "" {
-				return errors.New(msg)
+				return nil, "", errors.New(msg)
 			}
 			if errobj, ok := obj["error"].(map[string]any); ok {
 				if m, ok2 := errobj["message"].(string); ok2 && m != "" {
-					return errors.New(m)
+					return nil, "", errors.New(m)
 				}
 			}
 		}
-		return fmt.Errorf("api status %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("api status %d", resp.StatusCode)
 	}
+	// Success
+	return body, resp.Header.Get("OpenAI-Model"), nil
+}
 
-	// Parse success body: { data: [ { b64_json: "..." }, ... ] }
+// produceOutput formats and writes output based on inputSpec.
+func produceOutput(in inputSpec, body []byte, model string) error {
 	var apiResp struct {
 		Data []struct {
 			B64 string `json:"b64_json"`
@@ -199,6 +225,7 @@ func run() error {
 	if len(apiResp.Data) == 0 {
 		return errors.New("no images returned")
 	}
+	_ = model // reserved for future use; apiResp.Model may already include it
 
 	if in.ReturnB64 {
 		debug := isTruthyEnv("IMG_CREATE_DEBUG_B64") || isTruthyEnv("DEBUG_B64")
@@ -233,8 +260,6 @@ func run() error {
 		Sha256 string `json:"sha256"`
 	}, 0, len(apiResp.Data))
 	for i, d := range apiResp.Data {
-		// Decode base64 JSON field
-		// Standard encoding per OpenAI: it is standard base64
 		imgBytes, decErr := decodeStdB64(d.B64)
 		if decErr != nil {
 			return fmt.Errorf("decode b64 image %d: %w", i+1, decErr)
@@ -246,8 +271,7 @@ func run() error {
 			return fmt.Errorf("write temp file: %w", err)
 		}
 		if err := os.Rename(tmpPath, finalPath); err != nil {
-			// best-effort cleanup
-			_ = os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup
+			_ = os.Remove(tmpPath) //nolint:errcheck
 			return fmt.Errorf("rename: %w", err)
 		}
 		sum := sha256.Sum256(imgBytes)
