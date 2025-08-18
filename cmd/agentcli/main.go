@@ -157,6 +157,33 @@ func (f *float64FlexFlag) Set(s string) error {
 	return nil
 }
 
+// intFlexFlag wires an int destination and records if it was set via flag.
+type intFlexFlag struct {
+    dst *int
+    set *bool
+}
+
+func (f *intFlexFlag) String() string {
+    if f == nil || f.dst == nil {
+        return "0"
+    }
+    return strconv.Itoa(*f.dst)
+}
+
+func (f *intFlexFlag) Set(s string) error {
+    v, err := strconv.Atoi(strings.TrimSpace(s))
+    if err != nil {
+        return err
+    }
+    if f.dst != nil {
+        *f.dst = v
+    }
+    if f.set != nil {
+        *f.set = true
+    }
+    return nil
+}
+
 func getEnv(key, def string) string {
 	v := os.Getenv(key)
 	if v == "" {
@@ -242,7 +269,7 @@ func parseFlags() (cliConfig, int) {
 	cfg.toolTimeout = 0
 	var httpSet, toolSet bool
 	var prepHTTPSet bool
-	flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
+    flag.Var(durationFlexFlag{dst: &cfg.httpTimeout, set: &httpSet}, "http-timeout", "HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.prepHTTPTimeout, set: &prepHTTPSet}, "prep-http-timeout", "HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)")
 	flag.Var(durationFlexFlag{dst: &cfg.toolTimeout, set: &toolSet}, "tool-timeout", "Per-tool timeout (falls back to -timeout if unset)")
 	// Use a flexible float flag to detect whether -temp was explicitly set
@@ -265,11 +292,22 @@ func parseFlags() (cliConfig, int) {
 	// Pre-stage explicit overrides
 	flag.StringVar(&cfg.prepModel, "prep-model", "", "Pre-stage model ID (env OAI_PREP_MODEL; inherits -model if unset)")
 	flag.StringVar(&cfg.prepBaseURL, "prep-base-url", "", "Pre-stage base URL (env OAI_PREP_BASE_URL; inherits -base-url if unset)")
-	flag.StringVar(&cfg.prepAPIKey, "prep-api-key", "", "Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)")
-	flag.IntVar(&cfg.prepHTTPRetries, "prep-http-retries", 0, "Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)")
-	flag.DurationVar(&cfg.prepHTTPBackoff, "prep-http-retry-backoff", 0, "Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
-	flag.IntVar(&cfg.httpRetries, "http-retries", 2, "Number of retries for transient HTTP failures (timeouts, 429, 5xx)")
-	flag.DurationVar(&cfg.httpBackoff, "http-retry-backoff", 300*time.Millisecond, "Base backoff between HTTP retry attempts (exponential)")
+    flag.StringVar(&cfg.prepAPIKey, "prep-api-key", "", "Pre-stage API key (env OAI_PREP_API_KEY; falls back to OAI_API_KEY/OPENAI_API_KEY; inherits -api-key if unset)")
+    flag.IntVar(&cfg.prepHTTPRetries, "prep-http-retries", 0, "Pre-stage HTTP retries (env OAI_PREP_HTTP_RETRIES; inherits -http-retries if unset)")
+    flag.DurationVar(&cfg.prepHTTPBackoff, "prep-http-retry-backoff", 0, "Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)")
+    // Global HTTP retry knobs: precedence flag > env > default
+    var httpRetriesSet bool
+    (func() {
+        cfg.httpRetries = -1 // sentinel to detect unset
+        f := &intFlexFlag{dst: &cfg.httpRetries, set: &httpRetriesSet}
+        flag.CommandLine.Var(f, "http-retries", "Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)")
+    })()
+    var httpBackoffSet bool
+    (func() {
+        cfg.httpBackoff = 0 // resolved after parsing
+        f := durationFlexFlag{dst: &cfg.httpBackoff, set: &httpBackoffSet}
+        flag.CommandLine.Var(f, "http-retry-backoff", "Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)")
+    })()
 	flag.BoolVar(&cfg.debug, "debug", false, "Dump request/response JSON to stderr")
 	flag.BoolVar(&cfg.verbose, "verbose", false, "Also print non-final assistant channels (critic/confidence) to stderr")
 	flag.BoolVar(&cfg.quiet, "quiet", false, "Suppress non-final output; print only final text to stdout")
@@ -311,7 +349,7 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-	// Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
+    // Resolve split timeouts with precedence: flag > env (HTTP only) > legacy -timeout > sane default
 	// HTTP timeout: env OAI_HTTP_TIMEOUT supported
 	httpEnvUsed := false
 	if cfg.httpTimeout <= 0 {
@@ -348,7 +386,7 @@ func parseFlags() (cliConfig, int) {
 		}
 	}
 
-	// Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
+    // Tool timeout: no env per checklist; fallback to legacy -timeout or 30s default
 	if cfg.toolTimeout <= 0 {
 		if cfg.timeout > 0 {
 			cfg.toolTimeout = cfg.timeout
@@ -356,6 +394,29 @@ func parseFlags() (cliConfig, int) {
 			cfg.toolTimeout = 30 * time.Second
 		}
 	}
+
+    // Resolve global HTTP retry knobs with precedence: flag > env > default
+    if !httpRetriesSet {
+        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRIES")); v != "" {
+            if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+                cfg.httpRetries = n
+            }
+        }
+    }
+    if cfg.httpRetries < 0 {
+        cfg.httpRetries = 2
+    }
+    if !httpBackoffSet {
+        if v := strings.TrimSpace(os.Getenv("OAI_HTTP_RETRY_BACKOFF")); v != "" {
+            if d, err := parseDurationFlexible(v); err == nil && d >= 0 {
+                cfg.httpBackoff = d
+            }
+        }
+    }
+    if cfg.httpBackoff == 0 && !httpBackoffSet {
+        // Only apply default when not explicitly set to 0 via flag
+        cfg.httpBackoff = 500 * time.Millisecond
+    }
 
 	// Resolve prep overrides precedence: flag > env OAI_PREP_* > inherit main-call
 	// Model
@@ -1505,6 +1566,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -http-timeout duration\n    HTTP timeout for chat completions (env OAI_HTTP_TIMEOUT; falls back to -timeout if unset)\n")
 	b.WriteString("  -prep-http-timeout duration\n    HTTP timeout for pre-stage (env OAI_PREP_HTTP_TIMEOUT; falls back to -http-timeout if unset)\n")
 	b.WriteString("  -tool-timeout duration\n    Per-tool timeout (falls back to -timeout if unset)\n")
+  b.WriteString("  -http-retries int\n    Number of retries for transient HTTP failures (timeouts, 429, 5xx) (env OAI_HTTP_RETRIES; default 2)\n")
+  b.WriteString("  -http-retry-backoff duration\n    Base backoff between HTTP retry attempts (exponential) (env OAI_HTTP_RETRY_BACKOFF; default 500ms)\n")
 	b.WriteString("  -temp float\n    Sampling temperature (default 1.0)\n")
 	b.WriteString("  -top-p float\n    Nucleus sampling probability mass (conflicts with -temp; omits temperature when set)\n")
 	b.WriteString("  -prep-profile string\n    Pre-stage prompt profile (deterministic|general|creative|reasoning); sets temperature when supported (conflicts with -prep-top-p)\n")
