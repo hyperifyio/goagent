@@ -30,6 +30,8 @@ This docs index helps you navigate architecture notes and diagrams.
 
 - Tool reference: Image generation tool (`img_create`).
   - Link: [docs/reference/img_create.md](reference/img_create.md)
+- Tool reference: HTTP fetch (`http_fetch`).
+  - Link: [docs/reference/http_fetch.md](reference/http_fetch.md)
 
 - Security: Threat model and trust boundaries.
   - Link: [docs/security/threat-model.md](security/threat-model.md)
