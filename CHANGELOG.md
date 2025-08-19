@@ -1,3 +1,28 @@
+PR slicing plan (tracked on develop; code PRs will branch from main in `./work/main`):
+- [ ] PR #01: Scaffold repository (LICENSE, README, `.gitignore`, `.gitattributes`, `.editorconfig`, `Makefile`, `go.mod`, `docs/README.md`)
+- [ ] PR #02: Minimal CLI entrypoint (`cmd/agentcli/main.go` only)
+- [ ] PR #03: Flags & help (help/flags files + docs/tests)
+- [ ] PR #04: OpenAI HTTP client (types + client, tests)
+- [ ] PR #05: Model defaults & capability map (serialization only + ADR)
+- [ ] PR #06: Tools manifest loader + reference docs
+- [ ] PR #07: Secure tool runner (argv only)
+- [ ] PR #09: Baseline docs & diagrams (no code)
+- [ ] PR #10: Example tool `get_time` + `tools.json` + Makefile build-tools
+- [ ] PR #11: Quickstart README runnable
+- [ ] PR #12: Minimal unit tests enabling (core only)
+- [ ] PR (per-tool): exec, fs_read_file, fs_write_file, fs_append_file, fs_rm, fs_move, fs_search, fs_mkdirp, fs_apply_patch, fs_read_lines, fs_edit_range, fs_listdir, fs_stat, img_create, http_fetch, searxng_search, robots_check, readability_extract, metadata_extract, pdf_extract, rss_fetch, wayback_lookup, wiki_query, openalex_search, crossref_search, github_search, dedupe_rank, citation_pack
+- [ ] PR: Makefile wiring for tools (build-tools/clean)
+- [ ] PR: scripts and CI utilities
+- [ ] PR: security & runbooks
+- [ ] PR: ADRs
+- [ ] PR: diagrams
+- [ ] PR: CLI features (version, print-config, timeouts/backoff, validator, enable/disable)
+- [ ] PR: parallel tool calls (main loop)
+- [ ] PR: audit logs and redaction
+- [ ] PR: minimal integration test
+- [ ] PR: README finalization and examples
+- [ ] Post-migration cleanup
+
 * [x] Initialize repo with Go module and scaffolding: run `mkdir agentcli && cd agentcli && git init && go mod init github.com/<org>/agentcli`; add `LICENSE` (MIT), `README.md` (purpose, usage, examples), `.gitignore` (bin/, dist/, .DS_Store, go.work, .idea, .vscode); create directories `cmd/agentcli`, `internal/oai`, `internal/tools`, `docs/adr`, `docs/diagrams`; set default model id `oss-gpt-20b` and default OpenAI-compatible base URL `https://api.openai.com/v1` to be read from env or flags.
 * [x] Implement `cmd/agentcli/main.go` non-interactive run loop: `package main` with `main()` reading flags, building initial messages `[system,user]`, calling the HTTP client, executing any returned tool calls, appending tool results as `role=tool` messages, repeating until the model returns a final assistant message with text, then printing to stdout and exiting 0; all failures print a concise error to stderr and exit non-zero (2 for CLI misuse like missing `-prompt`, 1 otherwise).
 * [x] Implement full CLI flag set with defaults and env fallbacks: `-prompt (string, required)`, `-tools (path to tools.json, optional)`, `-system (string, default "You are a helpful, precise assistant. Use tools when strictly helpful.")`, `-base-url (string, default env OAI_BASE_URL or https://api.openai.com/v1)`, `-api-key (string, default env OAI_API_KEY)`, `-model (string, default env OAI_MODEL or oss-gpt-20b)`, `-max-steps (int, default 8)`, `-timeout (duration, default 30s, applies to HTTP and tool exec unless tool overrides)`, `-temp (float64, default 0.2)`, `-debug (bool, default false, dumps request/response JSON to stderr)`; precedence: flag > env > hard default; validate `-prompt` non-empty before running.
