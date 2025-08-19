@@ -1,1 +1,1 @@
-Blocked: Add pre-stage prompt override flags pending CLI scaffold presence.
+Implement concatenation and normalization of pre-stage prompt in internal/oai, with tests.

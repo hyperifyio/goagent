@@ -3,6 +3,7 @@ package oai
 import (
 	"os"
 	"strings"
+	"unicode"
 )
 
 // ImageConfig holds resolved configuration for the Images API endpoint.
@@ -61,4 +62,45 @@ func MaskAPIKeyLast4(key string) string {
 		return "****" + k
 	}
 	return "****" + k[len(k)-4:]
+}
+
+// PrepConfig holds resolved configuration for the pre-stage flow.
+// Currently it includes only the prepared prompt text.
+type PrepConfig struct {
+	// Prompt is the finalized pre-stage prompt after applying overrides.
+	// When multiple prompt sources are provided, they are concatenated using
+	// JoinPrompts and stored here.
+	Prompt string
+}
+
+// JoinPrompts concatenates the given parts in-order using two newline
+// separators ("\n\n") and trims trailing whitespace from the final string.
+// It preserves leading whitespace and internal whitespace within parts.
+func JoinPrompts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	// Trim trailing newlines, carriage returns, and tabs from each part, but
+	// preserve trailing spaces to avoid eating intentional spacing before the
+	// separator.
+	trimmed := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed = append(trimmed, trimRightNLTab(p))
+	}
+	joined := strings.Join(trimmed, "\n\n")
+	// Finally, trim any trailing whitespace from the full string
+	return strings.TrimRightFunc(joined, unicode.IsSpace)
+}
+
+// trimRightNLTab removes trailing newlines, carriage returns, and tabs.
+func trimRightNLTab(s string) string {
+	return strings.TrimRightFunc(s, func(r rune) bool {
+		return r == '\n' || r == '\r' || r == '\t'
+	})
+}
+
+// NewPrepConfig constructs a PrepConfig with Prompt set to the normalized
+// concatenation of the provided parts.
+func NewPrepConfig(parts []string) PrepConfig {
+	return PrepConfig{Prompt: JoinPrompts(parts)}
 }

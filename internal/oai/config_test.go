@@ -55,3 +55,34 @@ func TestMaskAPIKeyLast4(t *testing.T) {
 		t.Fatalf("expected last4 masked, got %s", got)
 	}
 }
+
+func TestJoinPrompts_BasicConcatAndTrim(t *testing.T) {
+	cases := []struct {
+		name  string
+		parts []string
+		want  string
+	}{
+		{"empty", nil, ""},
+		{"single", []string{"hello"}, "hello"},
+		{"two parts", []string{"hello", "world"}, "hello\n\nworld"},
+		{"preserve internal", []string{"a\n b", "c"}, "a\n b\n\nc"},
+		{"trim trailing spaces", []string{"x ", "y\n"}, "x \n\ny"},
+		{"trim trailing tabs/newlines", []string{"x\n\n", "y\t\n\n"}, "x\n\ny"},
+		{"keep leading spaces", []string{"  lead", "trail  "}, "  lead\n\ntrail"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := JoinPrompts(tc.parts)
+			if got != tc.want {
+				t.Fatalf("JoinPrompts mismatch: got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewPrepConfig_SetsPrompt(t *testing.T) {
+	cfg := NewPrepConfig([]string{"one", "two"})
+	if cfg.Prompt != "one\n\ntwo" {
+		t.Fatalf("unexpected prompt: %q", cfg.Prompt)
+	}
+}
