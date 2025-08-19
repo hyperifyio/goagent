@@ -1,1 +1,1 @@
-Implement code.sandbox.wasm.run — validating positive limits.
+Blocked on code.sandbox.wasm.run: need embedded minimal wasm module to implement and test.
