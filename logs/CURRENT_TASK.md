@@ -1,1 +1,1 @@
-Blocked on PR #01 due to branch switching conflict from uncommitted CURRENT_TASK.md; isolate and commit status-only changes, then revisit when pushing/PR creation permitted.
+Slicing: opened draft PR #7 for OAI client/types; next: tools manifest.
