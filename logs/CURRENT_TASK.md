@@ -1,1 +1,1 @@
-Idle: waiting on reviews for open PRs; no new features selected this pass
+Opened PR #55 (CLI reference). Preparing next docs-only slice.
