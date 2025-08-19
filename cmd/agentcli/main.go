@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+    "math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,6 +63,8 @@ type cliConfig struct {
 	prepEnabledSet bool
 	capabilities   bool
 	printConfig    bool
+    // Dry-run planning for state persistence actions
+    dryRun bool
 	// State persistence
 	stateDir string
 	// Optional partition key for persisted state; when empty we compute a default
@@ -385,6 +388,8 @@ func parseFlags() (cliConfig, int) {
 	flag.StringVar(&cfg.loadMessagesPath, "load-messages", "", "Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)")
 	flag.BoolVar(&cfg.capabilities, "capabilities", false, "Print enabled tools and exit")
 	flag.BoolVar(&cfg.printConfig, "print-config", false, "Print resolved config and exit")
+    // Global dry-run for state persistence planning (no disk writes)
+    flag.BoolVar(&cfg.dryRun, "dry-run", false, "Print intended state actions (restore/refine/save) and exit without writing state")
 	// Image API flags
 	flag.StringVar(&cfg.imageBaseURL, "image-base-url", "", "Image API base URL (env OAI_IMAGE_BASE_URL; inherits -base-url if unset)")
 	flag.StringVar(&cfg.imageAPIKey, "image-api-key", "", "Image API key (env OAI_IMAGE_API_KEY; inherits -api-key if unset; falls back to OPENAI_API_KEY)")
@@ -871,6 +876,10 @@ func cliMain(args []string, stdout io.Writer, stderr io.Writer) int {
 		printUsage(stderr)
 		return exitOn
 	}
+    // Global dry-run: print intended state actions and exit without executing network calls or writing state
+    if cfg.dryRun {
+        return printStateDryRunPlan(cfg, stdout, stderr)
+    }
 	if cfg.printConfig {
 		return printResolvedConfig(cfg, stdout)
 	}
@@ -1977,6 +1986,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-enabled\n    Enable pre-stage processing (default true; when false, skip pre-stage and proceed directly to main call)\n")
 	b.WriteString("  -capabilities\n    Print enabled tools and exit\n")
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
+    b.WriteString("  -dry-run\n    Print intended state actions (restore/refine/save) and exit without writing state\n")
 	b.WriteString("  --version | -version\n    Print version and exit\n")
 	b.WriteString("\nExamples:\n")
 	b.WriteString("  # Quick start (after make build build-tools)\n")
@@ -2160,6 +2170,61 @@ func printResolvedConfig(cfg cliConfig, stdout io.Writer) int {
 	}
 	safeFprintln(stdout, string(data))
 	return 0
+}
+
+// printStateDryRunPlan outputs a concise plan describing intended state actions.
+// It never writes to disk. Exit code 0 on success.
+func printStateDryRunPlan(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
+    // Normalize/expand state-dir as parseFlags would have done
+    dir := strings.TrimSpace(cfg.stateDir)
+    if dir != "" {
+        if strings.HasPrefix(dir, "~") {
+            if home, err := os.UserHomeDir(); err == nil {
+                dir = filepath.Join(home, strings.TrimPrefix(dir, "~"))
+            }
+        }
+        dir = filepath.Clean(dir)
+    }
+
+    // Determine action
+    type plan struct {
+        Action        string `json:"action"`
+        StateDir      string `json:"state_dir"`
+        ScopeKey      string `json:"scope_key"`
+        Refine        bool   `json:"refine"`
+        HasRefineText bool   `json:"has_refine_text"`
+        HasRefineFile bool   `json:"has_refine_file"`
+        Notes         string `json:"notes"`
+    }
+    p := plan{StateDir: dir, ScopeKey: strings.TrimSpace(cfg.stateScope), Refine: cfg.stateRefine, HasRefineText: strings.TrimSpace(cfg.stateRefineText) != "", HasRefineFile: strings.TrimSpace(cfg.stateRefineFile) != ""}
+
+    if dir == "" {
+        p.Action = "none"
+        p.Notes = "state-dir not set; no restore/save will occur"
+    } else if cfg.stateRefine || p.HasRefineText || p.HasRefineFile {
+        p.Action = "refine"
+        p.Notes = "would load latest bundle (if any), apply refinement, and write a new snapshot"
+    } else {
+        // Not refining: would attempt restore-before-prep and save afterward
+        p.Action = "restore_or_save"
+        p.Notes = "would attempt restore-before-prep using latest.json; on success reuse without calling pre-stage; otherwise would run pre-stage and save a new snapshot"
+    }
+
+    // Include a synthetic SHA hint to demonstrate formatting without real IO
+    // This keeps output stable yet obviously a placeholder.
+    hint := map[string]any{
+        "sample_short_sha": fmt.Sprintf("%08x", rand.Uint32()),
+    }
+    out := map[string]any{
+        "plan": p,
+        "hint": hint,
+    }
+    if b, err := json.MarshalIndent(out, "", "  "); err == nil {
+        safeFprintln(stdout, string(b))
+        return 0
+    }
+    safeFprintln(stdout, "{\"plan\":{\"action\":\"unknown\"}}")
+    return 0
 }
 
 // nonEmptyOr returns a when non-empty, otherwise b.

@@ -65,6 +65,7 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-tools string`: Path to pre-stage tools.json (optional). Used only when `-prep-tools-allow-external` is enabled; if provided, the pre-stage uses this manifest instead of `-tools`.
 - `-capabilities`: Print enabled tools and exit
 - `-print-config`: Print resolved config and exit
+- `-dry-run`: Print intended state actions (restore/refine/save) and exit without writing state
 - `--version | -version`: Print version and exit
 
 ## Environment variables

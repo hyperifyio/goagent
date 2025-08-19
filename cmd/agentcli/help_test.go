@@ -82,6 +82,7 @@ func TestHelpSnapshot_ContainsAllExpectedTokens(t *testing.T) {
 		"-prep-enabled",
 		"-capabilities",
 		"-print-config",
+		"-dry-run",
 		"-state-dir string",
 		"-state-scope string",
 		"-state-refine",

@@ -260,6 +260,7 @@ Flags are order‑insensitive. You can place `-prompt` and other flags in any or
 -quiet                 Suppress non-final output; print only final text to stdout
 -capabilities          Print enabled tools and exit
 -print-config          Print resolved config and exit
+-dry-run               Print intended state actions (restore/refine/save) and exit without writing state
 --version | -version   Print version and exit
 ```
 Run `./bin/agentcli -h` to see the built‑in help.
