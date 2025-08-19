@@ -18,6 +18,8 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
 - [ ] PR: scripts and CI utilities — OPEN: https://github.com/hyperifyio/goagent/pull/42
 - [ ] PR: security & runbooks — OPEN: https://github.com/hyperifyio/goagent/pull/43
 - [ ] PR: ADRs
+  - [ ] ADR-0011: State bundle schema — docs-only PR (restore `docs/adr/0011-state-bundle-schema.md` + `docs/README.md` from develop)
+  - [ ] ADR-0012: State dir persistence — docs-only PR (restore `docs/adr/0012-state-dir-persistence.md` + `docs/README.md` from develop)
 - [ ] PR: diagrams
 - [ ] PR: CLI features (version, print-config, timeouts/backoff, validator, enable/disable)
 - [ ] PR: parallel tool calls (main loop)
