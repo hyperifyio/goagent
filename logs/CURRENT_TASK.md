@@ -1,1 +1,1 @@
-Implement RefineStateBundle and tests for state refinement preserving fields and recording prev_sha.
+Enforce effective-source precedence in pre-stage coordinator and warn once when overrides are used with -state-refine, with tests.

@@ -3,8 +3,10 @@ package prestage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +117,27 @@ func TestCoordinator_RefineForcesLiveRun(t *testing.T) {
 	}
 	if s.calls != 1 {
 		t.Fatalf("runner should be called once, got %d", s.calls)
+	}
+}
+
+func TestCoordinator_WarnsOnceWhenOverridesWithRefine(t *testing.T) {
+	s := &stubRunner{resp: oai.ChatCompletionsResponse{Model: "m"}}
+	var warns []string
+	c := &Coordinator{Refine: true, PrepPrompts: []string{"OVR"}, Runner: s, Warnf: func(format string, args ...any) {
+		warns = append(warns, fmt.Sprintf(format, args...))
+	}}
+	out, err := c.Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if out.UsedRestore {
+		t.Fatalf("should not restore when overrides present")
+	}
+	if len(warns) != 1 {
+		t.Fatalf("expected exactly one warning, got %d: %#v", len(warns), warns)
+	}
+	if !strings.Contains(strings.ToLower(warns[0]), "override") || !strings.Contains(strings.ToLower(warns[0]), "refine") {
+		t.Fatalf("warning should mention override and refine: %q", warns[0])
 	}
 }
 

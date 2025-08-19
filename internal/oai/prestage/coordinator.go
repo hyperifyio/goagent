@@ -31,6 +31,10 @@ type Coordinator struct {
 
 	// Runner used when a live pre-stage call is required.
 	Runner PrestageRunner
+
+	// Warnf, when set, is used to emit a single-line warning message.
+	// It is called at most once per Execute() invocation.
+	Warnf func(format string, args ...any)
 }
 
 // Outcome captures the result of Execute.
@@ -59,6 +63,11 @@ func (c *Coordinator) Execute(ctx context.Context) (Outcome, error) {
 	// If overrides are present, they take precedence and force a live call.
 	overrideSource, overrideText := oai.ResolvePrepPrompt(c.PrepPrompts, c.PrepFilesJoined)
 	overridesProvided := overrideSource == "override" && strings.TrimSpace(overrideText) != ""
+
+	// If refine is requested but explicit overrides are provided, warn and proceed.
+	if overridesProvided && c.Refine && c.Warnf != nil {
+		c.Warnf("pre-stage: explicit overrides provided while -state-refine is set; proceeding with overrides")
+	}
 
 	if !overridesProvided && !c.Refine && strings.TrimSpace(c.StateDir) != "" {
 		if b, err := state.LoadLatestStateBundle(c.StateDir); err == nil && b != nil {
