@@ -1,1 +1,1 @@
-Implement ResolvePrepPrompt selection logic and tests.
+Wire pre-stage prompt into execution by sending the resolved prompt as the user message.
