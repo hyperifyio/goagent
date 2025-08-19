@@ -1,1 +1,1 @@
-Working on L59: backward compatibility and conflict error messages; adding explicit parse errors and compat tests.
+Implement examples and smoke script for image flows.

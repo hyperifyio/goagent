@@ -89,6 +89,25 @@ build-tool:
 test:
 	$(GO) test ./...
 
+# Smoke test for image flow: run CLI with a deterministic prompt and require non-empty output
+.PHONY: smoke-image
+smoke-image: build build-tools
+	@set -euo pipefail; \
+	if [ ! -x ./bin/agentcli ]; then echo "smoke-image: ./bin/agentcli missing"; exit 2; fi; \
+	if [ ! -x ./tools/bin/img_create$(EXE) ]; then echo "smoke-image: ./tools/bin/img_create$(EXE) missing (run make build-tools)"; exit 2; fi; \
+	# Require API base and key for a real run; allow user to point to a mock
+	: "$${OAI_IMAGE_BASE_URL:=${OAI_BASE_URL:-}}"; \
+	if [ -z "$$OAI_IMAGE_BASE_URL" ]; then echo "smoke-image: set OAI_IMAGE_BASE_URL or OAI_BASE_URL"; exit 2; fi; \
+	: "$${OAI_API_KEY:-}"; \
+	if [ -z "$$OAI_API_KEY" ]; then echo "smoke-image: set OAI_API_KEY"; exit 2; fi; \
+	TMP=$$(mktemp -d 2>/dev/null || mktemp -d -t simg); \
+	TOOLS_JSON="$$TMP/tools.json"; \
+	jq -n '{tools:[{name:"img_create",description:"Generate images",schema:{type:"object",additionalProperties:false,required:["prompt"],properties:{prompt:{type:"string"},n:{type:"integer",minimum:1,maximum:4,default:1},size:{type:"string",pattern:"^\\d{3,4}x\\d{3,4}$",default:"1024x1024"},model:{type:"string",default:"gpt-image-1"},return_b64:{type:"boolean",default:false},save:{type:"object",additionalProperties:false,required:["dir"],properties:{dir:{type:"string"},basename:{type:"string",default:"img"},ext:{type:"string",enum:["png"],default:"png"}}}}},command:["./tools/bin/img_create"],timeoutSec:120,envPassthrough:["OAI_API_KEY","OAI_BASE_URL","OAI_IMAGE_BASE_URL","OAI_HTTP_TIMEOUT"]}]}' > "$$TOOLS_JSON"; \
+	OUT=$$(./bin/agentcli -tools "$$TOOLS_JSON" -prompt "Use img_create to save under out/" -model gpt-5 -max-steps 3 -http-timeout 10s -tool-timeout 20s -debug 2>/dev/null || true); \
+	if [ -z "$$OUT" ]; then echo "smoke-image: empty CLI output"; exit 1; fi; \
+	echo "smoke-image: OK: $$OUT"; \
+	rm -rf "$$TMP"
+
 clean:
 	# Remove agent binary and each tool binary deterministically
 	rm -f $(addprefix tools/bin/,$(addsuffix $(EXE),$(TOOLS)))
