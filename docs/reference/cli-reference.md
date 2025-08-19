@@ -1,0 +1,126 @@
+# agentcli CLI reference
+
+A concise, canonical reference for `agentcli` flags and behavior. Flags are order-insensitive; precedence is flag > environment > default.
+
+## Flags
+
+- `-prompt string`: User prompt (required)
+- `-prompt-file string`: Path to file containing user prompt ('-' for STDIN; mutually exclusive with `-prompt`)
+- `-tools string`: Path to tools.json (optional)
+- `-system string`: System prompt (default "You are a helpful, precise assistant. Use tools when strictly helpful.")
+- `-system-file string`: Path to file containing system prompt ('-' for STDIN; mutually exclusive with `-system`)
+- `-developer string`: Developer message (repeatable)
+- `-developer-file string`: Path to file containing developer message (repeatable; '-' for STDIN)
+- `-base-url string`: OpenAI-compatible base URL (env `OAI_BASE_URL`, default `https://api.openai.com/v1`)
+- `-api-key string`: API key if required (env `OAI_API_KEY`; falls back to `OPENAI_API_KEY`)
+- `-model string`: Model ID (env `OAI_MODEL`, default `oss-gpt-20b`)
+- `-max-steps int`: Maximum reasoning/tool steps (default 8)
+- `-http-timeout duration`: HTTP timeout for chat completions (env `OAI_HTTP_TIMEOUT`; falls back to `-timeout` if unset)
+- `-prep-http-timeout duration`: HTTP timeout for pre-stage (env `OAI_PREP_HTTP_TIMEOUT`; falls back to `-http-timeout` if unset)
+- `-http-retries int`: Number of retries for transient HTTP failures (timeouts, 429, 5xx) (default 2)
+- `-http-retry-backoff duration`: Base backoff between HTTP retry attempts (exponential) (default 300ms)
+- `-image-base-url string`: Image API base URL (env `OAI_IMAGE_BASE_URL`; inherits `-base-url` if unset)
+- `-image-model string`: Image model ID (env `OAI_IMAGE_MODEL`; default `gpt-image-1`)
+- `-image-api-key string`: Image API key (env `OAI_IMAGE_API_KEY`; inherits `-api-key` if unset; falls back to `OPENAI_API_KEY`)
+- `-image-http-timeout duration`: Image HTTP timeout (env `OAI_IMAGE_HTTP_TIMEOUT`; inherits `-http-timeout` if unset)
+- `-image-http-retries int`: Image HTTP retries (env `OAI_IMAGE_HTTP_RETRIES`; inherits `-http-retries` if unset)
+- `-image-http-retry-backoff duration`: Image HTTP retry backoff (env `OAI_IMAGE_HTTP_RETRY_BACKOFF`; inherits `-http-retry-backoff` if unset)
+- `-image-n int`: Number of images to generate (env `OAI_IMAGE_N`; default 1)
+- `-image-size string`: Image size WxH, e.g., 1024x1024 (env `OAI_IMAGE_SIZE`; default 1024x1024)
+- `-image-quality string`: Image quality: standard|hd (env `OAI_IMAGE_QUALITY`; default standard)
+- `-image-style string`: Image style: natural|vivid (env `OAI_IMAGE_STYLE`; default natural)
+- `-image-response-format string`: Image response format: url|b64_json (env `OAI_IMAGE_RESPONSE_FORMAT`; default url)
+- `-image-transparent-background`: Request transparent background when supported (env `OAI_IMAGE_TRANSPARENT_BACKGROUND`; default false)
+- `-tool-timeout duration`: Per-tool timeout (falls back to `-timeout` if unset)
+- `-timeout duration`: [DEPRECATED] Global timeout; prefer `-http-timeout` and `-tool-timeout` (default 30s)
+- `-temp float`: Sampling temperature (default 1.0; omitted for models that do not support it)
+- `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
+- `-prep-temp float`: Pre-stage sampling temperature (env `OAI_PREP_TEMP`; inherits `-temp` if unset; conflicts with `-prep-top-p`)
+- `-prep-top-p float`: Pre-stage nucleus sampling probability mass (env `OAI_PREP_TOP_P`; conflicts with `-prep-temp`; when set, pre-stage omits temperature and sends `top_p`)
+- `-prep-system string`: Pre-stage system message (env `OAI_PREP_SYSTEM`; mutually exclusive with `-prep-system-file`)
+- `-prep-system-file string`: Path to file containing pre-stage system message ('-' for STDIN; env `OAI_PREP_SYSTEM_FILE`; mutually exclusive with `-prep-system`)
+- `-prep-profile string`: Pre-stage prompt profile (`deterministic|general|creative|reasoning`); sets temperature when supported (conflicts with `-prep-top-p`)
+- `-prep-model string`: Pre-stage model ID (env `OAI_PREP_MODEL`; inherits `-model` if unset)
+- `-prep-base-url string`: Pre-stage base URL (env `OAI_PREP_BASE_URL`; inherits `-base-url` if unset)
+- `-prep-api-key string`: Pre-stage API key (env `OAI_PREP_API_KEY`; falls back to `OAI_API_KEY`/`OPENAI_API_KEY`; inherits `-api-key` if unset)
+- `-prep-http-retries int`: Pre-stage HTTP retries (env `OAI_PREP_HTTP_RETRIES`; inherits `-http-retries` if unset)
+- `-prep-http-retry-backoff duration`: Pre-stage HTTP retry backoff (env `OAI_PREP_HTTP_RETRY_BACKOFF`; inherits `-http-retry-backoff` if unset)
+- `-prep-cache-bust`: Skip pre-stage cache and force recompute
+- `-prep-dry-run`: Run pre-stage only, print refined Harmony messages to stdout, and exit 0
+- `-state-dir string`: Directory to persist and restore execution state across runs (env `AGENTCLI_STATE_DIR`)
+- `-state-scope string`: Optional scope key to partition saved state (env `AGENTCLI_STATE_SCOPE`); when empty, a default hash of model|base_url|toolset is used
+- `-state-refine`: Refine the loaded state bundle using `-state-refine-text` or `-state-refine-file` (requires `-state-dir`)
+- `-state-refine-text string`: Refinement input text to apply to the loaded state bundle (ignored when `-state-refine-file` is set; requires `-state-dir`)
+- `-state-refine-file string`: Path to file containing refinement input (wins over `-state-refine-text`; requires `-state-dir`)
+- `-print-messages`: Pretty-print the final merged message array to stderr before the main call
+- `-stream-final`: If server supports streaming, stream only `assistant{channel:"final"}` to stdout; buffer other channels for `-verbose`
+- `-channel-route name=stdout|stderr|omit`: Override default channel routing (`final→stdout`, `critic/confidence→stderr`); repeatable
+- `-save-messages string`: Write the final merged Harmony messages to the given JSON file and continue
+- `-load-messages string`: Bypass pre-stage and prompt; load Harmony messages from the given JSON file (validator-checked)
+- `-prep-enabled`: Enable pre-stage processing (default true). When false, pre-stage is skipped and the agent proceeds directly with the original `{system,user}` messages.
+- `-debug`: Dump request/response JSON to stderr
+- `-verbose`: Also print non-final assistant channels (critic/confidence) to stderr
+- `-quiet`: Suppress non-final output; print only final text to stdout
+- `-prep-tools-allow-external`: Allow pre-stage to execute external tools from `-tools` (default false). When not set, pre-stage is limited to built-in read-only tools and ignores `-tools`.
+- `-prep-tools string`: Path to pre-stage tools.json (optional). Used only when `-prep-tools-allow-external` is enabled; if provided, the pre-stage uses this manifest instead of `-tools`.
+- `-capabilities`: Print enabled tools and exit
+- `-print-config`: Print resolved config and exit
+- `-dry-run`: Print intended state actions (restore/refine/save) and exit without writing state
+- `--version | -version`: Print version and exit
+
+## Environment variables
+
+- `OAI_BASE_URL`: Base URL for chat completions API
+- `OAI_MODEL`: Default model ID
+- `OAI_API_KEY`: API key (canonical; CLI also accepts `OPENAI_API_KEY` as a fallback)
+- `OAI_HTTP_TIMEOUT`: HTTP timeout for chat requests (e.g., `90s`)
+- `OAI_PREP_HTTP_TIMEOUT`: HTTP timeout for pre-stage requests (e.g., `90s`); overrides inheritance from `-http-timeout`
+- `LLM_TEMPERATURE`: Temperature override when `-temp` is not provided (flag takes precedence)
+
+## Exit codes
+
+- `0`: Success, printed final assistant message or handled help/version
+- `1`: Operational error (HTTP failure, tool manifest issues, no final assistant content)
+- `2`: CLI misuse (e.g., missing `-prompt`)
+
+## Examples
+
+- Inline developer messages (repeatable) with an inline prompt:
+
+```bash
+./bin/agentcli -developer "Follow style guide X" -developer "Prefer JSON outputs" -prompt "Summarize the repo"
+```
+
+- Read system prompt from a file and user prompt from STDIN:
+
+```bash
+echo "What changed since last release?" | ./bin/agentcli -system-file ./system.txt -prompt-file -
+```
+
+- Mix developer files and inline developer messages; read one developer message from STDIN:
+
+```bash
+echo "Security MUST be documented" | ./bin/agentcli \
+  -developer-file ./dev/a.txt \
+  -developer-file - \
+  -developer "Add tests for every change" \
+  -prompt "Implement the CLI role flags"
+```
+
+## Notes
+
+- Temperature is sent only when supported by the selected model; otherwise it is omitted to avoid API errors. When `-top-p` is set, temperature is omitted, `top_p` is included, and a one-line warning is printed to stderr.
+- Tools are executed via argv only with JSON stdin/stdout and strict timeouts; no shell is used.
+- See ADR‑0005 for the pre-stage flow and channel routing details: [../adr/0005-harmony-pre-processing-and-channel-aware-output.md](../adr/0005-harmony-pre-processing-and-channel-aware-output.md).
+ - See ADR‑0005 for the pre-stage flow and channel routing details: [../adr/0005-harmony-pre-processing-and-channel-aware-output.md](../adr/0005-harmony-pre-processing-and-channel-aware-output.md). See also ADR‑0006 for the image generation tool rationale: [../adr/0006-image-generation-tool-img_create.md](../adr/0006-image-generation-tool-img_create.md).
+
+## Prompt profiles
+
+The following profiles map to sampling behaviors for convenience. Temperature is omitted when the target model does not support it.
+
+| Profile | Effect |
+|---|---|
+| deterministic | temperature = 0.1 (pre-stage via `-prep-profile deterministic`) |
+| general | temperature = 1.0 |
+| creative | temperature = 1.0 |
+| reasoning | temperature = 1.0 |
