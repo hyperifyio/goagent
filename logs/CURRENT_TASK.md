@@ -1,1 +1,1 @@
-Writing ADR and README for -state-dir persistence and refinement.
+Idle: no unblocked checklist items.
