@@ -16,7 +16,7 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
   - [ ] Tool: wayback_lookup — OPEN: https://github.com/hyperifyio/goagent/pull/32
 - [ ] PR: Makefile wiring for tools (build-tools/clean)
 - [ ] PR: scripts and CI utilities — OPEN: https://github.com/hyperifyio/goagent/pull/42
-- [ ] PR: security & runbooks
+- [ ] PR: security & runbooks — OPEN: https://github.com/hyperifyio/goagent/pull/43
 - [ ] PR: ADRs
 - [ ] PR: diagrams
 - [ ] PR: CLI features (version, print-config, timeouts/backoff, validator, enable/disable)
