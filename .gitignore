@@ -1,0 +1,29 @@
+agentcli
+agentcli.exe
+bin/
+logs/
+
+.goagent
+*.log
+
+# Ignore built tool binaries only; keep sources tracked
+tools/bin/**
+
+# Test reports and coverage artifacts
+# Keep the working tree clean after local test runs
+reports/
+tests/
+coverage.out
+*.coverprofile
+coverage.html
+lint.err
+lint_verify.err
+
+# Common local artifacts
+dist/
+.DS_Store
+go.work
+.idea/
+.vscode/
+# Editor swap files
+*.swp
