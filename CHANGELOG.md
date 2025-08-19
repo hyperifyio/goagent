@@ -9,7 +9,7 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
 - [ ] PR #06: Tools manifest loader + reference docs — OPEN: https://github.com/hyperifyio/goagent/pull/9
 - [ ] PR #07: Secure tool runner (argv only) — OPEN: https://github.com/hyperifyio/goagent/pull/10
  - [ ] PR #09: Baseline docs & diagrams (no code) — OPEN: https://github.com/hyperifyio/goagent/pull/5
-- [ ] PR #10: Example tool `get_time` + `tools.json` + Makefile build-tools
+- [ ] PR #10: Example tool `get_time` + `tools.json` + Makefile build-tools — OPEN: https://github.com/hyperifyio/goagent/pull/11
 - [ ] PR #11: Quickstart README runnable
 - [ ] PR #12: Minimal unit tests enabling (core only)
 - [ ] PR (per-tool): exec, fs_read_file, fs_write_file, fs_append_file, fs_rm, fs_move, fs_search, fs_mkdirp, fs_apply_patch, fs_read_lines, fs_edit_range, fs_listdir, fs_stat, img_create, http_fetch, searxng_search, robots_check, readability_extract, metadata_extract, pdf_extract, rss_fetch, wayback_lookup, wiki_query, openalex_search, crossref_search, github_search, dedupe_rank, citation_pack
