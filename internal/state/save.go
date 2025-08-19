@@ -122,20 +122,20 @@ func SaveStateBundle(dir string, bundle *StateBundle) error {
 		return fmt.Errorf("invalid bundle: %w", err)
 	}
 
-    // Security: reject insecure directories (world-writable or non-owned) on Unix
-    if err := ensureSecureStateDir(dir); err != nil {
-        return err
-    }
+	// Security: reject insecure directories (world-writable or non-owned) on Unix
+	if err := ensureSecureStateDir(dir); err != nil {
+		return err
+	}
 
-    // Redact/sanitize secrets before persisting
-    sanitized, err := sanitizeBundleForSave(bundle)
-    if err != nil {
-        return err
-    }
+	// Redact/sanitize secrets before persisting
+	sanitized, err := sanitizeBundleForSave(bundle)
+	if err != nil {
+		return err
+	}
 
 	// Marshal the snapshot deterministically.
 	// Note: json.Marshal is sufficient; map key ordering is not relied upon for correctness here.
-    snapshotBytes, err := json.MarshalIndent(sanitized, "", "  ")
+	snapshotBytes, err := json.MarshalIndent(sanitized, "", "  ")
 	if err != nil {
 		return err
 	}

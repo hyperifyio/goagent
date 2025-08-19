@@ -45,27 +45,27 @@ func TestLoadLatestStateBundle_OK(t *testing.T) {
 }
 
 func TestLoadLatestStateBundle_RejectsInsecureDir(t *testing.T) {
-    dir := t.TempDir()
-    now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
-    b := makeValidBundle(now)
-    if err := SaveStateBundle(dir, b); err != nil {
-        t.Fatalf("SaveStateBundle: %v", err)
-    }
-    if runtime.GOOS != "windows" {
-        if err := os.Chmod(dir, 0o707); err != nil {
-            t.Fatalf("chmod: %v", err)
-        }
-        if got, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || got != nil {
-            t.Fatalf("expected ErrStateInvalid and nil for insecure dir, got %v, %v", err, got)
-        }
-        // Fix perms and expect success
-        if err := os.Chmod(dir, 0o700); err != nil {
-            t.Fatalf("chmod fix: %v", err)
-        }
-    }
-    if got, err := LoadLatestStateBundle(dir); err != nil || got == nil {
-        t.Fatalf("LoadLatestStateBundle after fix: %v, %v", err, got)
-    }
+	dir := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+	b := makeValidBundle(now)
+	if err := SaveStateBundle(dir, b); err != nil {
+		t.Fatalf("SaveStateBundle: %v", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(dir, 0o707); err != nil {
+			t.Fatalf("chmod: %v", err)
+		}
+		if got, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || got != nil {
+			t.Fatalf("expected ErrStateInvalid and nil for insecure dir, got %v, %v", err, got)
+		}
+		// Fix perms and expect success
+		if err := os.Chmod(dir, 0o700); err != nil {
+			t.Fatalf("chmod fix: %v", err)
+		}
+	}
+	if got, err := LoadLatestStateBundle(dir); err != nil || got == nil {
+		t.Fatalf("LoadLatestStateBundle after fix: %v, %v", err, got)
+	}
 }
 
 func TestLoadLatestStateBundle_MissingLatest(t *testing.T) {

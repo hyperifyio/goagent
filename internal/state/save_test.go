@@ -164,10 +164,10 @@ func TestSaveStateBundle_SanitizesSecretsAndRejectsInsecureDir(t *testing.T) {
 		t.Fatalf("SaveStateBundle error after fix: %v", err)
 	}
 	// Read snapshot and verify redactions present
-    entries, err := os.ReadDir(tempDir)
-    if err != nil {
-        t.Fatalf("ReadDir: %v", err)
-    }
+	entries, err := os.ReadDir(tempDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
 	var snapshot string
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "state-") && strings.HasSuffix(e.Name(), ".json") {
