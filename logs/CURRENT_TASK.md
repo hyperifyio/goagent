@@ -1,1 +1,1 @@
-Idle.
+Implement structured error codes for jsrun and mark checklist item complete

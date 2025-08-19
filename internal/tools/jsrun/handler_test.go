@@ -52,6 +52,13 @@ func TestRun_OutputLimit_TruncatesAndErrors(t *testing.T) {
 	if string(stderr) == "" || !json.Valid(stderr) {
 		t.Fatalf("expected structured stderr json, got: %s", string(stderr))
 	}
+	var errObj struct{ Code, Message string }
+	if uerr := json.Unmarshal(stderr, &errObj); uerr != nil {
+		t.Fatalf("stderr not JSON: %v: %s", uerr, string(stderr))
+	}
+	if errObj.Code != "OUTPUT_LIMIT" {
+		t.Fatalf("expected OUTPUT_LIMIT code, got %q (%s)", errObj.Code, errObj.Message)
+	}
 	var out struct {
 		Output string `json:"output"`
 	}
@@ -87,6 +94,62 @@ func TestRun_Timeout_Interrupts(t *testing.T) {
 	}
 	if e.Code != "TIMEOUT" {
 		t.Fatalf("expected TIMEOUT code, got %q (%s)", e.Code, e.Message)
+	}
+}
+
+func TestRun_EvalError_ThrownError(t *testing.T) {
+	req := map[string]any{
+		"source": "throw new Error('boom')",
+		"input":  "",
+		"limits": map[string]any{"output_kb": 1},
+	}
+	b, merr := json.Marshal(req)
+	if merr != nil {
+		t.Fatalf("marshal: %v", merr)
+	}
+	stdout, stderr, err := Run(b)
+	if err == nil {
+		t.Fatalf("expected EVAL_ERROR")
+	}
+	if len(stdout) != 0 {
+		t.Fatalf("expected no stdout on eval error, got: %s", string(stdout))
+	}
+	var e struct{ Code, Message string }
+	if jerr := json.Unmarshal(stderr, &e); jerr != nil {
+		t.Fatalf("stderr not JSON: %v: %s", jerr, string(stderr))
+	}
+	if e.Code != "EVAL_ERROR" {
+		t.Fatalf("expected EVAL_ERROR code, got %q (%s)", e.Code, e.Message)
+	}
+	if e.Message == "" {
+		t.Fatalf("expected non-empty error message")
+	}
+}
+
+func TestRun_EvalError_ReferenceError(t *testing.T) {
+	// Referencing an undefined symbol should raise an evaluation error
+	req := map[string]any{
+		"source": "emit(does_not_exist)",
+		"input":  "",
+		"limits": map[string]any{"output_kb": 1},
+	}
+	b, merr := json.Marshal(req)
+	if merr != nil {
+		t.Fatalf("marshal: %v", merr)
+	}
+	stdout, stderr, err := Run(b)
+	if err == nil {
+		t.Fatalf("expected EVAL_ERROR for reference error")
+	}
+	if len(stdout) != 0 {
+		t.Fatalf("expected no stdout on eval error, got: %s", string(stdout))
+	}
+	var e struct{ Code, Message string }
+	if jerr := json.Unmarshal(stderr, &e); jerr != nil {
+		t.Fatalf("stderr not JSON: %v: %s", jerr, string(stderr))
+	}
+	if e.Code != "EVAL_ERROR" {
+		t.Fatalf("expected EVAL_ERROR code, got %q (%s)", e.Code, e.Message)
 	}
 }
 
