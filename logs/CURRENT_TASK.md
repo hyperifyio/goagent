@@ -1,1 +1,1 @@
-Idle: PR inventory refreshed; ./work/main synced to origin/main.
+Idle: PR inventory refreshed; ./work/main reset to origin/main; no new PRs to open in this pass.
