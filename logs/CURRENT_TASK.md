@@ -1,1 +1,1 @@
-Completing L105 Security Model docs for sandbox tools.
+Idle — next checklist item is L108 (state bundle schema).
