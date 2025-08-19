@@ -23,12 +23,18 @@ func acquireStateLock(dir string) (func(), error) {
 		return func() {}, err
 	}
 	// Best-effort set exact perms (in case existing dir had broader perms).
-	_ = os.Chmod(dir, 0o700)
+	if err := os.Chmod(dir, 0o700); err != nil {
+		// ignore; directory may already have stricter perms
+		_ = err
+	}
 
 	tryOnce := func() (bool, error) {
 		// Include a small token in the file for debugging; best-effort.
 		var token [8]byte
-		_, _ = rand.Read(token[:])
+		if _, err := rand.Read(token[:]); err != nil {
+			// ignore; token will be zeroed which is fine for debug content
+			_ = err
+		}
 		contents := []byte(fmt.Sprintf("ts=%s token=%s\n", time.Now().UTC().Format(time.RFC3339Nano), hex.EncodeToString(token[:])))
 		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err != nil {
@@ -37,9 +43,20 @@ func acquireStateLock(dir string) (func(), error) {
 			}
 			return false, err
 		}
-		_, _ = f.Write(contents)
-		_ = f.Sync()
-		_ = f.Close()
+		if _, werr := f.Write(contents); werr != nil {
+			_ = f.Close()
+			_ = os.Remove(lockPath)
+			return false, werr
+		}
+		if serr := f.Sync(); serr != nil {
+			_ = f.Close()
+			_ = os.Remove(lockPath)
+			return false, serr
+		}
+		if cerr := f.Close(); cerr != nil {
+			_ = os.Remove(lockPath)
+			return false, cerr
+		}
 		return true, nil
 	}
 
@@ -49,7 +66,11 @@ func acquireStateLock(dir string) (func(), error) {
 		return func() {}, err
 	}
 	if ok {
-		return func() { _ = os.Remove(lockPath) }, nil
+		return func() {
+			if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {
+				_ = err
+			}
+		}, nil
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -62,7 +83,11 @@ func acquireStateLock(dir string) (func(), error) {
 			return func() {}, err
 		}
 		if ok {
-			return func() { _ = os.Remove(lockPath) }, nil
+			return func() {
+				if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {
+					_ = err
+				}
+			}, nil
 		}
 	}
 	// Failed to acquire; proceed without lock

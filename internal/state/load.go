@@ -35,15 +35,14 @@ func isBaseName(p string) bool {
 // bundle schema. On any issue (missing files, decode errors, version mismatch,
 // permission errors), it returns (nil, ErrStateInvalid).
 func LoadLatestStateBundle(dir string) (*StateBundle, error) {
-    // Security: reject insecure directories (world-writable or non-owned) on Unix
-    if err := ensureSecureStateDir(dir); err != nil {
-        return nil, ErrStateInvalid
-    }
-    // Best-effort lock to reduce concurrent writers/readers races
-    unlock, _ := acquireStateLock(dir)
-    if unlock != nil {
-        defer unlock()
-    }
+	// Security: reject insecure directories (world-writable or non-owned) on Unix
+	if err := ensureSecureStateDir(dir); err != nil {
+		return nil, ErrStateInvalid
+	}
+	// Best-effort lock to reduce concurrent writers/readers races
+	if unlock, _ := acquireStateLock(dir); unlock != nil {
+		defer unlock()
+	}
 	latestPath := filepath.Join(dir, "latest.json")
 	latestBytes, err := os.ReadFile(latestPath)
 	if err != nil {

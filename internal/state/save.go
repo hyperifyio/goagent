@@ -127,13 +127,12 @@ func SaveStateBundle(dir string, bundle *StateBundle) error {
 		return err
 	}
 
-    // Attempt coarse-grained advisory lock to avoid concurrent writes
-    unlock, lockErr := acquireStateLock(dir)
-    if lockErr == nil && unlock != nil {
-        defer unlock()
-    }
+	// Attempt coarse-grained advisory lock to avoid concurrent writes
+	if unlock, lockErr := acquireStateLock(dir); lockErr == nil && unlock != nil {
+		defer unlock()
+	}
 
-    // Redact/sanitize secrets before persisting
+	// Redact/sanitize secrets before persisting
 	sanitized, err := sanitizeBundleForSave(bundle)
 	if err != nil {
 		return err
