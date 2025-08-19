@@ -59,6 +59,16 @@ Expected stdout:
 ```
 Expected behavior: stdout contains 1024 bytes of `"a"`; stderr is `{"code":"OUTPUT_LIMIT",...}` and the process exits non‑zero.
 
+- Malicious loop (timeout):
+```json
+{
+  "source": "for(;;) {}",
+  "input": "",
+  "limits": {"wall_ms": 100}
+}
+```
+Expected behavior: process is interrupted within ~100ms with `stderr` `{"code":"TIMEOUT",...}` and non‑zero exit; stdout is empty.
+
 ### Quick verification via CLI (local repository)
 
 You can verify the interface using the existing unit tests:
@@ -68,12 +78,17 @@ go test ./internal/tools/jsrun -run 'TestRun_EmitReadInput_Succeeds|TestRun_Outp
 ```
 These tests cover happy-path echo, output truncation, and timeout interruption.
 
-### Security model and pitfalls
+### Security Model
 
-- No ambient capabilities: the VM has no filesystem, network, or OS access.
-- No timers or async scheduling: `setTimeout`, `setInterval`, and Promise-based scheduling are not available by default.
-- Deterministic budget: keep snippets small; large computations may hit the `wall_ms` timeout.
-- Do not embed secrets in `source` or `input`; logs may include error metadata.
+- Deny-by-default capabilities: the VM exposes only `emit` and `read_input`; there is no filesystem, network, clock, process, or environment access.
+- No timers/async: `setTimeout`, `setInterval`, Promises scheduling, and microtask queues are unavailable by default.
+- Deterministic budget: wall-time and output-size limits enforce bounded execution; long-running or unbounded loops will be interrupted.
+- Secrets hygiene: do not include secrets in `source` or `input`; error logs may contain minimal metadata necessary for troubleshooting.
+
+### Pitfalls
+
+- Large computations or accidental loops may hit the `wall_ms` timeout.
+- Emitting excessive data triggers `OUTPUT_LIMIT` with truncated output and a non-zero exit.
 
 ### Status
 
