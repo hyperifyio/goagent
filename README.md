@@ -573,6 +573,7 @@ Start with the [Documentation index](docs/README.md) for design docs, ADRs, and 
 - [Tools manifest reference](docs/reference/tools-manifest.md)
 - [Research tools reference](docs/reference/research-tools.md)
 - [CLI reference](docs/reference/cli-reference.md)
+- [Interface: code.sandbox.js.run](docs/interfaces/code.sandbox.js.run.md)
 - [Architecture: Module boundaries](docs/architecture/module-boundaries.md)
 - [Security: Threat model](docs/security/threat-model.md)
 - [ADR‑0005: Harmony pre‑processing and channel‑aware output](docs/adr/0005-harmony-pre-processing-and-channel-aware-output.md)
