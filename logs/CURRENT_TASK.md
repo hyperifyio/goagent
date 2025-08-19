@@ -1,1 +1,1 @@
-Embed a default smart prep prompt and wire loader tests.
+Implement ResolvePrepPrompt selection logic and tests.
