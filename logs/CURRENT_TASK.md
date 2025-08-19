@@ -1,1 +1,1 @@
-Plan state persistence dry-run mode: add --dry-run flag and help/docs, ensure tests green.
+E2E scenario test for state persistence: save, restore, refine, assert latest.json points to newest and prompts precedence.
