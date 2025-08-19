@@ -1,1 +1,1 @@
-Recorded sandbox JS and WASM PRs in checklist and changelog.
+Idle: PR inventory refreshed; ./work/main synced to origin/main.
