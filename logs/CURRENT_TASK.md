@@ -1,1 +1,1 @@
-Implement backpressure & corruption handling for state bundles by quarantining invalid latest/snapshot files and adding tests.
+Implement advisory file lock state.lock for state save/load to prevent concurrent writers.

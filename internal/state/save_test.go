@@ -114,6 +114,71 @@ func TestSaveStateBundle_WritesFilesAtomicallyWithPermsAndPointer(t *testing.T) 
 	}
 }
 
+func TestSaveStateBundle_AdvisoryLock_AllowsSingleWriter(t *testing.T) {
+    t.Parallel()
+    dir := t.TempDir()
+
+    now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+    mk := func(i int) *StateBundle {
+        return &StateBundle{
+            Version:     "1",
+            CreatedAt:   now,
+            ToolVersion: "test-1",
+            ModelID:     "gpt-5",
+            BaseURL:     "http://example.local",
+            ToolsetHash: "abc",
+            ScopeKey:    "scope-1",
+            Prompts:     map[string]string{"system": "hi"},
+            SourceHash:  ComputeSourceHash("gpt-5", "http://example.local", "abc", "scope-1"),
+        }
+    }
+
+    done := make(chan error, 2)
+    go func() { done <- SaveStateBundle(dir, mk(1)) }()
+    go func() { done <- SaveStateBundle(dir, mk(2)) }()
+
+    // Both should succeed; lock serializes them. Wait for both.
+    if err := <-done; err != nil {
+        t.Fatalf("first SaveStateBundle error: %v", err)
+    }
+    if err := <-done; err != nil {
+        t.Fatalf("second SaveStateBundle error: %v", err)
+    }
+
+    // There must be exactly one latest.json and at least one snapshot.
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        t.Fatalf("ReadDir: %v", err)
+    }
+    hasLatest := false
+    snapCount := 0
+    hasTmp := false
+    for _, e := range entries {
+        switch {
+        case e.Name() == "latest.json":
+            hasLatest = true
+        case strings.HasPrefix(e.Name(), "state-") && strings.HasSuffix(e.Name(), ".json"):
+            snapCount++
+        case strings.HasPrefix(e.Name(), ".tmp-"):
+            hasTmp = true
+        }
+    }
+    if !hasLatest {
+        t.Fatalf("missing latest.json after concurrent writes")
+    }
+    if snapCount == 0 {
+        t.Fatalf("no snapshot files after concurrent writes")
+    }
+    if hasTmp {
+        t.Fatalf("found lingering temp files after concurrent writes")
+    }
+
+    // Pointer should load successfully
+    if b, err := LoadLatestStateBundle(dir); err != nil || b == nil {
+        t.Fatalf("LoadLatestStateBundle failed after concurrent writes: %v, %v", err, b)
+    }
+}
+
 func TestSaveStateBundle_InvalidBundle(t *testing.T) {
 	tempDir := t.TempDir()
 	// Missing required fields (CreatedAt invalid)
