@@ -694,9 +694,11 @@ func parseFlags() (cliConfig, int) {
 	// Enforce mutual exclusion and required prompt presence (unless print-only modes)
 	if strings.TrimSpace(cfg.systemFile) != "" && strings.TrimSpace(cfg.systemPrompt) != "" && cfg.systemPrompt != defaultSystem {
 		// Both -system and -system-file provided (with -system not defaulted)
+		cfg.parseError = "error: -system and -system-file are mutually exclusive"
 		return cfg, 2
 	}
 	if strings.TrimSpace(cfg.promptFile) != "" && strings.TrimSpace(cfg.prompt) != "" {
+		cfg.parseError = "error: -prompt and -prompt-file are mutually exclusive"
 		return cfg, 2
 	}
 	if !cfg.capabilities && !cfg.printConfig {
@@ -740,11 +742,13 @@ func parseFlags() (cliConfig, int) {
 
 	// Conflict checks for save/load flags
 	if strings.TrimSpace(cfg.saveMessagesPath) != "" && strings.TrimSpace(cfg.loadMessagesPath) != "" {
+		cfg.parseError = "error: -save-messages and -load-messages are mutually exclusive"
 		return cfg, 2
 	}
 	if strings.TrimSpace(cfg.loadMessagesPath) != "" {
 		// Loading messages conflicts with providing -prompt or -prompt-file
 		if strings.TrimSpace(cfg.prompt) != "" || strings.TrimSpace(cfg.promptFile) != "" {
+			cfg.parseError = "error: -load-messages cannot be combined with -prompt or -prompt-file"
 			return cfg, 2
 		}
 	}

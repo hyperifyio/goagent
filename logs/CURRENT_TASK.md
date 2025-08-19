@@ -1,1 +1,1 @@
-Adding --help snapshot test asserting flags and key phrases.
+Working on L59: backward compatibility and conflict error messages; adding explicit parse errors and compat tests.
