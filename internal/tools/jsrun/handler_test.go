@@ -52,3 +52,27 @@ func TestRun_OutputLimit_TruncatesAndErrors(t *testing.T) {
         t.Fatalf("expected truncated to 1024 bytes, got %d", len(out.Output))
     }
 }
+
+func TestRun_Timeout_Interrupts(t *testing.T) {
+    // Infinite loop; should be interrupted by wall_ms
+    req := map[string]any{
+        "source": "for(;;){}",
+        "input":  "",
+        "limits": map[string]any{"output_kb": 1, "wall_ms": 50},
+    }
+    b, _ := json.Marshal(req)
+    stdout, stderr, err := Run(b)
+    if err == nil {
+        t.Fatalf("expected timeout error")
+    }
+    if len(stdout) != 0 {
+        t.Fatalf("expected no stdout on timeout, got: %s", string(stdout))
+    }
+    var e struct{ Code, Message string }
+    if jerr := json.Unmarshal(stderr, &e); jerr != nil {
+        t.Fatalf("stderr not JSON: %v: %s", jerr, string(stderr))
+    }
+    if e.Code != "TIMEOUT" {
+        t.Fatalf("expected TIMEOUT code, got %q (%s)", e.Code, e.Message)
+    }
+}

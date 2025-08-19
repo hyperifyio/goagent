@@ -1,1 +1,1 @@
-Implement code.sandbox.js.run tool and handler — starting.
+Implement timeouts with interruption in code.sandbox.js.run.

@@ -2,10 +2,13 @@ package jsrun
 
 import (
     "bytes"
+    "context"
     "encoding/json"
     "errors"
     "fmt"
-    "strings"
+    "time"
+
+    "github.com/dop251/goja"
 )
 
 // Input models the expected stdin JSON for code.sandbox.js.run
@@ -29,7 +32,10 @@ type Error struct {
     Message string `json:"message"`
 }
 
-var errOutputLimit = errors.New("OUTPUT_LIMIT")
+var (
+    errOutputLimit = errors.New("OUTPUT_LIMIT")
+    errTimeout     = errors.New("TIMEOUT")
+)
 
 // Run executes the provided JavaScript source with minimal host bindings.
 // Returns (stdoutJSON, stderrJSON, err). On OUTPUT_LIMIT, returns truncated
@@ -50,30 +56,86 @@ func Run(raw []byte) ([]byte, []byte, error) {
     }
     capBytes := maxKB * 1024
 
-    // Bounded output buffer
+    // Prepare bounded output buffer
     var outBuf bytes.Buffer
 
-    // Minimal interpreter stub supporting two forms:
-    // 1) emit(read_input())
-    // 2) emit("<literal>")
-    src := strings.TrimSpace(in.Source)
-    switch {
-    case src == "emit(read_input())":
-        // write input subject to cap
-        writeBounded(&outBuf, in.Input, capBytes)
-        if outBuf.Len() >= capBytes && len(in.Input) > capBytes {
+    // Build a Goja VM with minimal bindings
+    vm := goja.New()
+
+    // Helper to write to bounded buffer and signal limit
+    writeAndMaybeLimit := func(s string) error {
+        writeBounded(&outBuf, s, capBytes)
+        if outBuf.Len() >= capBytes && len(s) > capBytes {
+            return errOutputLimit
+        }
+        return nil
+    }
+
+    // Bind read_input(): returns provided input string
+    if err := vm.Set("read_input", func() string { return in.Input }); err != nil {
+        return nil, mustMarshalError("EVAL_ERROR", "failed to bind read_input"), err
+    }
+
+    // Bind emit(s): appends to bounded buffer
+    if err := vm.Set("emit", func(call goja.FunctionCall) goja.Value {
+        if len(call.Arguments) > 0 {
+            arg := call.Arguments[0].String()
+            if e := writeAndMaybeLimit(arg); e != nil {
+                // Trigger a JS exception that we map after execution
+                panic(errOutputLimit)
+            }
+        }
+        return goja.Undefined()
+    }); err != nil {
+        return nil, mustMarshalError("EVAL_ERROR", "failed to bind emit"), err
+    }
+
+    // Timeout handling with interrupt
+    wall := in.Limits.WallMS
+    if wall <= 0 {
+        wall = 1000 // 1s default
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), time.Duration(wall)*time.Millisecond)
+    defer cancel()
+
+    // Arrange to interrupt VM on timeout
+    done := make(chan struct{})
+    var runErr error
+    go func() {
+        defer close(done)
+        defer func() {
+            if r := recover(); r != nil {
+                // Propagate as error for classification below
+                if errVal, ok := r.(error); ok {
+                    runErr = errVal
+                } else {
+                    runErr = fmt.Errorf("panic: %v", r)
+                }
+            }
+        }()
+        _, runErr = vm.RunString(in.Source)
+    }()
+
+    select {
+    case <-done:
+        // Completed or panicked; classify below
+    case <-ctx.Done():
+        vm.Interrupt("timeout")
+        <-done
+        runErr = errTimeout
+    }
+
+    // Classify results
+    if runErr != nil {
+        switch runErr {
+        case errOutputLimit:
             outJSON, _ := json.Marshal(Output{Output: outBuf.String()})
             return outJSON, mustMarshalError("OUTPUT_LIMIT", fmt.Sprintf("output exceeded %d KB", maxKB)), errOutputLimit
+        case errTimeout:
+            return nil, mustMarshalError("TIMEOUT", fmt.Sprintf("execution exceeded %d ms", wall)), errTimeout
+        default:
+            return nil, mustMarshalError("EVAL_ERROR", runErr.Error()), runErr
         }
-    case strings.HasPrefix(src, "emit(\"") && strings.HasSuffix(src, "\")"):
-        lit := strings.TrimSuffix(strings.TrimPrefix(src, "emit(\""), "\")")
-        writeBounded(&outBuf, lit, capBytes)
-        if outBuf.Len() >= capBytes && len(lit) > capBytes {
-            outJSON, _ := json.Marshal(Output{Output: outBuf.String()})
-            return outJSON, mustMarshalError("OUTPUT_LIMIT", fmt.Sprintf("output exceeded %d KB", maxKB)), errOutputLimit
-        }
-    default:
-        return nil, mustMarshalError("EVAL_ERROR", "unsupported source"), errors.New("eval error")
     }
 
     outJSON, _ := json.Marshal(Output{Output: outBuf.String()})
