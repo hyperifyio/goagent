@@ -5,6 +5,7 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
 - [ ] PR #04: OpenAI HTTP client (types + client, tests)
   - [ ] OPEN: https://github.com/hyperifyio/goagent/pull/7
 - [ ] PR #05: Model defaults & capability map (serialization only + ADR)
+  - [ ] OPEN: https://github.com/hyperifyio/goagent/pull/8
 - [ ] PR #06: Tools manifest loader + reference docs
 - [ ] PR #07: Secure tool runner (argv only)
  - [ ] PR #09: Baseline docs & diagrams (no code) — OPEN: https://github.com/hyperifyio/goagent/pull/5
