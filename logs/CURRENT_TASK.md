@@ -1,1 +1,1 @@
-Implement -prep-dry-run to print merged Harmony messages to stdout and add tests.
+Extend -print-messages and -save-messages to include prestage metadata and verify with tests.

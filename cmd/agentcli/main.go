@@ -956,7 +956,8 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 
 	// Optional: pretty-print the final merged messages prior to the main call
 	if cfg.printMessages {
-		if b, err := json.MarshalIndent(messages, "", "  "); err == nil {
+		// Print a wrapper that includes metadata but omits any sensitive keys
+		if b, err := json.MarshalIndent(buildMessagesWrapper(messages, strings.TrimSpace(cfg.imagePrompt)), "", "  "); err == nil {
 			safeFprintln(stderr, string(b))
 		}
 	}
@@ -1726,17 +1727,37 @@ func parseSavedMessages(data []byte) ([]oai.Message, string, error) {
 	return wrapper.Messages, strings.TrimSpace(wrapper.ImagePrompt), nil
 }
 
-// writeSavedMessages writes the wrapper JSON with messages and optional image_prompt.
-func writeSavedMessages(path string, messages []oai.Message, imagePrompt string) error {
-	type savedMessagesFile struct {
+// buildMessagesWrapper constructs the saved/printed JSON wrapper including
+// the Harmony messages, optional image prompt, and pre-stage metadata.
+func buildMessagesWrapper(messages []oai.Message, imagePrompt string) any {
+	// Determine pre-stage prompt source and size using resolver.
+	// Flags for pre-stage prompt are not yet implemented; this will resolve to
+	// the embedded default for now, which is acceptable and deterministic.
+	src, text := oai.ResolvePrepPrompt(nil, "")
+	type prestageMeta struct {
+		Source string `json:"source"`
+		Bytes  int    `json:"bytes"`
+	}
+	type wrapper struct {
 		Messages    []oai.Message `json:"messages"`
 		ImagePrompt string        `json:"image_prompt,omitempty"`
+		Prestage    prestageMeta  `json:"prestage"`
 	}
-	out := savedMessagesFile{Messages: messages}
+	w := wrapper{
+		Messages: messages,
+		Prestage: prestageMeta{Source: src, Bytes: len([]byte(text))},
+	}
 	if strings.TrimSpace(imagePrompt) != "" {
-		out.ImagePrompt = strings.TrimSpace(imagePrompt)
+		w.ImagePrompt = strings.TrimSpace(imagePrompt)
 	}
-	b, err := json.MarshalIndent(out, "", "  ")
+	return w
+}
+
+// writeSavedMessages writes the wrapper JSON with messages, optional image_prompt,
+// and pre-stage metadata.
+func writeSavedMessages(path string, messages []oai.Message, imagePrompt string) error {
+	wrapper := buildMessagesWrapper(messages, strings.TrimSpace(imagePrompt))
+	b, err := json.MarshalIndent(wrapper, "", "  ")
 	if err != nil {
 		return err
 	}
