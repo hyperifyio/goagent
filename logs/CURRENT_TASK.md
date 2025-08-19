@@ -1,1 +1,1 @@
-Implement merge of pre-stage Harmony output into main-call config with tests.
+Implement -prep-dry-run to print merged Harmony messages to stdout and add tests.

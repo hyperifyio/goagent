@@ -2816,6 +2816,43 @@ func TestPrepDryRun_PrintsMessages(t *testing.T) {
 	}
 }
 
+// FEATURE_CHECKLIST L69: -prep-dry-run should reflect merged pre-stage output
+// (system replacement and developer appends) in the printed messages.
+func TestPrepDryRun_MergesPrestageOutput(t *testing.T) {
+	// Stub server that returns a pre-stage assistant message with JSON payload
+	// specifying a new system and an extra developer message.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// Assistant content contains Harmony array for pre-stage merge
+		payload := `[{"role":"system","content":"SYSX"},{"role":"developer","content":"DEVX"}]`
+		resp := oai.ChatCompletionsResponse{
+			Choices: []oai.ChatCompletionsResponseChoice{{
+				Message: oai.Message{Role: oai.RoleAssistant, Content: payload},
+			}},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	// Run CLI with -prep-dry-run so it prints refined (merged) messages to stdout.
+	args := []string{"-prompt", "USER", "-base-url", srv.URL, "-prep-dry-run"}
+	var out, errBuf strings.Builder
+	code := cliMain(args, &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code=%d; want 0; stderr=%s", code, errBuf.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, "\"SYSX\"") {
+		t.Fatalf("merged system not found in output: %s", truncate(s, 200))
+	}
+	if !strings.Contains(s, "\"DEVX\"") {
+		t.Fatalf("merged developer not found in output: %s", truncate(s, 200))
+	}
+}
+
 // FEATURE_CHECKLIST L21: -print-messages should pretty-print the final merged
 // message array to stderr before the main call.
 func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {

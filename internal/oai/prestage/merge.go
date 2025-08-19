@@ -17,10 +17,10 @@ type ToolConfig struct {
 // PrestageParsed represents structured data extracted from the pre-stage
 // Harmony payload. Fields are optional; empty values indicate absence.
 type PrestageParsed struct {
-	System            string                 // optional replacement for the system prompt
-	Developers        []string               // zero-or-more developer prompts to append
-	ToolConfig        *ToolConfig            // optional tool configuration hints
-	ImageInstructions map[string]any         // optional defaults for downstream image tools
+	System            string         // optional replacement for the system prompt
+	Developers        []string       // zero-or-more developer prompts to append
+	ToolConfig        *ToolConfig    // optional tool configuration hints
+	ImageInstructions map[string]any // optional defaults for downstream image tools
 }
 
 // ParsePrestagePayload parses a JSON payload returned by the pre-stage model.
@@ -35,92 +35,118 @@ func ParsePrestagePayload(payload string) (PrestageParsed, error) {
 	if s == "" {
 		return out, nil
 	}
-	// Accept either a raw array or a JSON value with surrounding whitespace
-	var arr []map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(s), &arr); err != nil {
-		// If not an array of objects, attempt to parse as a single Harmony message object
-		var single map[string]json.RawMessage
-		if err2 := json.Unmarshal([]byte(s), &single); err2 != nil {
-			return out, err
-		}
-		arr = []map[string]json.RawMessage{single}
+	arr, err := parseToObjectArray(s)
+	if err != nil {
+		return out, err
 	}
-
 	for _, obj := range arr {
-		// Prefer explicit Harmony role schema when present
-		if rawRole, ok := obj["role"]; ok {
-			var role string
-			_ = json.Unmarshal(rawRole, &role)
-			role = strings.ToLower(strings.TrimSpace(role))
-			if role == oai.RoleSystem || role == oai.RoleDeveloper {
-				var content string
-				_ = json.Unmarshal(obj["content"], &content)
-				content = strings.TrimSpace(content)
-				if content == "" {
-					continue
-				}
-				if role == oai.RoleSystem {
-					// First system wins; later ones are ignored
-					if out.System == "" {
-						out.System = content
-					}
-				} else {
-					out.Developers = append(out.Developers, content)
-				}
-				continue
-			}
-		}
-
-		// Fallback: support key-based entries as used in the default prompt examples
-		if rawSys, ok := obj["system"]; ok {
-			var sys string
-			if err := json.Unmarshal(rawSys, &sys); err == nil {
-				sys = strings.TrimSpace(sys)
-				if sys != "" && out.System == "" {
-					out.System = sys
-				}
-			}
-			continue
-		}
-		if rawDev, ok := obj["developer"]; ok {
-			var dev string
-			if err := json.Unmarshal(rawDev, &dev); err == nil {
-				dev = strings.TrimSpace(dev)
-				if dev != "" {
-					out.Developers = append(out.Developers, dev)
-				}
-			}
-			continue
-		}
-		if rawTool, ok := obj["tool_config"]; ok {
-			var tc ToolConfig
-			if err := json.Unmarshal(rawTool, &tc); err == nil {
-				// Normalize empty slices/maps to nil to avoid noise
-				if len(tc.EnableTools) == 0 {
-					tc.EnableTools = nil
-				}
-				if len(tc.Hints) == 0 {
-					tc.Hints = nil
-				}
-				// First tool_config wins; ignore subsequent ones
-				if out.ToolConfig == nil {
-					out.ToolConfig = &tc
-				}
-			}
-			continue
-		}
-		if rawImg, ok := obj["image_instructions"]; ok {
-			var ii map[string]any
-			if err := json.Unmarshal(rawImg, &ii); err == nil {
-				if len(ii) > 0 && out.ImageInstructions == nil {
-					out.ImageInstructions = ii
-				}
-			}
-			continue
-		}
+		updateParsedFromObject(obj, &out)
 	}
-
 	return out, nil
+}
+
+// parseToObjectArray accepts either a JSON array of objects or a single object and returns a slice.
+func parseToObjectArray(s string) ([]map[string]json.RawMessage, error) {
+	var arr []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &arr); err == nil {
+		return arr, nil
+	}
+	var single map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &single); err != nil {
+		return nil, err
+	}
+	return []map[string]json.RawMessage{single}, nil
+}
+
+// updateParsedFromObject mutates out based on recognized fields in obj.
+func updateParsedFromObject(obj map[string]json.RawMessage, out *PrestageParsed) {
+	if tryRoleBased(obj, out) {
+		return
+	}
+	_ = tryKeyBased(obj, out)
+}
+
+// tryRoleBased handles objects using the explicit Harmony role schema.
+func tryRoleBased(obj map[string]json.RawMessage, out *PrestageParsed) bool {
+	rawRole, ok := obj["role"]
+	if !ok {
+		return false
+	}
+	var role string
+	if err := json.Unmarshal(rawRole, &role); err != nil {
+		return false
+	}
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role != oai.RoleSystem && role != oai.RoleDeveloper {
+		return false
+	}
+	var content string
+	if rawContent, ok := obj["content"]; ok {
+		if err := json.Unmarshal(rawContent, &content); err != nil {
+			return true
+		}
+		content = strings.TrimSpace(content)
+	}
+	if content == "" {
+		return true
+	}
+	if role == oai.RoleSystem {
+		if out.System == "" {
+			out.System = content
+		}
+	} else {
+		out.Developers = append(out.Developers, content)
+	}
+	return true
+}
+
+// tryKeyBased supports legacy key-based entries.
+func tryKeyBased(obj map[string]json.RawMessage, out *PrestageParsed) bool {
+	if rawSys, ok := obj["system"]; ok {
+		var sys string
+		if err := json.Unmarshal(rawSys, &sys); err == nil {
+			sys = strings.TrimSpace(sys)
+			if sys != "" && out.System == "" {
+				out.System = sys
+			}
+		}
+		return true
+	}
+	if rawDev, ok := obj["developer"]; ok {
+		var dev string
+		if err := json.Unmarshal(rawDev, &dev); err == nil {
+			dev = strings.TrimSpace(dev)
+			if dev != "" {
+				out.Developers = append(out.Developers, dev)
+			}
+		}
+		return true
+	}
+	if rawTool, ok := obj["tool_config"]; ok {
+		var tc ToolConfig
+		if err := json.Unmarshal(rawTool, &tc); err == nil {
+			if len(tc.EnableTools) == 0 {
+				tc.EnableTools = nil
+			}
+			if len(tc.Hints) == 0 {
+				tc.Hints = nil
+			}
+			if out.ToolConfig == nil {
+				out.ToolConfig = &tc
+			}
+		}
+		return true
+	}
+	if rawImg, ok := obj["image_instructions"]; ok {
+		var ii map[string]any
+		if err := json.Unmarshal(rawImg, &ii); err == nil {
+			if len(ii) > 0 && out.ImageInstructions == nil {
+				out.ImageInstructions = ii
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // MergePrestageIntoMessages merges parsed pre-stage outputs into the provided
@@ -129,6 +155,7 @@ func ParsePrestagePayload(payload string) (PrestageParsed, error) {
 //  2. Append parsed.Developers immediately before the first user message; when
 //     no user message exists, append them to the end. CLI-provided developer
 //     messages in the seed remain first, preserving precedence.
+//
 // Messages with other roles are preserved in their original order.
 func MergePrestageIntoMessages(seed []oai.Message, parsed PrestageParsed) []oai.Message {
 	// Replace system content when provided

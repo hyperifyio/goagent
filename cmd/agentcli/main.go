@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hyperifyio/goagent/internal/oai"
+	prestage "github.com/hyperifyio/goagent/internal/oai/prestage"
 	"github.com/hyperifyio/goagent/internal/tools"
 )
 
@@ -1469,13 +1470,24 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		}
 	}
 
-	// If there are no tool calls, return messages unchanged
+	// Parse and merge pre-stage payload into the seed messages when present
+	merged := normalizedIn
+	if len(resp.Choices) > 0 {
+		payload := strings.TrimSpace(resp.Choices[0].Message.Content)
+		if payload != "" {
+			if parsed, perr := prestage.ParsePrestagePayload(payload); perr == nil {
+				merged = prestage.MergePrestageIntoMessages(normalizedIn, parsed)
+			}
+		}
+	}
+
+	// If there are no tool calls, return merged messages
 	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
-		// Cache the unchanged transcript as well for consistency
-		if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, normalizedIn); err != nil {
+		// Cache the merged transcript for consistency
+		if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, merged); err != nil {
 			_ = err // best-effort cache write; ignore error
 		}
-		return normalizedIn, nil
+		return merged, nil
 	}
 
 	// Append the assistant message carrying tool_calls
@@ -1484,14 +1496,14 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 	if norm, err := oai.NormalizeHarmonyMessages([]oai.Message{assistantMsg}); err == nil && len(norm) == 1 {
 		assistantMsg = norm[0]
 	}
-	out := append(append([]oai.Message{}, normalizedIn...), assistantMsg)
+	out := append(append([]oai.Message{}, merged...), assistantMsg)
 
 	// Decide pre-stage tool execution policy: built-in read-only by default
 	if !cfg.prepToolsAllowExternal {
 		// Ignore -tools and execute only built-in read-only adapters
 		out = appendPreStageBuiltinToolOutputs(out, assistantMsg, cfg)
 		// Write cache
-		if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, out); err != nil {
+		if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, out); err != nil {
 			_ = err // best-effort cache write; ignore error
 		}
 		return out, nil
@@ -1523,7 +1535,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		}
 	}
 	out = appendToolCallOutputs(out, assistantMsg, registry, cfg)
-	if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, messages, out); err != nil {
+	if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, out); err != nil {
 		_ = err // best-effort cache write; ignore error
 	}
 	return out, nil

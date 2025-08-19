@@ -28,9 +28,15 @@ func TestParsePrestagePayload_SupportsRoleSchemaAndKeyEntries(t *testing.T) {
 	if parsed.ToolConfig == nil || len(parsed.ToolConfig.EnableTools) != 1 || parsed.ToolConfig.EnableTools[0] != "http_fetch" {
 		t.Fatalf("tool_config=%v", parsed.ToolConfig)
 	}
-	if parsed.ImageInstructions == nil || parsed.ImageInstructions["style"].(string) != "natural" {
-		t.Fatalf("image_instructions=%v", parsed.ImageInstructions)
+	if parsed.ImageInstructions == nil {
+		t.Fatalf("image_instructions missing: %v", parsed.ImageInstructions)
 	}
+	if v, ok := parsed.ImageInstructions["style"]; !ok {
+		t.Fatalf("style missing in image_instructions: %v", parsed.ImageInstructions)
+	} else if s, ok := v.(string); !ok || s != "natural" {
+		t.Fatalf("style invalid: %#v", v)
+	}
+	// done
 }
 
 func TestMergePrestageIntoMessages_ReplacesSystemAndAppendsDevelopers(t *testing.T) {
@@ -69,7 +75,10 @@ func TestParsePrestagePayload_IgnoresUnknownObjects(t *testing.T) {
 
 func TestParsePrestagePayload_SingleObject(t *testing.T) {
 	obj := map[string]any{"system": "S"}
-	b, _ := json.Marshal(obj)
+	b, mErr := json.Marshal(obj)
+	if mErr != nil {
+		t.Fatalf("marshal: %v", mErr)
+	}
 	parsed, err := ParsePrestagePayload(string(b))
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
