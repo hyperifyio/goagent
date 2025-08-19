@@ -83,6 +83,10 @@ func TestLoadLatestStateBundle_CorruptLatest(t *testing.T) {
 	if b, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b != nil {
 		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b)
 	}
+	// Corrupt pointer should be quarantined
+	if _, err := os.Stat(filepath.Join(dir, "latest.json.quarantined")); err != nil {
+		t.Fatalf("expected quarantined latest.json, err=%v", err)
+	}
 }
 
 func TestLoadLatestStateBundle_UnknownVersion(t *testing.T) {
@@ -118,6 +122,10 @@ func TestLoadLatestStateBundle_UnknownVersion(t *testing.T) {
 	if b2, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b2 != nil {
 		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b2)
 	}
+	// Unknown version pointer should be quarantined
+	if _, err := os.Stat(filepath.Join(dir, "latest.json.quarantined")); err != nil {
+		t.Fatalf("expected quarantined latest.json, err=%v", err)
+	}
 }
 
 func TestLoadLatestStateBundle_MissingSnapshot(t *testing.T) {
@@ -133,6 +141,10 @@ func TestLoadLatestStateBundle_MissingSnapshot(t *testing.T) {
 	}
 	if b, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b != nil {
 		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b)
+	}
+	// Pointer should be quarantined
+	if _, err := os.Stat(filepath.Join(dir, "latest.json.quarantined")); err != nil {
+		t.Fatalf("expected quarantined latest.json, err=%v", err)
 	}
 }
 
@@ -170,5 +182,77 @@ func TestLoadLatestStateBundle_PermissionDenied(t *testing.T) {
 
 	if b2, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b2 != nil {
 		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b2)
+	}
+}
+
+func TestLoadLatestStateBundle_SnapshotHashMismatch_QuarantineBoth(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+	b := makeValidBundle(now)
+	if err := SaveStateBundle(dir, b); err != nil {
+		t.Fatalf("SaveStateBundle: %v", err)
+	}
+	// Tamper with snapshot contents to break SHA
+	// Find snapshot name
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	var snapshot string
+	for _, e := range entries {
+		if !e.IsDir() && e.Name() != "latest.json" {
+			snapshot = e.Name()
+			break
+		}
+	}
+	if snapshot == "" {
+		t.Fatalf("snapshot not found")
+	}
+	snapPath := filepath.Join(dir, snapshot)
+	if err := os.WriteFile(snapPath, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("tamper snapshot: %v", err)
+	}
+	if b2, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b2 != nil {
+		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b2)
+	}
+	if _, err := os.Stat(snapPath + ".quarantined"); err != nil {
+		t.Fatalf("expected quarantined snapshot, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "latest.json.quarantined")); err != nil {
+		t.Fatalf("expected quarantined latest.json, err=%v", err)
+	}
+}
+
+func TestLoadLatestStateBundle_CorruptSnapshotJSON_QuarantineBoth(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+	b := makeValidBundle(now)
+	if err := SaveStateBundle(dir, b); err != nil {
+		t.Fatalf("SaveStateBundle: %v", err)
+	}
+	// Locate snapshot and write invalid JSON
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	var snapshot string
+	for _, e := range entries {
+		if !e.IsDir() && e.Name() != "latest.json" {
+			snapshot = e.Name()
+			break
+		}
+	}
+	snapPath := filepath.Join(dir, snapshot)
+	if err := os.WriteFile(snapPath, []byte("not-json"), 0o600); err != nil {
+		t.Fatalf("write corrupt snapshot: %v", err)
+	}
+	if b2, err := LoadLatestStateBundle(dir); !errors.Is(err, ErrStateInvalid) || b2 != nil {
+		t.Fatalf("expected ErrStateInvalid and nil, got %v, %v", err, b2)
+	}
+	if _, err := os.Stat(snapPath + ".quarantined"); err != nil {
+		t.Fatalf("expected quarantined snapshot, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "latest.json.quarantined")); err != nil {
+		t.Fatalf("expected quarantined latest.json, err=%v", err)
 	}
 }
