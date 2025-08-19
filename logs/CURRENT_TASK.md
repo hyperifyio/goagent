@@ -1,1 +1,1 @@
-Continuing L114: implement RefineStateBundle and tests.
+Implement RefineStateBundle and tests for state refinement preserving fields and recording prev_sha.
