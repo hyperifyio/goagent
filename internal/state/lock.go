@@ -44,17 +44,17 @@ func acquireStateLock(dir string) (func(), error) {
 			return false, err
 		}
 		if _, werr := f.Write(contents); werr != nil {
-			_ = f.Close()
-			_ = os.Remove(lockPath)
+			_ = f.Close()           //nolint:errcheck // best-effort cleanup on error
+			_ = os.Remove(lockPath) //nolint:errcheck // best-effort cleanup on error
 			return false, werr
 		}
 		if serr := f.Sync(); serr != nil {
-			_ = f.Close()
-			_ = os.Remove(lockPath)
+			_ = f.Close()           //nolint:errcheck // best-effort cleanup on error
+			_ = os.Remove(lockPath) //nolint:errcheck // best-effort cleanup on error
 			return false, serr
 		}
 		if cerr := f.Close(); cerr != nil {
-			_ = os.Remove(lockPath)
+			_ = os.Remove(lockPath) //nolint:errcheck // best-effort cleanup on error
 			return false, cerr
 		}
 		return true, nil

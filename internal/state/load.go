@@ -40,7 +40,7 @@ func LoadLatestStateBundle(dir string) (*StateBundle, error) {
 		return nil, ErrStateInvalid
 	}
 	// Best-effort lock to reduce concurrent writers/readers races
-	if unlock, _ := acquireStateLock(dir); unlock != nil {
+	if unlock, lockErr := acquireStateLock(dir); lockErr == nil && unlock != nil {
 		defer unlock()
 	}
 	latestPath := filepath.Join(dir, "latest.json")
