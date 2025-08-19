@@ -1,1 +1,1 @@
-Implement structured error codes for jsrun and mark checklist item complete
+Documenting code.sandbox.js.run interface and linking it from README.
