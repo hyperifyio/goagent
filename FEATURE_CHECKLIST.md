@@ -1,4 +1,5 @@
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs created this pass.
+  - Verified OPEN PRs to `main` via gh; prepared clean working copy at `./work/main` reset to `origin/main`; no duplicates opened this pass.
 * [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
 * [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
 * [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
