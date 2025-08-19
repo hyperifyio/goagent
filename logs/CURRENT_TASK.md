@@ -1,1 +1,1 @@
-Blocked on backward compatibility guard: missing cmd/agentcli CLI to host tests.
+Blocked on telemetry/verbosity alignment until cmd/agentcli scaffold exists.
