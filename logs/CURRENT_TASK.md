@@ -1,1 +1,1 @@
-Writing Linux 5.4 compatibility and policy authoring documentation and linking it from --help.
+Bootstrap and preflight: ensure main/develop branches exist and are up to date, and gh auth is valid.
