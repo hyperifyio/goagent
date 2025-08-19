@@ -1,1 +1,1 @@
-E2E scenario test for state persistence: save, restore, refine, assert latest.json points to newest and prompts precedence.
+E2E state persistence test completed and marked done in FEATURE_CHECKLIST.md.
