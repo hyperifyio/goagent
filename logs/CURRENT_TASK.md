@@ -1,1 +1,1 @@
-Defining pre-stage output contract and validator for pre-stage Harmony messages (L67).
+Implement merge of pre-stage Harmony output into main-call config with tests.
