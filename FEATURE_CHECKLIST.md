@@ -35,6 +35,7 @@
   - [ ] Tool: http_fetch — OPEN: https://github.com/hyperifyio/goagent/pull/27
    - [ ] Tool: robots_check — OPEN: https://github.com/hyperifyio/goagent/pull/28
    - [ ] Tool: readability_extract — OPEN: https://github.com/hyperifyio/goagent/pull/29
+   - [ ] Tool: metadata_extract — OPEN: https://github.com/hyperifyio/goagent/pull/30
    - [ ] Tool: img_create — OPEN: https://github.com/hyperifyio/goagent/pull/26
 * [ ] Slice PR — tool error-contract standardization (one tool per PR for clarity): for each tool that needs the unified stderr JSON `{"error":"...","hint?":"..."}` behavior, branch from main, restore only that tool’s sources and tests from develop, run its negative-path tests, fix if needed, commit and PR titled `Tool NAME: standardize error contract`; Definition of Done: tool emits single-line stderr JSON on failure and exits non-zero, tests cover it, PR only touches that tool.
 * [ ] Slice PR — Makefile wiring (TOOLS list, build-tools/clean, Windows .exe): `git switch -c pr/makefile-tools main && git restore --source develop --staged --worktree Makefile && make build-tools && make clean`; commit/push/PR; Definition of Done: `make build-tools` deterministically builds all already-merged tools to tools/bin, `make clean` removes them, no code beyond Makefile changed.

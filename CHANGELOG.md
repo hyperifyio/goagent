@@ -3,6 +3,7 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
   - [ ] Tool: http_fetch — OPEN: https://github.com/hyperifyio/goagent/pull/27
   - [ ] Tool: robots_check — OPEN: https://github.com/hyperifyio/goagent/pull/28
   - [ ] Tool: readability_extract — OPEN: https://github.com/hyperifyio/goagent/pull/29
+  - [ ] Tool: metadata_extract — OPEN: https://github.com/hyperifyio/goagent/pull/30
 - [ ] PR: Makefile wiring for tools (build-tools/clean)
 - [ ] PR: scripts and CI utilities
 - [ ] PR: security & runbooks
