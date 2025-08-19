@@ -1,1 +1,1 @@
-Implement observability for code.sandbox.js.run: log tool name, wall_ms, bytes_out with span field.
+Implement code.sandbox.wasm.run tool and handler.
