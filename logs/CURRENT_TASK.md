@@ -1,1 +1,1 @@
-Opened PR #10 for the secure tool runner; next: run tests in CI scope.
+Working PRs enumerated; next: rebase and verify pr/06-tools-manifest.
