@@ -1,0 +1,517 @@
+{
+  "tools": [
+    {
+      "name": "get_time",
+      "description": "Get current time for an IANA timezone",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone, e.g. Europe/Helsinki"
+          },
+          "tz": {
+            "type": "string",
+            "description": "Alias for timezone (deprecated)"
+          }
+        },
+        "required": ["timezone"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/get_time"],
+      "timeoutSec": 5
+    }
+    ,
+    {
+      "name": "http_fetch",
+      "description": "Safe HTTP/HTTPS fetcher with byte cap and redirects",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "method": {"type": "string", "enum": ["GET", "HEAD"]},
+          "max_bytes": {"type": "integer", "minimum": 1, "default": 1048576},
+          "timeout_ms": {"type": "integer", "minimum": 1, "default": 10000},
+          "decompress": {"type": "boolean", "default": true}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/http_fetch"],
+      "timeoutSec": 15,
+      "envPassthrough": ["HTTP_TIMEOUT_MS"]
+    }
+    ,
+    {
+      "name": "fs_read_file",
+      "description": "Read a repository-relative file as base64 with optional offset and max bytes",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Repo-relative path to file"},
+          "offsetBytes": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_read_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_write_file",
+      "description": "Atomically write a repository-relative file from base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"},
+          "createModeOctal": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_write_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_append_file",
+      "description": "Append base64 content to a repository-relative file (create if missing)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "contentBase64": {"type": "string"}
+        },
+        "required": ["path", "contentBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_append_file"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_mkdirp",
+      "description": "Recursively create a directory path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "modeOctal": {"type": "string"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_mkdirp"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_rm",
+      "description": "Remove a repository-relative file or directory",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "force": {"type": "boolean"}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_rm"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_move",
+      "description": "Move or rename a repository-relative path",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "overwrite": {"type": "boolean"}
+        },
+        "required": ["from", "to"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_move"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_search",
+      "description": "Search repository files for a query with optional regex/globs",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "regex": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_search"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_listdir",
+      "description": "List directory entries with optional recursion and glob filtering",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "recursive": {"type": "boolean"},
+          "globs": {"type": "array", "items": {"type": "string"}},
+          "includeHidden": {"type": "boolean"},
+          "maxResults": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_listdir"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_read_lines",
+      "description": "Read a line range from a repository-relative file with optional byte cap",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startLine": {"type": "integer", "minimum": 0},
+          "endLine": {"type": "integer", "minimum": 0},
+          "maxBytes": {"type": "integer", "minimum": 1}
+        },
+        "required": ["path", "startLine", "endLine"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_read_lines"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "fs_apply_patch",
+      "description": "Apply a strict unified diff (optional dry-run)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "unifiedDiff": {"type": "string"},
+          "dryRun": {"type": "boolean"}
+        },
+        "required": ["unifiedDiff"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_apply_patch"],
+      "timeoutSec": 10
+    },
+    {
+      "name": "fs_edit_range",
+      "description": "Atomically replace a byte range in a file with base64 content",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "startByte": {"type": "integer", "minimum": 0},
+          "endByte": {"type": "integer", "minimum": 0},
+          "replacementBase64": {"type": "string"},
+          "expectedSha256": {"type": "string"}
+        },
+        "required": ["path", "startByte", "endByte", "replacementBase64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_edit_range"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "exec",
+      "description": "Run an arbitrary program with args, cwd, env, and stdin",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "cmd": {"type": "string"},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "cwd": {"type": "string"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}},
+          "stdin": {"type": "string"},
+          "timeoutSec": {"type": "integer", "minimum": 1}
+        },
+        "required": ["cmd"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/exec"],
+      "timeoutSec": 30
+    },
+    {
+      "name": "fs_stat",
+      "description": "Stat a path (optionally follow symlinks and compute hash)",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string"},
+          "followSymlinks": {"type": "boolean"},
+          "hash": {"type": "string", "enum": ["none", "sha256"]}
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/fs_stat"],
+      "timeoutSec": 5
+    },
+    {
+      "name": "img_create",
+      "description": "Generate image(s) with OpenAI Images API and save to repo or return base64",
+      "schema": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {"type": "string"},
+          "n": {"type": "integer", "minimum": 1, "maximum": 4, "default": 1},
+          "size": {"type": "string", "pattern": "^\\d{3,4}x\\d{3,4}$", "default": "1024x1024"},
+          "model": {"type": "string", "default": "gpt-image-1"},
+          "return_b64": {"type": "boolean", "default": false},
+          "save": {
+            "type": "object",
+            "required": ["dir"],
+            "properties": {
+              "dir": {"type": "string"},
+              "basename": {"type": "string", "default": "img"},
+              "ext": {"type": "string", "enum": ["png"], "default": "png"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/img_create"],
+      "timeoutSec": 120,
+      "envPassthrough": ["OAI_API_KEY", "OAI_BASE_URL", "OAI_IMAGE_BASE_URL", "OAI_HTTP_TIMEOUT"]
+    },
+    {
+      "name": "searxng_search",
+      "description": "Meta search via SearXNG",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "time_range": {"type": "string", "enum": ["day","week","month","year"]},
+          "categories": {"type": "array", "items": {"type": "string"}},
+          "engines": {"type": "array", "items": {"type": "string"}},
+          "language": {"type": "string"},
+          "page": {"type": "integer", "minimum": 1},
+          "size": {"type": "integer", "minimum": 1, "maximum": 50}
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/searxng_search"],
+      "timeoutSec": 15,
+      "envPassthrough": ["SEARXNG_BASE_URL","HTTP_TIMEOUT_MS"]
+    }
+    ,
+    {
+      "name": "robots_check",
+      "description": "Evaluate robots.txt for a given URL and user agent",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "user_agent": {"type": "string"}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/robots_check"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "readability_extract",
+      "description": "Extract article content from HTML using go-readability",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "html": {"type": "string"},
+          "base_url": {"type": "string"}
+        },
+        "required": ["html", "base_url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/readability_extract"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "metadata_extract",
+      "description": "Extract OpenGraph, Twitter cards, and JSON-LD from HTML",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "html": {"type": "string"},
+          "base_url": {"type": "string"}
+        },
+        "required": ["html", "base_url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/metadata_extract"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "pdf_extract",
+      "description": "Extract text from PDF pages; optional OCR via tesseract",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pdf_base64": {"type": "string"},
+          "pages": {"type": "array", "items": {"type": "integer"}}
+        },
+        "required": ["pdf_base64"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/pdf_extract"],
+      "timeoutSec": 60,
+      "envPassthrough": ["ENABLE_OCR"]
+    }
+    ,
+    {
+      "name": "rss_fetch",
+      "description": "Fetch and parse RSS/Atom feeds with conditional GET",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "if_modified_since": {"type": "string"}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/rss_fetch"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "wayback_lookup",
+      "description": "Query Internet Archive Wayback Machine for closest snapshot; optionally trigger save",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "save": {"type": "boolean", "default": false}
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/wayback_lookup"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "wiki_query",
+      "description": "MediaWiki summaries/search",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "titles": {
+            "type": "string",
+            "description": "Exact page title to fetch summary for (mutually exclusive with 'search')"
+          },
+          "search": {
+            "type": "string",
+            "description": "Full-text search term to find pages (mutually exclusive with 'titles')"
+          },
+          "language": {
+            "type": "string",
+            "default": "en",
+            "description": "MediaWiki language code, e.g. en, fi"
+          }
+        }
+      },
+      "command": ["./tools/bin/wiki_query"],
+      "timeoutSec": 10
+    }
+    ,
+    {
+      "name": "openalex_search",
+      "description": "Search scholarly works via OpenAlex",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "per_page": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/openalex_search"],
+      "timeoutSec": 15
+    }
+    ,
+    {
+      "name": "crossref_search",
+      "description": "Search DOI metadata via Crossref",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "rows": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/crossref_search"],
+      "timeoutSec": 15,
+      "envPassthrough": ["CROSSREF_MAILTO", "HTTP_TIMEOUT_MS"]
+    }
+    ,
+    {
+      "name": "github_search",
+      "description": "Search GitHub repositories, code, issues, or commits",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string"},
+          "type": {"type": "string", "enum": ["repositories", "code", "issues", "commits"]},
+          "per_page": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}
+        },
+        "required": ["q", "type"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/github_search"],
+      "timeoutSec": 15,
+      "envPassthrough": ["GITHUB_TOKEN"]
+    }
+    ,
+    {
+      "name": "citation_pack",
+      "description": "Normalize a citation and optionally include Wayback archive URL",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "doc": {
+            "type": "object",
+            "properties": {
+              "title": {"type": "string"},
+              "url": {"type": "string"},
+              "published_at": {"type": "string"}
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          },
+          "archive": {
+            "type": "object",
+            "properties": {
+              "wayback": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["doc"],
+        "additionalProperties": false
+      },
+      "command": ["./tools/bin/citation_pack"],
+      "timeoutSec": 10
+    }
+  ]
+}
