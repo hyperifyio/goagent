@@ -13,6 +13,8 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
 - [ ] PR #11: Quickstart README runnable — OPEN: https://github.com/hyperifyio/goagent/pull/12
 - [ ] PR #12: Minimal unit tests enabling (core only)
 - [ ] PR (per-tool): exec, fs_read_file, fs_write_file, fs_append_file, fs_rm, fs_move, fs_search, fs_mkdirp, fs_apply_patch, fs_read_lines, fs_edit_range, fs_listdir, fs_stat, img_create, http_fetch, searxng_search, robots_check, readability_extract, metadata_extract, pdf_extract, rss_fetch, wayback_lookup, wiki_query, openalex_search, crossref_search, github_search, dedupe_rank, citation_pack
+  - [ ] Tool: exec — OPEN: https://github.com/hyperifyio/goagent/pull/13
+  - [ ] Tool: fs_read_file — OPEN: https://github.com/hyperifyio/goagent/pull/14
 - [ ] PR: Makefile wiring for tools (build-tools/clean)
 - [ ] PR: scripts and CI utilities
 - [ ] PR: security & runbooks
