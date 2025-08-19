@@ -28,21 +28,24 @@ type cliConfig struct {
 	developerFiles   []string
 	systemFile       string
 	promptFile       string
-	toolsPath        string
-	systemPrompt     string
-	baseURL          string
-	apiKey           string
-	model            string
-	maxSteps         int
-	timeout          time.Duration // deprecated global timeout; kept for backward compatibility
-	httpTimeout      time.Duration // resolved HTTP timeout (final value after env/flags/global)
-	prepHTTPTimeout  time.Duration // resolved pre-stage HTTP timeout (inherits from http-timeout)
-	toolTimeout      time.Duration // resolved per-tool timeout (final value after flags/global)
-	httpRetries      int           // number of retries for HTTP
-	httpBackoff      time.Duration // base backoff between retries
-	temperature      float64
-	topP             float64
-	prepTopP         float64
+	// Pre-stage specific system message inputs
+	prepSystem      string
+	prepSystemFile  string
+	toolsPath       string
+	systemPrompt    string
+	baseURL         string
+	apiKey          string
+	model           string
+	maxSteps        int
+	timeout         time.Duration // deprecated global timeout; kept for backward compatibility
+	httpTimeout     time.Duration // resolved HTTP timeout (final value after env/flags/global)
+	prepHTTPTimeout time.Duration // resolved pre-stage HTTP timeout (inherits from http-timeout)
+	toolTimeout     time.Duration // resolved per-tool timeout (final value after flags/global)
+	httpRetries     int           // number of retries for HTTP
+	httpBackoff     time.Duration // base backoff between retries
+	temperature     float64
+	topP            float64
+	prepTopP        float64
 	// Pre-stage explicit temperature override and its source
 	prepTemperature       float64
 	prepTemperatureSource string // "flag" | "env" | "inherit"
@@ -279,6 +282,9 @@ func parseFlags() (cliConfig, int) {
 	flag.Var((*stringSliceFlag)(&cfg.developerFiles), "developer-file", "Path to file containing developer message (repeatable; '-' for STDIN)")
 	flag.StringVar(&cfg.systemFile, "system-file", "", "Path to file containing system prompt ('-' for STDIN; mutually exclusive with -system)")
 	flag.StringVar(&cfg.promptFile, "prompt-file", "", "Path to file containing user prompt ('-' for STDIN; mutually exclusive with -prompt)")
+	// Pre-stage system message (optional). Precedence: flag > env > empty. Mutually exclusive with -prep-system-file
+	flag.StringVar(&cfg.prepSystem, "prep-system", "", "Pre-stage system message (env OAI_PREP_SYSTEM; mutually exclusive with -prep-system-file)")
+	flag.StringVar(&cfg.prepSystemFile, "prep-system-file", "", "Path to file containing pre-stage system message ('-' for STDIN; env OAI_PREP_SYSTEM_FILE; mutually exclusive with -prep-system)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
@@ -399,6 +405,18 @@ func parseFlags() (cliConfig, int) {
 	ignoreError(flag.CommandLine.Parse(os.Args[1:]))
 	if strings.TrimSpace(prepProfileRaw) != "" {
 		cfg.prepProfile = oai.PromptProfile(strings.TrimSpace(prepProfileRaw))
+	}
+
+	// Apply env precedence for pre-stage system fields when flags unset
+	if strings.TrimSpace(cfg.prepSystem) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_PREP_SYSTEM")); v != "" {
+			cfg.prepSystem = v
+		}
+	}
+	if strings.TrimSpace(cfg.prepSystemFile) == "" {
+		if v := strings.TrimSpace(os.Getenv("OAI_PREP_SYSTEM_FILE")); v != "" {
+			cfg.prepSystemFile = v
+		}
 	}
 
 	// Resolve temperature precedence: flag > env (LLM_TEMPERATURE) > config file (not implemented) > default 1.0
@@ -696,6 +714,11 @@ func parseFlags() (cliConfig, int) {
 	if strings.TrimSpace(cfg.systemFile) != "" && strings.TrimSpace(cfg.systemPrompt) != "" && cfg.systemPrompt != defaultSystem {
 		// Both -system and -system-file provided (with -system not defaulted)
 		cfg.parseError = "error: -system and -system-file are mutually exclusive"
+		return cfg, 2
+	}
+	// Mutual exclusion for pre-stage system inputs
+	if strings.TrimSpace(cfg.prepSystem) != "" && strings.TrimSpace(cfg.prepSystemFile) != "" {
+		cfg.parseError = "error: -prep-system and -prep-system-file are mutually exclusive"
 		return cfg, 2
 	}
 	if strings.TrimSpace(cfg.promptFile) != "" && strings.TrimSpace(cfg.prompt) != "" {
@@ -1430,9 +1453,22 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		return nil, normErr
 	}
 	// Apply transcript hygiene before pre-stage call when -debug is off (harmless if no tool messages yet)
+	// Optionally prepend a pre-stage system message when provided via flags/env
+	var prepMessages []oai.Message
+	if strings.TrimSpace(cfg.prepSystem) != "" || strings.TrimSpace(cfg.prepSystemFile) != "" {
+		sysText, sysErr := resolveMaybeFile(strings.TrimSpace(cfg.prepSystem), strings.TrimSpace(cfg.prepSystemFile))
+		if sysErr != nil {
+			safeFprintf(stderr, "error: prep system read failed: %v\n", sysErr)
+			return nil, sysErr
+		}
+		if s := strings.TrimSpace(sysText); s != "" {
+			prepMessages = append(prepMessages, oai.Message{Role: oai.RoleSystem, Content: s})
+		}
+	}
+	prepMessages = append(prepMessages, applyTranscriptHygiene(normalizedIn, cfg.debug)...)
 	req := oai.ChatCompletionsRequest{
 		Model:    prepModel,
-		Messages: applyTranscriptHygiene(normalizedIn, cfg.debug),
+		Messages: prepMessages,
 	}
 	// Pre-flight validate message sequence to avoid API 400s for stray tool messages
 	if err := oai.ValidateMessageSequence(req.Messages); err != nil {
@@ -1846,6 +1882,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-http-retry-backoff duration\n    Pre-stage HTTP retry backoff (env OAI_PREP_HTTP_RETRY_BACKOFF; inherits -http-retry-backoff if unset)\n")
 	b.WriteString("  -prep-temp float\n    Pre-stage sampling temperature (env OAI_PREP_TEMP; inherits -temp if unset; conflicts with -prep-top-p)\n")
 	b.WriteString("  -prep-top-p float\n    Nucleus sampling probability mass for pre-stage (env OAI_PREP_TOP_P; conflicts with -prep-temp; omits temperature when set)\n")
+	b.WriteString("  -prep-system string\n    Pre-stage system message (env OAI_PREP_SYSTEM; mutually exclusive with -prep-system-file)\n")
+	b.WriteString("  -prep-system-file string\n    Path to file containing pre-stage system message ('-' for STDIN; env OAI_PREP_SYSTEM_FILE; mutually exclusive with -prep-system)\n")
 	b.WriteString("  -image-n int\n    Number of images to generate (env OAI_IMAGE_N; default 1)\n")
 	b.WriteString("  -image-size string\n    Image size WxH, e.g., 1024x1024 (env OAI_IMAGE_SIZE; default 1024x1024)\n")
 	b.WriteString("  -image-quality string\n    Image quality: standard|hd (env OAI_IMAGE_QUALITY; default standard)\n")

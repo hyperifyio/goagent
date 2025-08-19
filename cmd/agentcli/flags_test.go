@@ -23,6 +23,43 @@ func TestParseFlags_SystemAndSystemFile_MutuallyExclusive(t *testing.T) {
 	}
 }
 
+// TestParseFlags_PrepSystem_Exclusivity ensures -prep-system and -prep-system-file are mutually exclusive.
+func TestParseFlags_PrepSystem_Exclusivity(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"agentcli.test", "-prompt", "p", "-prep-system", "X", "-prep-system-file", "-"}
+	_, code := parseFlags()
+	if code != 2 {
+		t.Fatalf("parseFlags exit = %d; want 2 (mutual exclusion)", code)
+	}
+}
+
+// TestPrepSystem_EnvAndFlagPrecedence ensures env is used when flags unset and flag overrides env.
+func TestPrepSystem_EnvAndFlagPrecedence(t *testing.T) {
+	t.Setenv("OAI_PREP_SYSTEM", "ENV_SYS")
+	t.Setenv("OAI_PREP_SYSTEM_FILE", "")
+	// When flags unset, env should populate cfg.prepSystem
+	orig := os.Args
+	defer func() { os.Args = orig }()
+	os.Args = []string{"agentcli.test", "-prompt", "p"}
+	cfg, code := parseFlags()
+	if code != 0 {
+		t.Fatalf("parseFlags exit=%d; want 0", code)
+	}
+	if strings.TrimSpace(cfg.prepSystem) != "ENV_SYS" {
+		t.Fatalf("prepSystem=%q; want ENV_SYS", cfg.prepSystem)
+	}
+	// Flag should override env
+	os.Args = []string{"agentcli.test", "-prompt", "p", "-prep-system", "FLAG_SYS"}
+	cfg, code = parseFlags()
+	if code != 0 {
+		t.Fatalf("parseFlags exit=%d; want 0", code)
+	}
+	if strings.TrimSpace(cfg.prepSystem) != "FLAG_SYS" {
+		t.Fatalf("prepSystem=%q; want FLAG_SYS", cfg.prepSystem)
+	}
+}
+
 // TestParseFlags_PromptAndPromptFile_MutuallyExclusive ensures providing both
 // -prompt and -prompt-file results in exit code 2 from parseFlags.
 func TestParseFlags_PromptAndPromptFile_MutuallyExclusive(t *testing.T) {

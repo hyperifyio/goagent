@@ -37,6 +37,8 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-top-p float`: Nucleus sampling probability mass (conflicts with `-temp`; when set, temperature is omitted per one‑knob rule and `top_p` is sent)
 - `-prep-temp float`: Pre-stage sampling temperature (env `OAI_PREP_TEMP`; inherits `-temp` if unset; conflicts with `-prep-top-p`)
 - `-prep-top-p float`: Pre-stage nucleus sampling probability mass (env `OAI_PREP_TOP_P`; conflicts with `-prep-temp`; when set, pre-stage omits temperature and sends `top_p`)
+- `-prep-system string`: Pre-stage system message (env `OAI_PREP_SYSTEM`; mutually exclusive with `-prep-system-file`)
+- `-prep-system-file string`: Path to file containing pre-stage system message ('-' for STDIN; env `OAI_PREP_SYSTEM_FILE`; mutually exclusive with `-prep-system`)
 - `-prep-profile string`: Pre-stage prompt profile (`deterministic|general|creative|reasoning`); sets temperature when supported (conflicts with `-prep-top-p`)
 - `-prep-model string`: Pre-stage model ID (env `OAI_PREP_MODEL`; inherits `-model` if unset)
 - `-prep-base-url string`: Pre-stage base URL (env `OAI_PREP_BASE_URL`; inherits `-base-url` if unset)
