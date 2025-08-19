@@ -3,6 +3,7 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
  - [ ] PR #02: Minimal CLI entrypoint (`cmd/agentcli/main.go` only) — OPEN: https://github.com/hyperifyio/goagent/pull/4
 - [ ] PR #03: Flags & help (help/flags files + docs/tests)
 - [ ] PR #04: OpenAI HTTP client (types + client, tests)
+  - [ ] OPEN: https://github.com/hyperifyio/goagent/pull/7
 - [ ] PR #05: Model defaults & capability map (serialization only + ADR)
 - [ ] PR #06: Tools manifest loader + reference docs
 - [ ] PR #07: Secure tool runner (argv only)
