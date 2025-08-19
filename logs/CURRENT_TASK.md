@@ -1,1 +1,1 @@
-Blocked on README pre-stage prompt overrides: missing -prep-prompt and -prep-file flags in CLI.
+Blocked on backward compatibility guard: missing cmd/agentcli CLI to host tests.
