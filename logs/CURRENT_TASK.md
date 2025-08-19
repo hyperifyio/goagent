@@ -1,1 +1,1 @@
-Implement code.sandbox.wasm.run tool and handler.
+Implement code.sandbox.wasm.run — validating positive limits.
