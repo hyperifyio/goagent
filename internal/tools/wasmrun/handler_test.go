@@ -93,3 +93,28 @@ func TestRun_UnimplementedOnValidInput(t *testing.T) {
         t.Fatalf("expected UNIMPLEMENTED, got %q (%s)", e.Code, e.Message)
     }
 }
+
+func TestRun_InvalidLimits(t *testing.T) {
+    cases := []map[string]any{
+        {"module_b64": "AA==", "entry": "main", "input": "", "limits": map[string]any{"output_kb": 0, "wall_ms": 10, "mem_pages": 1}},
+        {"module_b64": "AA==", "entry": "main", "input": "", "limits": map[string]any{"output_kb": 1, "wall_ms": 0, "mem_pages": 1}},
+        {"module_b64": "AA==", "entry": "main", "input": "", "limits": map[string]any{"output_kb": 1, "wall_ms": 10, "mem_pages": 0}},
+    }
+    for i, req := range cases {
+        b, _ := json.Marshal(req)
+        stdout, stderr, err := Run(b)
+        if err == nil {
+            t.Fatalf("case %d: expected error for invalid limits", i)
+        }
+        if len(stdout) != 0 {
+            t.Fatalf("case %d: expected no stdout, got: %s", i, string(stdout))
+        }
+        var e struct{ Code, Message string }
+        if jerr := json.Unmarshal(stderr, &e); jerr != nil {
+            t.Fatalf("case %d: stderr not JSON: %v: %s", i, jerr, string(stderr))
+        }
+        if e.Code != "INVALID_INPUT" {
+            t.Fatalf("case %d: expected INVALID_INPUT, got %q (%s)", i, e.Code, e.Message)
+        }
+    }
+}

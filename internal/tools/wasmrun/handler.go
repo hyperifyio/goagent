@@ -47,6 +47,16 @@ func Run(raw []byte) ([]byte, []byte, error) {
     if _, err := base64.StdEncoding.DecodeString(in.ModuleB64); err != nil {
         return nil, mustMarshalError("INVALID_INPUT", "module_b64 is not valid base64: "+err.Error()), errInvalidInput
     }
+    // Validate limits
+    if in.Limits.OutputKB <= 0 {
+        return nil, mustMarshalError("INVALID_INPUT", "limits.output_kb must be > 0"), errInvalidInput
+    }
+    if in.Limits.WallMS <= 0 {
+        return nil, mustMarshalError("INVALID_INPUT", "limits.wall_ms must be > 0"), errInvalidInput
+    }
+    if in.Limits.MemPages <= 0 {
+        return nil, mustMarshalError("INVALID_INPUT", "limits.mem_pages must be > 0"), errInvalidInput
+    }
 
     // Not yet implemented: actual wasm execution. Return a stable stub error.
     return nil, mustMarshalError("UNIMPLEMENTED", "wasm execution not yet implemented"), errors.New("unimplemented")
