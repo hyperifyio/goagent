@@ -1,1 +1,1 @@
-Implement shared limits and sanitizer utilities in internal/sandbox/limits.go (in progress)
+Idle — next unblocked checklist item will be selected on next iteration
