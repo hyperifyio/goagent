@@ -1,1 +1,1 @@
-E2E state persistence test completed and marked done in FEATURE_CHECKLIST.md.
+Implement backpressure & corruption handling for state bundles by quarantining invalid latest/snapshot files and adding tests.
