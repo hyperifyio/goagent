@@ -1,1 +1,1 @@
-Implement examples and smoke script for image flows.
+Blocked: Add pre-stage prompt override flags pending CLI scaffold presence.
