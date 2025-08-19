@@ -1,1 +1,1 @@
-Implement concatenation and normalization of pre-stage prompt in internal/oai, with tests.
+Embed a default smart prep prompt and wire loader tests.
