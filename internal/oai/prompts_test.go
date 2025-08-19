@@ -8,7 +8,7 @@ func TestDefaultPrepPrompt_NonEmpty(t *testing.T) {
 	}
 	// Basic sanity: contains the Harmony JSON phrase
 	if s := DefaultPrepPrompt(); !containsAll(s, []string{"Harmony", "JSON"}) {
-		// non-fatal shape check; still require non-empty above
+		t.Log("default prompt does not contain expected shape hints; continuing")
 	}
 }
 
@@ -21,7 +21,9 @@ func containsAll(s string, subs []string) bool {
 	return true
 }
 
-func contains(s, sub string) bool { return len(s) >= len(sub) && (len(sub) == 0 || (func() bool { return (stringIndex(s, sub) >= 0) })()) }
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (len(sub) == 0 || (func() bool { return (stringIndex(s, sub) >= 0) })())
+}
 
 // naive index to avoid importing strings in this tiny test
 func stringIndex(haystack, needle string) int {
