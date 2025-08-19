@@ -6,8 +6,8 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
   - [ ] OPEN: https://github.com/hyperifyio/goagent/pull/7
 - [ ] PR #05: Model defaults & capability map (serialization only + ADR)
   - [ ] OPEN: https://github.com/hyperifyio/goagent/pull/8
-- [ ] PR #06: Tools manifest loader + reference docs
-- [ ] PR #07: Secure tool runner (argv only)
+- [ ] PR #06: Tools manifest loader + reference docs — OPEN: https://github.com/hyperifyio/goagent/pull/9
+- [ ] PR #07: Secure tool runner (argv only) — OPEN: https://github.com/hyperifyio/goagent/pull/10
  - [ ] PR #09: Baseline docs & diagrams (no code) — OPEN: https://github.com/hyperifyio/goagent/pull/5
 - [ ] PR #10: Example tool `get_time` + `tools.json` + Makefile build-tools
 - [ ] PR #11: Quickstart README runnable
