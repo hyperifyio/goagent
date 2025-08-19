@@ -1,1 +1,1 @@
-Implement observability logging for wasmrun with audit span tools.wasm.run.
+Continue observability for wasmrun; tests and lint green. Idle until next task.
