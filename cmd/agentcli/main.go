@@ -1988,6 +1988,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -print-config\n    Print resolved config and exit\n")
 	b.WriteString("  -dry-run\n    Print intended state actions (restore/refine/save) and exit without writing state\n")
 	b.WriteString("  --version | -version\n    Print version and exit\n")
+	b.WriteString("\nDocs:\n")
+	b.WriteString("  - Linux 5.4 sandbox compatibility and policy authoring: docs/runbooks/linux-5.4-sandbox-compatibility.md\n")
 	b.WriteString("\nExamples:\n")
 	b.WriteString("  # Quick start (after make build build-tools)\n")
 	b.WriteString("  ./bin/agentcli -prompt \"What's the local time in Helsinki? Use get_time.\" -tools ./tools.json -debug\n\n")
