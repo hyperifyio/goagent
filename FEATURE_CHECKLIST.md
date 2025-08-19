@@ -1,3 +1,11 @@
+* [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
+* [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
+* [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
+* [ ] Tool: crossref_search — OPEN: https://github.com/hyperifyio/goagent/pull/37
+* [ ] Tool: openalex_search — OPEN: https://github.com/hyperifyio/goagent/pull/36
+* [ ] Tool: wiki_query — OPEN: https://github.com/hyperifyio/goagent/pull/35
+* [ ] Tool: pdf_extract — OPEN: https://github.com/hyperifyio/goagent/pull/34
+* [ ] Tool: searxng_search — OPEN: https://github.com/hyperifyio/goagent/pull/33
 * [x] Documentation: write a single developer-facing document describing Linux 5.4 compatibility constraints (no Landlock, no overlayfs-in-userns reliance), the three network modes with strictness caveats, how the bundle works (including inclusion of `agentcli`), how to author policies, and known limitations of rootless operation (optional cgroups only if delegated); DoD: the doc lives in the repo, is linked from `--help`, and contains copy-pastable policy examples and troubleshooting for common kernel settings.
 - [ ] PR #07: Secure tool runner — OPEN: https://github.com/hyperifyio/goagent/pull/10
 * [x] Bootstrap and preflight (once): ensure a clean workspace and gh auth; run: `git fetch --all --prune && git switch main || git checkout -b main && git pull --ff-only || true && git switch develop && git pull --ff-only && gh auth status`; set repo vars: `REPO=$(git remote get-url --push origin | sed -E 's#.*/([^/]+/[^/]+)(\.git)?$#\1#')`; verify tools: `make -n >/dev/null 2>&1 || true`; Definition of Done: main exists locally and remotely (or created), develop is up to date, gh is authenticated for $REPO.

@@ -1,1 +1,1 @@
-Working PRs enumerated; next: rebase and verify pr/06-tools-manifest.
+Opened PRs for searxng_search, pdf_extract, wiki_query, openalex_search, crossref_search, github_search, dedupe_rank, citation_pack

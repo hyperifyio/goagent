@@ -1,3 +1,11 @@
+- [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
+- [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
+- [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
+- [ ] Tool: crossref_search — OPEN: https://github.com/hyperifyio/goagent/pull/37
+- [ ] Tool: openalex_search — OPEN: https://github.com/hyperifyio/goagent/pull/36
+- [ ] Tool: wiki_query — OPEN: https://github.com/hyperifyio/goagent/pull/35
+- [ ] Tool: pdf_extract — OPEN: https://github.com/hyperifyio/goagent/pull/34
+- [ ] Tool: searxng_search — OPEN: https://github.com/hyperifyio/goagent/pull/33
 PR slicing plan (tracked on develop; code PRs will branch from main in `./work/main`):
   - [ ] Tool: img_create — OPEN: https://github.com/hyperifyio/goagent/pull/26
   - [ ] Tool: http_fetch — OPEN: https://github.com/hyperifyio/goagent/pull/27
