@@ -170,3 +170,38 @@ func TestParseDurationFlexible_EnvEquivalence(t *testing.T) {
 		t.Fatalf("parse 2 failed: %v %s", err, d)
 	}
 }
+
+func TestResolvePrepPrompt_FlagOverridesAndJoins(t *testing.T) {
+	src, txt := ResolvePrepPrompt([]string{"one", "two"}, "from files should be ignored")
+	if src != "override" {
+		t.Fatalf("expected source override, got %s", src)
+	}
+	if txt != "one\n\ntwo" {
+		t.Fatalf("expected joined flag prompts, got %q", txt)
+	}
+}
+
+func TestResolvePrepPrompt_FilesUsedWhenNoFlags(t *testing.T) {
+	// Simulate pre-joined file contents with extra trailing whitespace
+	src, txt := ResolvePrepPrompt(nil, "alpha\n\nbravo\n\n\n  \t\n")
+	if src != "override" {
+		t.Fatalf("expected source override for files, got %s", src)
+	}
+	// Right-trim should remove trailing whitespace at the very end
+	if txt != "alpha\n\nbravo" {
+		t.Fatalf("unexpected file-joined text: %q", txt)
+	}
+}
+
+func TestResolvePrepPrompt_DefaultWhenNoOverrides(t *testing.T) {
+	src, txt := ResolvePrepPrompt(nil, " ")
+	if src != "default" {
+		t.Fatalf("expected default source, got %s", src)
+	}
+	if txt == "" {
+		t.Fatalf("default prompt should be non-empty")
+	}
+	if txt != DefaultPrepPrompt() {
+		t.Fatalf("default prompt mismatch with embedded value")
+	}
+}

@@ -118,3 +118,24 @@ func parseDurationFlexible(raw string) (time.Duration, error) {
 	}
 	return 0, strconv.ErrSyntax
 }
+
+// ResolvePrepPrompt determines the effective pre-stage prompt text and its source.
+// It applies the following deterministic order:
+//  1. If one or more explicit prompt strings are provided via flags (prepPrompts),
+//     join them using JoinPrompts and return ("override", text).
+//  2. Else if one or more prompts were loaded from files (prepFilesJoined), use that
+//     joined text and return ("override", text).
+//  3. Otherwise, return the embedded default via DefaultPrepPrompt() with source
+//     label "default".
+//
+// Callers are expected to pre-join file contents in the order observed when flags
+// were parsed to produce prepFilesJoined.
+func ResolvePrepPrompt(prepPrompts []string, prepFilesJoined string) (source string, text string) {
+	if len(prepPrompts) > 0 {
+		return "override", JoinPrompts(prepPrompts)
+	}
+	if strings.TrimSpace(prepFilesJoined) != "" {
+		return "override", strings.TrimRightFunc(prepFilesJoined, func(r rune) bool { return r == '\n' || r == '\r' || r == '\t' || r == ' ' })
+	}
+	return "default", DefaultPrepPrompt()
+}
