@@ -21,6 +21,7 @@ This docs index helps you navigate architecture notes and diagrams.
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)
   - Link: [docs/diagrams/harmony-prep-seq.md](diagrams/harmony-prep-seq.md)
   - Link: [docs/diagrams/research-pipeline.md](diagrams/research-pipeline.md)
+  - Link: [docs/diagrams/prestage_flow.md](diagrams/prestage_flow.md)
 
 - Architecture: Module boundaries and allowed imports between layers.
   - Link: [docs/architecture/module-boundaries.md](architecture/module-boundaries.md)

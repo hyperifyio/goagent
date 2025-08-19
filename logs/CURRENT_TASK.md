@@ -1,1 +1,1 @@
-Writing ADR-0007 for pre-stage prompt overrides and verifying build/lint/tests before committing.
+Creating the prestage flow Mermaid diagram.
