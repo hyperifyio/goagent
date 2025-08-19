@@ -1,1 +1,1 @@
-Working on L113: add -state-refine flags, help text, and refine validation; run lint and tests.
+Continuing L114: implement RefineStateBundle and tests.
