@@ -1,4 +1,5 @@
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs with `gh`; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
+* [x] Maintenance: refreshed PR inventory on 2025-08-19; OPEN PRs acknowledged; `./work/main` at `origin/main`; no additional PRs this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; re-synced `./work/main` to `origin/main`; no new PRs needed this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs to open; `./work/main` pristine at `origin/main`.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; re-synced `./work/main` to `origin/main`; no additional feature PRs needed this pass.
