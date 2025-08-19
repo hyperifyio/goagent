@@ -1,1 +1,1 @@
-Add Security Model sections and examples for sandbox tools — JS doc updated; WASM pending, blocked by missing tool.
+Completing L105 Security Model docs for sandbox tools.
