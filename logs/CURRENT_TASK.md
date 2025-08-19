@@ -1,1 +1,1 @@
-Implement timeouts with interruption in code.sandbox.js.run.
+Implement deny-by-default globals tests for code.sandbox.js.run.

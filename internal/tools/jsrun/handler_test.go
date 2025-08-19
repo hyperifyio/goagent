@@ -89,3 +89,55 @@ func TestRun_Timeout_Interrupts(t *testing.T) {
 		t.Fatalf("expected TIMEOUT code, got %q (%s)", e.Code, e.Message)
 	}
 }
+
+func TestRun_DenyByDefault_UndefinedGlobals(t *testing.T) {
+	// Verify that require/console are not bound and evaluate to undefined via typeof
+	req := map[string]any{
+		"source": "emit(typeof require + '|' + typeof console)",
+		"input":  "",
+		"limits": map[string]any{"output_kb": 1},
+	}
+	b, merr := json.Marshal(req)
+	if merr != nil {
+		t.Fatalf("marshal: %v", merr)
+	}
+	stdout, stderr, err := Run(b)
+	if err != nil || len(stderr) != 0 {
+		t.Fatalf("unexpected error: %v stderr=%s", err, string(stderr))
+	}
+	var out struct {
+		Output string `json:"output"`
+	}
+	if e := json.Unmarshal(stdout, &out); e != nil {
+		t.Fatalf("bad json: %v", e)
+	}
+	if out.Output != "undefined|undefined" {
+		t.Fatalf("got %q want %q", out.Output, "undefined|undefined")
+	}
+}
+
+func TestRun_DenyByDefault_UndefinedTimers(t *testing.T) {
+	// Timers like setTimeout must not exist unless explicitly bound
+	req := map[string]any{
+		"source": "emit(typeof setTimeout + '|' + typeof setInterval)",
+		"input":  "",
+		"limits": map[string]any{"output_kb": 1},
+	}
+	b, merr := json.Marshal(req)
+	if merr != nil {
+		t.Fatalf("marshal: %v", merr)
+	}
+	stdout, stderr, err := Run(b)
+	if err != nil || len(stderr) != 0 {
+		t.Fatalf("unexpected error: %v stderr=%s", err, string(stderr))
+	}
+	var out struct {
+		Output string `json:"output"`
+	}
+	if e := json.Unmarshal(stdout, &out); e != nil {
+		t.Fatalf("bad json: %v", e)
+	}
+	if out.Output != "undefined|undefined" {
+		t.Fatalf("got %q want %q", out.Output, "undefined|undefined")
+	}
+}
