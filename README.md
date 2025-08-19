@@ -67,7 +67,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 ### Requirements
 - Go 1.24+ on Linux, macOS, or Windows
 - Network access to an OpenAI‑compatible API
-- For development: `ripgrep` (rg) and `golangci-lint`
+- For development and examples: `ripgrep` (rg), `jq`, and `golangci-lint`
 
 ### Install options
 1) Download a binary: see [Releases](https://github.com/hyperifyio/goagent/releases)
@@ -96,10 +96,24 @@ Developer prerequisites (examples):
 sudo apt-get update && sudo apt-get install -y ripgrep
 # - macOS (Homebrew)
 brew install ripgrep
+# - Windows (Chocolatey)
+choco install ripgrep -y
 
 # golangci-lint (pinned; installs into ./bin via Makefile)
 make install-golangci
 ./bin/golangci-lint version
+
+# jq (used by examples and runbooks)
+# - Ubuntu/Debian
+sudo apt-get install -y jq
+# - macOS (Homebrew)
+brew install jq
+# - Windows (Chocolatey)
+choco install jq -y
+
+# make (Windows, for running Makefile targets used in docs)
+# - Windows (Chocolatey)
+choco install make -y
 ```
 
 ## Configuration
