@@ -1,1 +1,1 @@
-Wire pre-stage prompt into execution by sending the resolved prompt as the user message.
+Continuing L66 pre-stage prompt wiring: green tests and lint, marking complete.
