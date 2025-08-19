@@ -62,6 +62,8 @@ type cliConfig struct {
 	prepEnabledSet bool
 	capabilities   bool
 	printConfig    bool
+	// State persistence
+	stateDir string
 	// Pre-stage tool policy
 	prepToolsAllowExternal bool // when false, pre-stage uses built-in read-only tools and ignores -tools
 	// Optional pre-stage-specific tools manifest path; when set and external tools are allowed,
@@ -286,6 +288,8 @@ func parseFlags() (cliConfig, int) {
 	flag.StringVar(&cfg.prepSystem, "prep-system", "", "Pre-stage system message (env OAI_PREP_SYSTEM; mutually exclusive with -prep-system-file)")
 	flag.StringVar(&cfg.prepSystemFile, "prep-system-file", "", "Path to file containing pre-stage system message ('-' for STDIN; env OAI_PREP_SYSTEM_FILE; mutually exclusive with -prep-system)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
+	// State directory (CLI > env > empty). When set, create if missing with 0700.
+	flag.StringVar(&cfg.stateDir, "state-dir", getEnv("AGENTCLI_STATE_DIR", ""), "Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
 	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
@@ -785,6 +789,23 @@ func parseFlags() (cliConfig, int) {
 		}
 	} else {
 		cfg.prepTopPSource = "inherit"
+	}
+	// Normalize/expand state-dir and create with 0700 if set
+	if s := strings.TrimSpace(cfg.stateDir); s != "" {
+		// Expand leading ~ to the user's home directory
+		if strings.HasPrefix(s, "~") {
+			if home, err := os.UserHomeDir(); err == nil {
+				s = filepath.Join(home, strings.TrimPrefix(s, "~"))
+			}
+		}
+		// Clean path and ensure it's absolute or relative within cwd; no wildcards
+		s = filepath.Clean(s)
+		// Create directory tree with 0700, respecting umask
+		if err := os.MkdirAll(s, 0o700); err != nil {
+			cfg.parseError = fmt.Sprintf("error: creating -state-dir %q: %v", s, err)
+			return cfg, 2
+		}
+		cfg.stateDir = s
 	}
 	return cfg, 0
 }
@@ -1897,6 +1918,7 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
 	b.WriteString("  -prep-tools string\n    Path to pre-stage tools.json (optional; used only with -prep-tools-allow-external)\n")
 	b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
+	b.WriteString("  -state-dir string\n    Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)\n")
 	b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
 	b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")
 	b.WriteString("  -channel-route name=stdout|stderr|omit\n    Override default channel routing (final→stdout, critic/confidence→stderr); repeatable\n")

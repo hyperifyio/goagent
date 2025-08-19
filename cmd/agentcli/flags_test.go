@@ -491,3 +491,62 @@ func TestImageHTTPKnobsPrecedence(t *testing.T) {
 		}
 	})
 }
+
+// TestStateDir_PrecedenceAndCreation verifies that -state-dir flag overrides env,
+// env applies when flag unset, tilde is expanded, and directory is created with 0700.
+func TestStateDir_PrecedenceAndCreation(t *testing.T) {
+	// Ensure env baseline empty
+	t.Setenv("AGENTCLI_STATE_DIR", "")
+
+	t.Run("env applies when flag unset and directory created", func(t *testing.T) {
+		tmp := t.TempDir()
+		envDir := filepath.Join(tmp, "state-env")
+		t.Setenv("AGENTCLI_STATE_DIR", envDir)
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.stateDir != filepath.Clean(envDir) {
+			t.Fatalf("stateDir=%q; want %q", cfg.stateDir, filepath.Clean(envDir))
+		}
+		// Directory should exist
+		info, err := os.Stat(cfg.stateDir)
+		if err != nil || !info.IsDir() {
+			t.Fatalf("expected directory to exist: %v", err)
+		}
+		// Mode should have no world-write; at least ensure only user perms bits are set from 0700 mask
+		if info.Mode().Perm()&0o077 != 0 {
+			t.Fatalf("state dir perms too open: %v", info.Mode().Perm())
+		}
+	})
+
+	t.Run("flag overrides env and expands tilde", func(t *testing.T) {
+		tmp := t.TempDir()
+		t.Setenv("AGENTCLI_STATE_DIR", filepath.Join(tmp, "ignored-env"))
+		// Use a fake home to control ~ expansion
+		fakeHome := filepath.Join(tmp, "home")
+		if err := os.MkdirAll(fakeHome, 0o755); err != nil {
+			t.Fatalf("mkdir fake home: %v", err)
+		}
+		// Temporarily override HOME
+		t.Setenv("HOME", fakeHome)
+		flagPath := "~/my-state"
+		want := filepath.Join(fakeHome, "my-state")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-state-dir", flagPath}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.stateDir != filepath.Clean(want) {
+			t.Fatalf("stateDir=%q; want %q", cfg.stateDir, filepath.Clean(want))
+		}
+		if _, err := os.Stat(cfg.stateDir); err != nil {
+			t.Fatalf("expected state dir created: %v", err)
+		}
+	})
+}

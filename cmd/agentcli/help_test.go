@@ -82,6 +82,7 @@ func TestHelpSnapshot_ContainsAllExpectedTokens(t *testing.T) {
 		"-prep-enabled",
 		"-capabilities",
 		"-print-config",
+		"-state-dir string",
 		"--version | -version",
 	}
 	for _, f := range flags {
