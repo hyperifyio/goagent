@@ -1,1 +1,1 @@
-Idle — next checklist item is L108 (state bundle schema).
+Implement versioned on-disk state bundle schema and validation helpers.
