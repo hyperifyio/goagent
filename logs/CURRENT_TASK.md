@@ -1,1 +1,1 @@
-Implement -state-scope flag with default scope_key hashing and scope-matching load behavior.
+Wiring restore-before-prep to reuse saved prompts and settings when a matching state bundle exists and -state-refine is not set.
