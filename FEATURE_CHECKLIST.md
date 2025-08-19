@@ -3,7 +3,7 @@
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs created this pass.
   - Verified OPEN PRs to `main` via gh; prepared clean working copy at `./work/main` reset to `origin/main`; no duplicates opened this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; confirmed no duplicate PRs; `./work/main` hard-reset to `origin/main`; status recorded in `logs/CURRENT_TASK.md`.
-* [x] Maintenance: prepared `./work/main` for slicing; switched remote to HTTPS, reset to `origin/main`; created branch `pr/docs-cli-reference` and restored `docs/reference/cli-reference.md` from `develop`; push/PR blocked pending GitHub auth setup.
+* [x] Maintenance: prepared `./work/main` for slicing; switched remote to HTTPS, reset to `origin/main`; created branch `pr/docs-cli-reference` and restored `docs/reference/cli-reference.md` from `develop`; opened PR #55.
 * [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
 * [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
 * [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
