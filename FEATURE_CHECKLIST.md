@@ -1,3 +1,4 @@
+* [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs created this pass.
 * [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
 * [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
 * [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
