@@ -122,3 +122,74 @@ func TestSaveStateBundle_InvalidBundle(t *testing.T) {
 		t.Fatalf("expected error for invalid bundle")
 	}
 }
+
+func TestSaveStateBundle_SanitizesSecretsAndRejectsInsecureDir(t *testing.T) {
+    tempDir := t.TempDir()
+    // Make directory world-writable on Unix to trigger rejection; skip on Windows
+    if runtime.GOOS != "windows" {
+        if err := os.Chmod(tempDir, 0o707); err != nil {
+            t.Fatalf("chmod: %v", err)
+        }
+    }
+
+    now := time.Now().UTC().Truncate(time.Second).Format(time.RFC3339)
+    b := &StateBundle{
+        Version:     "1",
+        CreatedAt:   now,
+        ToolVersion: "test-1",
+        ModelID:     "gpt-5",
+        BaseURL:     "http://example.local",
+        ToolsetHash: "abc",
+        ScopeKey:    "scope-1",
+        Prompts:     map[string]string{"system": "Authorization: Bearer secretTOKEN1234567890"},
+        PrepSettings: map[string]any{
+            "api_key": "sk-verylongexamplekey-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            "request_body": "{ big raw body }",
+        },
+        SourceHash: ComputeSourceHash("gpt-5", "http://example.local", "abc", "scope-1"),
+    }
+
+    err := SaveStateBundle(tempDir, b)
+    if runtime.GOOS != "windows" {
+        if err == nil {
+            t.Fatalf("expected error for insecure dir perms")
+        }
+        // Fix perms and try again
+        if err := os.Chmod(tempDir, 0o700); err != nil {
+            t.Fatalf("chmod fix: %v", err)
+        }
+    }
+
+    if err := SaveStateBundle(tempDir, b); err != nil {
+        t.Fatalf("SaveStateBundle error after fix: %v", err)
+    }
+    // Read snapshot and verify redactions present
+    entries, _ := os.ReadDir(tempDir)
+    var snapshot string
+    for _, e := range entries {
+        if strings.HasPrefix(e.Name(), "state-") && strings.HasSuffix(e.Name(), ".json") {
+            snapshot = filepath.Join(tempDir, e.Name())
+            break
+        }
+    }
+    if snapshot == "" {
+        t.Fatalf("snapshot not found")
+    }
+    data, err := os.ReadFile(snapshot)
+    if err != nil {
+        t.Fatalf("read snapshot: %v", err)
+    }
+    s := string(data)
+    if strings.Contains(s, "secretTOKEN1234567890") {
+        t.Fatalf("authorization token not redacted: %s", s)
+    }
+    if !strings.Contains(s, "Authorization: Bearer ****") {
+        t.Fatalf("authorization scheme not preserved/redacted: %s", s)
+    }
+    if strings.Contains(s, "sk-verylongexamplekey") {
+        t.Fatalf("api key not redacted: %s", s)
+    }
+    if strings.Contains(s, "{ big raw body }") {
+        t.Fatalf("raw body not omitted: %s", s)
+    }
+}

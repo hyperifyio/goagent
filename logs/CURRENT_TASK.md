@@ -1,1 +1,1 @@
-Enforce effective-source precedence in pre-stage coordinator and warn once when overrides are used with -state-refine, with tests.
+Harden state persistence: reject world-writable state dir and redact secrets before save.
