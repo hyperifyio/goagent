@@ -1,1 +1,1 @@
-Implement safe load LoadLatestStateBundle(dir) with tests under internal/state.
+Implement -state-scope flag with default scope_key hashing and scope-matching load behavior.

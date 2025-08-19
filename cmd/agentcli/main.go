@@ -64,6 +64,9 @@ type cliConfig struct {
 	printConfig    bool
 	// State persistence
 	stateDir string
+    // Optional partition key for persisted state; when empty we compute a default
+    // as sha256(model_id + "|" + base_url + "|" + toolset_hash)
+    stateScope string
 	// Pre-stage tool policy
 	prepToolsAllowExternal bool // when false, pre-stage uses built-in read-only tools and ignores -tools
 	// Optional pre-stage-specific tools manifest path; when set and external tools are allowed,
@@ -289,7 +292,9 @@ func parseFlags() (cliConfig, int) {
 	flag.StringVar(&cfg.prepSystemFile, "prep-system-file", "", "Path to file containing pre-stage system message ('-' for STDIN; env OAI_PREP_SYSTEM_FILE; mutually exclusive with -prep-system)")
 	flag.StringVar(&cfg.toolsPath, "tools", "", "Path to tools.json (optional)")
 	// State directory (CLI > env > empty). When set, create if missing with 0700.
-	flag.StringVar(&cfg.stateDir, "state-dir", getEnv("AGENTCLI_STATE_DIR", ""), "Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)")
+    flag.StringVar(&cfg.stateDir, "state-dir", getEnv("AGENTCLI_STATE_DIR", ""), "Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)")
+    // Optional state scope (CLI > env > computed default)
+    flag.StringVar(&cfg.stateScope, "state-scope", getEnv("AGENTCLI_STATE_SCOPE", ""), "Optional scope key to partition saved state (env AGENTCLI_STATE_SCOPE); when empty, a default hash of model|base_url|toolset is used")
 	flag.StringVar(&cfg.systemPrompt, "system", defaultSystem, "System prompt")
 	flag.StringVar(&cfg.baseURL, "base-url", defaultBase, "OpenAI-compatible base URL")
 	flag.StringVar(&cfg.apiKey, "api-key", defaultKey, "API key if required (env OAI_API_KEY; falls back to OPENAI_API_KEY)")
@@ -790,7 +795,7 @@ func parseFlags() (cliConfig, int) {
 	} else {
 		cfg.prepTopPSource = "inherit"
 	}
-	// Normalize/expand state-dir and create with 0700 if set
+    // Normalize/expand state-dir and create with 0700 if set
 	if s := strings.TrimSpace(cfg.stateDir); s != "" {
 		// Expand leading ~ to the user's home directory
 		if strings.HasPrefix(s, "~") {
@@ -807,6 +812,12 @@ func parseFlags() (cliConfig, int) {
 		}
 		cfg.stateDir = s
 	}
+    // Resolve state scope: when empty, compute default from model|base_url|toolset_hash
+    if strings.TrimSpace(cfg.stateScope) == "" {
+        // Compute toolset hash from manifest if provided; empty string when no tools
+        toolsetHash := computeToolsetHash(strings.TrimSpace(cfg.toolsPath))
+        cfg.stateScope = computeDefaultStateScope(strings.TrimSpace(cfg.model), strings.TrimSpace(cfg.baseURL), toolsetHash)
+    }
 	return cfg, 0
 }
 
@@ -1606,6 +1617,26 @@ func sha256SumHex(b []byte) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// computeToolsetHash returns a stable hash of the tools manifest contents.
+// When manifestPath is empty or unreadable, returns an empty string.
+func computeToolsetHash(manifestPath string) string {
+    path := strings.TrimSpace(manifestPath)
+    if path == "" {
+        return ""
+    }
+    b, err := os.ReadFile(path)
+    if err != nil {
+        return ""
+    }
+    return sha256SumHex(b)
+}
+
+// computeDefaultStateScope returns sha256(model + "|" + base + "|" + toolsetHash).
+func computeDefaultStateScope(model string, base string, toolsetHash string) string {
+    input := []byte(strings.TrimSpace(model) + "|" + strings.TrimSpace(base) + "|" + strings.TrimSpace(toolsetHash))
+    return sha256SumHex(input)
+}
+
 // tryReadPrepCache attempts to load cached pre-stage output messages.
 func tryReadPrepCache(model, base string, temp *float64, topP *float64, retries int, backoff time.Duration, toolSpec string, inMessages []oai.Message) ([]oai.Message, bool) {
 	key := computePrepCacheKey(model, base, temp, topP, retries, backoff, toolSpec, inMessages)
@@ -1918,7 +1949,8 @@ func printUsage(w io.Writer) {
 	b.WriteString("  -prep-cache-bust\n    Skip pre-stage cache and force recompute\n")
 	b.WriteString("  -prep-tools string\n    Path to pre-stage tools.json (optional; used only with -prep-tools-allow-external)\n")
 	b.WriteString("  -prep-dry-run\n    Run pre-stage only, print refined Harmony messages to stdout, and exit 0\n")
-	b.WriteString("  -state-dir string\n    Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)\n")
+    b.WriteString("  -state-dir string\n    Directory to persist and restore execution state across runs (env AGENTCLI_STATE_DIR)\n")
+    b.WriteString("  -state-scope string\n    Optional scope key to partition saved state (env AGENTCLI_STATE_SCOPE); when empty, a default hash of model|base_url|toolset is used\n")
 	b.WriteString("  -print-messages\n    Pretty-print the final merged message array to stderr before the main call\n")
 	b.WriteString("  -stream-final\n    If server supports streaming, stream only assistant{channel:\"final\"} to stdout; buffer other channels for -verbose\n")
 	b.WriteString("  -channel-route name=stdout|stderr|omit\n    Override default channel routing (final→stdout, critic/confidence→stderr); repeatable\n")
