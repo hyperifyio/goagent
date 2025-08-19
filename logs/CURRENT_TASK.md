@@ -1,1 +1,1 @@
-Implement atomic SaveStateBundle and unit tests.
+Implement safe load LoadLatestStateBundle(dir) with tests under internal/state.
