@@ -1,1 +1,1 @@
-Opened PRs for searxng_search, pdf_extract, wiki_query, openalex_search, crossref_search, github_search, dedupe_rank, citation_pack
+Open PR for security & runbooks and record in checklist.
