@@ -16,6 +16,10 @@ This docs index helps you navigate architecture notes and diagrams.
    - Link: [docs/adr/0006-image-generation-tool-img_create.md](adr/0006-image-generation-tool-img_create.md)
  - ADR-0010: Adopt SearXNG & network research toolbelt (CLI-only) — credible web discovery with provenance via SearXNG and a safe, CLI-only toolbelt.
    - Link: [docs/adr/0010-research-tools-searxng.md](adr/0010-research-tools-searxng.md)
+ - ADR-0011: State bundle schema — versioned on-disk JSON snapshots for reproducible runs.
+   - Link: [docs/adr/0011-state-bundle-schema.md](adr/0011-state-bundle-schema.md)
+ - ADR-0012: Persist and refine execution state via -state-dir — file-based snapshots with scopes, restore-before-prep, and refinement controls.
+   - Link: [docs/adr/0012-state-dir-persistence.md](adr/0012-state-dir-persistence.md)
 - Sequence diagrams: agent flow and toolbelt interactions.
   - Link: [docs/diagrams/agentcli-seq.md](diagrams/agentcli-seq.md)
   - Link: [docs/diagrams/toolbelt-seq.md](diagrams/toolbelt-seq.md)

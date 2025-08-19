@@ -1,1 +1,1 @@
-Implement advisory file lock state.lock for state save/load to prevent concurrent writers.
+Writing ADR and README for -state-dir persistence and refinement.

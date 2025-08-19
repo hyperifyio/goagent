@@ -47,6 +47,7 @@ goagent is a compact, vendor‑agnostic command‑line tool for running non‑in
 - [Changelog](#changelog)
 - [More examples](#more-examples)
 - [CI quality gates](docs/operations/ci-quality-gates.md)
+ - [State persistence (-state-dir)](#state-persistence--state-dir)
 
 
 ## At a glance
@@ -579,6 +580,34 @@ See the full threat model in `docs/security/threat-model.md`.
 - Run the CLI and tools in a sandboxed environment (container/jail/VM) with least privilege.
 - Keep `tools.json` minimal and audited. Do not pass secrets via tool arguments; prefer environment variables or CI secret stores.
 - Audit log redaction: set `GOAGENT_REDACT` to mask sensitive values in audit entries. `OAI_API_KEY`/`OPENAI_API_KEY` are always masked if present.
+
+## State persistence (-state-dir)
+
+Persist and restore execution state to make repeated runs deterministic and faster.
+
+- Enable by passing `-state-dir <dir>` (or `AGENTCLI_STATE_DIR`). The directory must be private (`0700`).
+- On first run, the CLI saves a snapshot `state-<RFC3339UTC>-<8charSHA>.json` and a pointer file `latest.json`.
+- On subsequent runs with the same scope, the CLI restores prompts/settings and skips pre-stage unless `-state-refine` is provided.
+- Partition contexts with `-state-scope` (or `AGENTCLI_STATE_SCOPE`); when unset, a default scope is derived from model, base URL, and toolset.
+- Inspect actions without touching disk using `-dry-run`.
+
+Examples:
+
+```bash
+# First run saves a snapshot
+./bin/agentcli -prompt "Say ok" -tools ./tools.json -state-dir "$PWD/.agent-state"
+
+# Restore and skip pre-stage
+./bin/agentcli -prompt "Say ok" -tools ./tools.json -state-dir "$PWD/.agent-state"
+
+# Refine existing state with inline text
+./bin/agentcli -prompt "Say ok" -state-dir "$PWD/.agent-state" -state-refine -state-refine-text "Tighten tone"
+
+# Use a custom scope to keep contexts separate
+./bin/agentcli -prompt "Say ok" -state-dir "$PWD/.agent-state" -state-scope docs-demo
+```
+
+See ADR‑0012 for rationale and details: `docs/adr/0012-state-dir-persistence.md`.
 
 ## Troubleshooting
 Common issues and deterministic fixes are documented with copy‑paste commands in `docs/runbooks/troubleshooting.md`.
