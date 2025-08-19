@@ -1,1 +1,1 @@
-Implement versioned on-disk state bundle schema and validation helpers.
+Implement atomic SaveStateBundle and unit tests.
