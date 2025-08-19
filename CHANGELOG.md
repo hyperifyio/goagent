@@ -22,6 +22,9 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
   - [ ] Tool: fs_listdir — OPEN: https://github.com/hyperifyio/goagent/pull/19
   - [ ] Tool: fs_mkdirp — OPEN: https://github.com/hyperifyio/goagent/pull/20
   - [ ] Tool: fs_stat — OPEN: https://github.com/hyperifyio/goagent/pull/21
+  - [ ] Tool: fs_edit_range — OPEN: https://github.com/hyperifyio/goagent/pull/22
+  - [ ] Tool: fs_read_lines — OPEN: https://github.com/hyperifyio/goagent/pull/23
+  - [ ] Tool: fs_search — OPEN: https://github.com/hyperifyio/goagent/pull/24
 - [ ] PR: Makefile wiring for tools (build-tools/clean)
 - [ ] PR: scripts and CI utilities
 - [ ] PR: security & runbooks
