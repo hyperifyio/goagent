@@ -2863,9 +2863,10 @@ func TestPrintMessages_FlagPrettyPrintsToStderr(t *testing.T) {
 	if code != 1 && code != 0 { // may exit 1 due to max-steps==0
 		t.Fatalf("unexpected exit: %d; stderr=%s", code, errBuf.String())
 	}
-	if !strings.Contains(errBuf.String(), "[") || !strings.Contains(errBuf.String(), "\"role\"") {
-		t.Fatalf("stderr missing messages JSON; got=%q", errBuf.String())
-	}
+    s := errBuf.String()
+    if !strings.Contains(s, "\"messages\"") || !strings.Contains(s, "\"prestage\"") || !strings.Contains(s, "\"bytes\"") {
+        t.Fatalf("stderr missing wrapper with prestage metadata; got=%s", truncate(s, 200))
+    }
 }
 
 // FEATURE_CHECKLIST L46: Enforce transcript hygiene — when -debug is off,
@@ -2943,7 +2944,7 @@ func TestSaveLoadMessages_RoundTrip(t *testing.T) {
 	if rerr != nil {
 		t.Fatalf("read saved messages: %v", rerr)
 	}
-	// Quick schema sniff: support both legacy array and new object wrapper
+    // Quick schema sniff: support both legacy array and new object wrapper
 	trimmed := strings.TrimSpace(string(b))
 	if strings.HasPrefix(trimmed, "[") {
 		if !strings.Contains(trimmed, "\"role\"") {
@@ -2953,6 +2954,10 @@ func TestSaveLoadMessages_RoundTrip(t *testing.T) {
 		if !strings.Contains(trimmed, "\"messages\"") {
 			t.Fatalf("saved wrapper missing messages field: %s", truncate(trimmed, 120))
 		}
+        // New wrapper should include prestage metadata without prompt text
+        if !strings.Contains(trimmed, "\"prestage\"") || !strings.Contains(trimmed, "\"bytes\"") {
+            t.Fatalf("saved wrapper missing prestage metadata: %s", truncate(trimmed, 160))
+        }
 	}
 
 	// Second run: load messages from file; should parse and validate without requiring -prompt.
