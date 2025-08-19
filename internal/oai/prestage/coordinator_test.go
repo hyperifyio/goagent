@@ -13,12 +13,13 @@ import (
 )
 
 // stubRunner implements PrestageRunner for tests.
-type stubRunner struct{
-	calls int
+type stubRunner struct {
+	calls      int
 	lastPrompt string
-	resp oai.ChatCompletionsResponse
-	err error
+	resp       oai.ChatCompletionsResponse
+	err        error
 }
+
 func (s *stubRunner) Run(ctx context.Context, prompt string) (oai.ChatCompletionsResponse, error) {
 	s.calls++
 	s.lastPrompt = prompt
@@ -28,19 +29,19 @@ func (s *stubRunner) Run(ctx context.Context, prompt string) (oai.ChatCompletion
 func writeValidBundle(t *testing.T, dir string, scope string) *state.StateBundle {
 	t.Helper()
 	b := &state.StateBundle{
-		Version: "1",
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		ToolVersion: "test",
-		ModelID: "gpt-x",
-		BaseURL: "http://example.test",
-		ToolsetHash: "abc",
-		ScopeKey: scope,
-		Prompts: map[string]string{"system":"S","developer":"D"},
-		PrepSettings: map[string]any{"k":"v"},
-		Context: map[string]any{"a":1},
-		ToolCaps: map[string]any{"c":true},
-		Custom: map[string]any{"x":"y"},
-		SourceHash: state.ComputeSourceHash("gpt-x","http://example.test","abc",scope),
+		Version:      "1",
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+		ToolVersion:  "test",
+		ModelID:      "gpt-x",
+		BaseURL:      "http://example.test",
+		ToolsetHash:  "abc",
+		ScopeKey:     scope,
+		Prompts:      map[string]string{"system": "S", "developer": "D"},
+		PrepSettings: map[string]any{"k": "v"},
+		Context:      map[string]any{"a": 1},
+		ToolCaps:     map[string]any{"c": true},
+		Custom:       map[string]any{"x": "y"},
+		SourceHash:   state.ComputeSourceHash("gpt-x", "http://example.test", "abc", scope),
 	}
 	if err := state.SaveStateBundle(dir, b); err != nil {
 		t.Fatalf("SaveStateBundle: %v", err)

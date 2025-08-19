@@ -1,1 +1,1 @@
-Wiring restore-before-prep to reuse saved prompts and settings when a matching state bundle exists and -state-refine is not set.
+Working on L113: add -state-refine flags, help text, and refine validation; run lint and tests.

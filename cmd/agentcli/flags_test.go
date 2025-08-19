@@ -551,85 +551,109 @@ func TestStateDir_PrecedenceAndCreation(t *testing.T) {
 	})
 }
 
+// TestStateRefine_RequiresStateDir ensures that using refine flags without -state-dir errors with exit code 2.
+func TestStateRefine_RequiresStateDir(t *testing.T) {
+	// No state-dir
+	orig := os.Args
+	defer func() { os.Args = orig }()
+
+	// Each case should fail with exit code 2 and a helpful error string
+	cases := [][]string{
+		{"agentcli.test", "-prompt", "p", "-state-refine"},
+		{"agentcli.test", "-prompt", "p", "-state-refine-text", "t"},
+		{"agentcli.test", "-prompt", "p", "-state-refine-file", "f.txt"},
+	}
+	for i, args := range cases {
+		os.Args = args
+		cfg, code := parseFlags()
+		if code != 2 {
+			t.Fatalf("case %d: parseFlags exit=%d; want 2", i, code)
+		}
+		if !strings.Contains(cfg.parseError, "requires -state-dir") {
+			t.Fatalf("case %d: parseError missing hint: %q", i, cfg.parseError)
+		}
+	}
+}
+
 // TestStateScope_PrecedenceAndDefaultHash verifies that -state-scope overrides env
 // and that when both are empty a default hash of model|base_url|toolset is computed.
 func TestStateScope_PrecedenceAndDefaultHash(t *testing.T) {
-    // Ensure env baseline empty
-    t.Setenv("AGENTCLI_STATE_SCOPE", "")
+	// Ensure env baseline empty
+	t.Setenv("AGENTCLI_STATE_SCOPE", "")
 
-    t.Run("env applies when flag unset", func(t *testing.T) {
-        t.Setenv("AGENTCLI_STATE_SCOPE", "env-scope")
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parseFlags exit=%d; want 0", code)
-        }
-        if cfg.stateScope != "env-scope" {
-            t.Fatalf("stateScope=%q; want env-scope", cfg.stateScope)
-        }
-    })
+	t.Run("env applies when flag unset", func(t *testing.T) {
+		t.Setenv("AGENTCLI_STATE_SCOPE", "env-scope")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.stateScope != "env-scope" {
+			t.Fatalf("stateScope=%q; want env-scope", cfg.stateScope)
+		}
+	})
 
-    t.Run("flag overrides env", func(t *testing.T) {
-        t.Setenv("AGENTCLI_STATE_SCOPE", "env-scope")
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-state-scope", "flag-scope"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parseFlags exit=%d; want 0", code)
-        }
-        if cfg.stateScope != "flag-scope" {
-            t.Fatalf("stateScope=%q; want flag-scope", cfg.stateScope)
-        }
-    })
+	t.Run("flag overrides env", func(t *testing.T) {
+		t.Setenv("AGENTCLI_STATE_SCOPE", "env-scope")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-state-scope", "flag-scope"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg.stateScope != "flag-scope" {
+			t.Fatalf("stateScope=%q; want flag-scope", cfg.stateScope)
+		}
+	})
 
-    t.Run("default hash when both unset and tools absent", func(t *testing.T) {
-        t.Setenv("AGENTCLI_STATE_SCOPE", "")
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        // Set explicit model/base to make hash deterministic; no -tools
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b"}
-        cfg, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parseFlags exit=%d; want 0", code)
-        }
-        // Expected sha256 of "m|http://b|" (empty toolset hash)
-        want := sha256SumHex([]byte("m|http://b|"))
-        if cfg.stateScope != want {
-            t.Fatalf("stateScope default hash=%q; want %q", cfg.stateScope, want)
-        }
-    })
+	t.Run("default hash when both unset and tools absent", func(t *testing.T) {
+		t.Setenv("AGENTCLI_STATE_SCOPE", "")
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		// Set explicit model/base to make hash deterministic; no -tools
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b"}
+		cfg, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		// Expected sha256 of "m|http://b|" (empty toolset hash)
+		want := sha256SumHex([]byte("m|http://b|"))
+		if cfg.stateScope != want {
+			t.Fatalf("stateScope default hash=%q; want %q", cfg.stateScope, want)
+		}
+	})
 
-    t.Run("toolset hash influences default scope", func(t *testing.T) {
-        t.Setenv("AGENTCLI_STATE_SCOPE", "")
-        dir := t.TempDir()
-        // Two different manifest contents
-        m1 := filepath.Join(dir, "tools1.json")
-        m2 := filepath.Join(dir, "tools2.json")
-        if err := os.WriteFile(m1, []byte(`{"tools":[{"name":"a"}]}`), 0o644); err != nil {
-            t.Fatalf("write m1: %v", err)
-        }
-        if err := os.WriteFile(m2, []byte(`{"tools":[{"name":"b"}]}`), 0o644); err != nil {
-            t.Fatalf("write m2: %v", err)
-        }
-        // First parse with tools1
-        orig := os.Args
-        defer func() { os.Args = orig }()
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b", "-tools", m1}
-        cfg1, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parseFlags exit=%d; want 0", code)
-        }
-        // Second parse with tools2
-        os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b", "-tools", m2}
-        cfg2, code := parseFlags()
-        if code != 0 {
-            t.Fatalf("parseFlags exit=%d; want 0", code)
-        }
-        if cfg1.stateScope == cfg2.stateScope {
-            t.Fatalf("expected different state scopes for different tool manifests; got %q == %q", cfg1.stateScope, cfg2.stateScope)
-        }
-    })
+	t.Run("toolset hash influences default scope", func(t *testing.T) {
+		t.Setenv("AGENTCLI_STATE_SCOPE", "")
+		dir := t.TempDir()
+		// Two different manifest contents
+		m1 := filepath.Join(dir, "tools1.json")
+		m2 := filepath.Join(dir, "tools2.json")
+		if err := os.WriteFile(m1, []byte(`{"tools":[{"name":"a"}]}`), 0o644); err != nil {
+			t.Fatalf("write m1: %v", err)
+		}
+		if err := os.WriteFile(m2, []byte(`{"tools":[{"name":"b"}]}`), 0o644); err != nil {
+			t.Fatalf("write m2: %v", err)
+		}
+		// First parse with tools1
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b", "-tools", m1}
+		cfg1, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		// Second parse with tools2
+		os.Args = []string{"agentcli.test", "-prompt", "p", "-model", "m", "-base-url", "http://b", "-tools", m2}
+		cfg2, code := parseFlags()
+		if code != 0 {
+			t.Fatalf("parseFlags exit=%d; want 0", code)
+		}
+		if cfg1.stateScope == cfg2.stateScope {
+			t.Fatalf("expected different state scopes for different tool manifests; got %q == %q", cfg1.stateScope, cfg2.stateScope)
+		}
+	})
 }

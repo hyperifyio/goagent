@@ -49,6 +49,9 @@ A concise, canonical reference for `agentcli` flags and behavior. Flags are orde
 - `-prep-dry-run`: Run pre-stage only, print refined Harmony messages to stdout, and exit 0
 - `-state-dir string`: Directory to persist and restore execution state across runs (env `AGENTCLI_STATE_DIR`)
 - `-state-scope string`: Optional scope key to partition saved state (env `AGENTCLI_STATE_SCOPE`); when empty, a default hash of model|base_url|toolset is used
+- `-state-refine`: Refine the loaded state bundle using `-state-refine-text` or `-state-refine-file` (requires `-state-dir`)
+- `-state-refine-text string`: Refinement input text to apply to the loaded state bundle (ignored when `-state-refine-file` is set; requires `-state-dir`)
+- `-state-refine-file string`: Path to file containing refinement input (wins over `-state-refine-text`; requires `-state-dir`)
 - `-print-messages`: Pretty-print the final merged message array to stderr before the main call
 - `-stream-final`: If server supports streaming, stream only `assistant{channel:"final"}` to stdout; buffer other channels for `-verbose`
 - `-channel-route name=stdout|stderr|omit`: Override default channel routing (`final→stdout`, `critic/confidence→stderr`); repeatable
