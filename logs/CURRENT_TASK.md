@@ -1,1 +1,1 @@
-Creating the prestage flow Mermaid diagram.
+Updating help snapshot tests in cmd/agentcli to include repeatable, '-' for STDIN, exclusivity, and precedence.
