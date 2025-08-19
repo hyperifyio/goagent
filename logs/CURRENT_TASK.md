@@ -1,1 +1,1 @@
-Implement wasm linear memory read helper and tests for OOB detection under the wasm runner item.
+Blocked: wasmrun structured errors & schema pending wazero execution integration and embedded test module.
