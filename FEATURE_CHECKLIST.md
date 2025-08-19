@@ -21,6 +21,8 @@
 * [ ] State: versioned StateBundle schema (v1) — OPEN: https://github.com/hyperifyio/goagent/pull/50
 * [ ] State: atomic save/load with secure dir + quarantine + advisory lock — OPEN (draft): https://github.com/hyperifyio/goagent/pull/51
 * [ ] Sandbox: limits utilities — OPEN: https://github.com/hyperifyio/goagent/pull/52
+* [ ] Sandbox: JavaScript runner — OPEN: https://github.com/hyperifyio/goagent/pull/53
+* [ ] Sandbox: WebAssembly runner — OPEN: https://github.com/hyperifyio/goagent/pull/54
 * [ ] Slice PR #02 — minimal CLI entrypoint (compile-only, no HTTP/tools): `git switch -c pr/02-cli-main main && git restore --source develop --staged --worktree cmd/agentcli/main.go && git restore --source develop --staged --worktree cmd/agentcli/go.* || true && go build ./cmd/agentcli`; update README usage snippet minimally if referenced by main.go; commit/push/create PR; Definition of Done: `go build ./cmd/agentcli` succeeds on a clean checkout of the branch; PR contains only cmd/agentcli/* (and any edited README lines).
   - OPEN: https://github.com/hyperifyio/goagent/pull/4
 * [ ] Slice PR #03 — flags & help (no network): `git switch -c pr/03-flags-help main && git restore --source develop --staged --worktree cmd/agentcli/flags.go cmd/agentcli/usage_test.go docs/reference/cli-reference.md`; run `go test ./cmd/agentcli -run Help -v` (or the repo’s equivalent); commit/push/PR; Definition of Done: `agentcli --help` works locally (prints full usage), tests covering help/flags pass, only flags/help related files changed.

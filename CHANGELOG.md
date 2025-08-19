@@ -34,6 +34,8 @@ PR slicing plan (tracked on develop; code PRs will branch from main in `./work/m
 
 ### Sandbox
 - Opened PR #52: limits utilities (bounded output buffer, wall-time helper, JSON error helper). Tracked in `FEATURE_CHECKLIST.md`. (develop-only admin update)
+- Opened PR #53: JavaScript runner (code.sandbox.js.run). Tracked in `FEATURE_CHECKLIST.md`. (develop-only admin update)
+- Opened PR #54: WebAssembly runner (validation and memory bounds). Tracked in `FEATURE_CHECKLIST.md`. (develop-only admin update)
 
 * [x] Initialize repo with Go module and scaffolding: run `mkdir agentcli && cd agentcli && git init && go mod init github.com/<org>/agentcli`; add `LICENSE` (MIT), `README.md` (purpose, usage, examples), `.gitignore` (bin/, dist/, .DS_Store, go.work, .idea, .vscode); create directories `cmd/agentcli`, `internal/oai`, `internal/tools`, `docs/adr`, `docs/diagrams`; set default model id `oss-gpt-20b` and default OpenAI-compatible base URL `https://api.openai.com/v1` to be read from env or flags.
 * [x] Implement `cmd/agentcli/main.go` non-interactive run loop: `package main` with `main()` reading flags, building initial messages `[system,user]`, calling the HTTP client, executing any returned tool calls, appending tool results as `role=tool` messages, repeating until the model returns a final assistant message with text, then printing to stdout and exiting 0; all failures print a concise error to stderr and exit non-zero (2 for CLI misuse like missing `-prompt`, 1 otherwise).

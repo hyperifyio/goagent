@@ -1,1 +1,1 @@
-Opened PR #55 (CLI reference). Preparing next docs-only slice.
+Recorded sandbox JS and WASM PRs in checklist and changelog.
