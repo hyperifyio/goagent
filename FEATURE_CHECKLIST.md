@@ -88,3 +88,5 @@
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs with gh; re-synced ./work/main to origin/main.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no duplicates; ./work/main hard-reset to origin/main; status recorded in `logs/CURRENT_TASK.md`.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs; `./work/main` reset to `origin/main`; no new feature PRs to open this pass.
+* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to  via gh; ensured  is hard-reset to ; no new PRs to open this pass.
+* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to  via gh; ensured  is hard-reset to ; no new PRs to open this pass.
