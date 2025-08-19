@@ -1,1 +1,1 @@
-Idle: inventory refreshed; next up pr/diagrams from ./work/main
+Maintaining checklist: refreshed PR inventory and reset ./work/main to origin/main
