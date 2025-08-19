@@ -1,5 +1,6 @@
 ### State
 - Opened PR #50: versioned `StateBundle` schema (v1) with validation and deterministic source hash. Tracked in `FEATURE_CHECKLIST.md`. (develop-only admin update)
+- Opened PR #51 (draft): atomic save/load with secure dir validation, quarantine on corruption, and coarse advisory lock. Tracked in `FEATURE_CHECKLIST.md`. (develop-only admin update)
 - [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
 - [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
 - [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38
