@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dop251/goja"
@@ -41,6 +43,7 @@ var (
 // Returns (stdoutJSON, stderrJSON, err). On OUTPUT_LIMIT, returns truncated
 // stdout along with stderr error JSON and a non-nil error.
 func Run(raw []byte) ([]byte, []byte, error) {
+	start := time.Now()
 	var in Input
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, mustMarshalError("INVALID_INPUT", "invalid JSON: "+err.Error()), err
@@ -133,10 +136,37 @@ func Run(raw []byte) ([]byte, []byte, error) {
 			if mErr != nil {
 				return nil, mustMarshalError("EVAL_ERROR", mErr.Error()), mErr
 			}
+			// audit before returning
+			_ = appendAudit(map[string]any{ //nolint:errcheck // best-effort audit
+				"ts":        time.Now().UTC().Format(time.RFC3339Nano),
+				"tool":      "code.sandbox.js.run",
+				"span":      "tools.js.run",
+				"ms":        time.Since(start).Milliseconds(),
+				"bytes_out": len(outBuf.String()),
+				"event":     "OUTPUT_LIMIT",
+			})
 			return outJSON, mustMarshalError("OUTPUT_LIMIT", fmt.Sprintf("output exceeded %d KB", maxKB)), errOutputLimit
 		case errTimeout:
+			// audit before returning
+			_ = appendAudit(map[string]any{ //nolint:errcheck // best-effort audit
+				"ts":        time.Now().UTC().Format(time.RFC3339Nano),
+				"tool":      "code.sandbox.js.run",
+				"span":      "tools.js.run",
+				"ms":        time.Since(start).Milliseconds(),
+				"bytes_out": outBuf.Len(),
+				"event":     "TIMEOUT",
+			})
 			return nil, mustMarshalError("TIMEOUT", fmt.Sprintf("execution exceeded %d ms", wall)), errTimeout
 		default:
+			// audit before returning
+			_ = appendAudit(map[string]any{ //nolint:errcheck // best-effort audit
+				"ts":        time.Now().UTC().Format(time.RFC3339Nano),
+				"tool":      "code.sandbox.js.run",
+				"span":      "tools.js.run",
+				"ms":        time.Since(start).Milliseconds(),
+				"bytes_out": outBuf.Len(),
+				"event":     "EVAL_ERROR",
+			})
 			return nil, mustMarshalError("EVAL_ERROR", runErr.Error()), runErr
 		}
 	}
@@ -145,6 +175,15 @@ func Run(raw []byte) ([]byte, []byte, error) {
 	if mErr != nil {
 		return nil, mustMarshalError("EVAL_ERROR", mErr.Error()), mErr
 	}
+	// success audit
+	_ = appendAudit(map[string]any{ //nolint:errcheck // best-effort audit
+		"ts":        time.Now().UTC().Format(time.RFC3339Nano),
+		"tool":      "code.sandbox.js.run",
+		"span":      "tools.js.run",
+		"ms":        time.Since(start).Milliseconds(),
+		"bytes_out": len(outBuf.String()),
+		"event":     "success",
+	})
 	return outJSON, nil, nil
 }
 
@@ -172,4 +211,47 @@ func writeBounded(buf *bytes.Buffer, s string, capBytes int) {
 		return
 	}
 	buf.Write(bs)
+}
+
+// appendAudit writes an NDJSON line under .goagent/audit/YYYYMMDD.log at the repo root.
+func appendAudit(entry any) error {
+	b, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	root := moduleRoot()
+	dir := filepath.Join(root, ".goagent", "audit")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	fname := time.Now().UTC().Format("20060102") + ".log"
+	path := filepath.Join(dir, fname)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }() //nolint:errcheck // best-effort close
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		return err
+	}
+	return nil
+}
+
+// moduleRoot walks upward from CWD to the directory containing go.mod; falls back to CWD.
+func moduleRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return "."
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return cwd
+		}
+		dir = parent
+	}
 }
