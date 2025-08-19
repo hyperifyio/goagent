@@ -26,7 +26,10 @@ func TestRunner_SendsResolvedPromptAsUserMessage(t *testing.T) {
 			return
 		}
 		// Minimal valid response
-		_ = json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Model: gotReq.Model})
+		if err := json.NewEncoder(w).Encode(oai.ChatCompletionsResponse{Model: gotReq.Model}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
