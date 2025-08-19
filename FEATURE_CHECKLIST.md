@@ -2,6 +2,7 @@
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no duplicates; `./work/main` reset to `origin/main`.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs created this pass.
   - Verified OPEN PRs to `main` via gh; prepared clean working copy at `./work/main` reset to `origin/main`; no duplicates opened this pass.
+* [x] Maintenance: refreshed PR inventory on 2025-08-19; confirmed no duplicate PRs; `./work/main` hard-reset to `origin/main`; status recorded in `logs/CURRENT_TASK.md`.
 * [ ] Tool: citation_pack — OPEN: https://github.com/hyperifyio/goagent/pull/40
 * [ ] Tool: dedupe_rank — OPEN: https://github.com/hyperifyio/goagent/pull/39
 * [ ] Tool: github_search — OPEN: https://github.com/hyperifyio/goagent/pull/38

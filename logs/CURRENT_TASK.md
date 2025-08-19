@@ -1,1 +1,1 @@
-Maintaining checklist: refreshed PR inventory and reset ./work/main to origin/main
+Idle: waiting on reviews for open PRs; no new features selected this pass
