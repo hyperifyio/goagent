@@ -1,5 +1,5 @@
 ### State
-- Maintenance: refreshed PR inventory on 2025-08-19; synced `./work/main` to `origin/main`; no new PRs created this pass. (develop-only admin update)
+- Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs; synced `./work/main` to `origin/main`; no new PRs created this pass. (develop-only admin update)
 - Maintenance: refreshed PR inventory on 2025-08-19; `./work/main` hard-reset to `origin/main`; no new PRs to open in this pass. (develop-only admin update)
 - Maintenance: refreshed PR inventory on 2025-08-19; synced `./work/main` to `origin/main`; created branch `pr/docs-cli-reference`, restored `docs/reference/cli-reference.md` from `develop`, and opened PR #55. (develop-only admin update)
 - Maintenance: refreshed PR inventory on 2025-08-19; ./work/main hard-reset to origin/main; status recorded in `logs/CURRENT_TASK.md`. (develop-only admin update)
