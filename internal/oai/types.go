@@ -69,6 +69,9 @@ type ChatCompletionsRequest struct {
 	// top_p or temperature is set, but never both.
 	TopP        *float64 `json:"top_p,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"`
+	// ResponseFormat requests a specific response format from the model, such as
+	// JSON mode: {"type":"json_object"}. Omitted by default.
+	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
 	// MaxTokens limits the number of tokens generated for the completion.
 	// Omitted when zero to preserve backward compatibility.
 	MaxTokens int `json:"max_tokens,omitempty"`
@@ -76,6 +79,12 @@ type ChatCompletionsRequest struct {
 	// When enabled, the server responds with text/event-stream and emits
 	// incremental deltas under choices[].delta.
 	Stream bool `json:"stream,omitempty"`
+}
+
+// ResponseFormat models the OpenAI response_format option.
+// For JSON mode, set Type to "json_object".
+type ResponseFormat struct {
+	Type string `json:"type"`
 }
 
 // includesTemperature reports whether the request currently has a temperature set.

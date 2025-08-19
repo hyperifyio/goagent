@@ -16,6 +16,8 @@ type Runner struct {
 	Temperature *float64
 	TopP        *float64
 	Timeout     time.Duration
+	// When true, request JSON mode (response_format {type:"json_object"}) if supported.
+	JSONMode bool
 }
 
 // Run executes a single non-streaming chat completion for the pre-stage using
@@ -29,6 +31,15 @@ func (r *Runner) Run(ctx context.Context, prompt string) (oai.ChatCompletionsRes
 		},
 		TopP:        r.TopP,
 		Temperature: r.Temperature,
+	}
+	// Capability-based omissions for sampling knobs are handled by the client for temperature.
+	// Enforce one‑knob rule here: if TopP is set, do not send Temperature at all.
+	if r.TopP != nil {
+		req.Temperature = nil
+	}
+	// Opt into JSON mode when requested; callers decide based on capability map.
+	if r.JSONMode {
+		req.ResponseFormat = &oai.ResponseFormat{Type: "json_object"}
 	}
 	// Tag audit with stage label "prep" for observability
 	ctx = oai.WithAuditStage(ctx, "prep")

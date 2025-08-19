@@ -1,1 +1,1 @@
-Implement capability-map enforcement for pre-stage (L72).
+Implement capability-map enforcement for pre-stage (omit unsupported sampling params and opt into JSON mode) with tests.
