@@ -1,1 +1,1 @@
-Extend -print-messages and -save-messages to include prestage metadata and verify with tests.
+Implement capability-map enforcement for pre-stage (L72).
