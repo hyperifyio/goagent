@@ -1,1 +1,1 @@
-Blocked on telemetry/verbosity alignment until cmd/agentcli scaffold exists.
+Writing ADR-0007 for pre-stage prompt overrides and verifying build/lint/tests before committing.
