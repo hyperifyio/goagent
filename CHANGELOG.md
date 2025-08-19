@@ -1,5 +1,5 @@
 PR slicing plan (tracked on develop; code PRs will branch from main in `./work/main`):
-- [ ] PR #01: Scaffold repository (LICENSE, README, `.gitignore`, `.gitattributes`, `.editorconfig`, `Makefile`, `go.mod`, `docs/README.md`)
+- [ ] PR #01: Scaffold repository — OPEN: https://github.com/hyperifyio/goagent/pull/3 (LICENSE, README, `.gitignore`, `.gitattributes`, `.editorconfig`, `Makefile`, `go.mod`, `docs/README.md`)
 - [ ] PR #02: Minimal CLI entrypoint (`cmd/agentcli/main.go` only)
 - [ ] PR #03: Flags & help (help/flags files + docs/tests)
 - [ ] PR #04: OpenAI HTTP client (types + client, tests)
