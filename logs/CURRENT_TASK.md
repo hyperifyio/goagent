@@ -1,1 +1,1 @@
-Blocked: implement -print-config prep section; cmd/agentcli CLI is missing; next step is to scaffold a minimal CLI to host -print-config.
+Blocked on README pre-stage prompt overrides: missing -prep-prompt and -prep-file flags in CLI.
