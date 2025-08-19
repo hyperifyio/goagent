@@ -33,3 +33,40 @@ func TestValidateMessageSequence_InvalidMismatchedID(t *testing.T) {
 		t.Fatalf("expected error for mismatched tool_call_id not present in prior assistant tool_calls")
 	}
 }
+
+func TestValidatePrestageHarmony_AllowsSystemAndDeveloperOnly(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleSystem, Content: "sys"},
+		{Role: RoleDeveloper, Content: "dev guidance"},
+	}
+	if err := ValidatePrestageHarmony(msgs); err != nil {
+		t.Fatalf("expected ok, got error: %v", err)
+	}
+}
+
+func TestValidatePrestageHarmony_RejectsAssistantUserToolRoles(t *testing.T) {
+	cases := []struct {
+		name string
+		msgs []Message
+	}{
+		{"assistant", []Message{{Role: RoleAssistant, Content: "nope"}}},
+		{"user", []Message{{Role: RoleUser, Content: "nope"}}},
+		{"tool", []Message{{Role: RoleTool, ToolCallID: "x"}}},
+	}
+	for _, tc := range cases {
+		if err := ValidatePrestageHarmony(tc.msgs); err == nil {
+			t.Fatalf("%s: expected error, got nil", tc.name)
+		}
+	}
+}
+
+func TestValidatePrestageHarmony_RejectsToolCallsAndToolCallID(t *testing.T) {
+	msgsWithToolCalls := []Message{{Role: RoleSystem, ToolCalls: []ToolCall{{ID: "1", Type: "function", Function: ToolCallFunction{Name: "x"}}}}}
+	if err := ValidatePrestageHarmony(msgsWithToolCalls); err == nil {
+		t.Fatalf("expected error for tool_calls, got nil")
+	}
+	msgsWithToolCallID := []Message{{Role: RoleDeveloper, ToolCallID: "abc"}}
+	if err := ValidatePrestageHarmony(msgsWithToolCallID); err == nil {
+		t.Fatalf("expected error for tool_call_id, got nil")
+	}
+}

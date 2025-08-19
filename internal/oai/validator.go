@@ -36,3 +36,35 @@ func ValidateMessageSequence(messages []Message) error {
 	}
 	return nil
 }
+
+// ValidatePrestageHarmony enforces the pre-stage output contract for Harmony
+// messages. The contract requires that the array contains only roles "system"
+// and/or "developer". Messages MUST NOT include role "tool", role
+// "assistant", or role "user". Additionally, no message may contain
+// tool_calls and no tool message with tool_call_id is allowed at this stage.
+// The content field may be empty for system messages but developer messages
+// should typically include guidance text; emptiness is permitted to keep the
+// validator non-opinionated about content semantics.
+func ValidatePrestageHarmony(messages []Message) error {
+	for i, m := range messages {
+		switch m.Role {
+		case RoleSystem, RoleDeveloper:
+			// Allowed roles for pre-stage output
+		case RoleTool:
+			return fmt.Errorf("pre-stage output invalid at index %d: role:\"tool\" is not allowed in pre-stage output", i)
+		case RoleAssistant:
+			return fmt.Errorf("pre-stage output invalid at index %d: role:\"assistant\" is not allowed in pre-stage output", i)
+		case RoleUser:
+			return fmt.Errorf("pre-stage output invalid at index %d: role:\"user\" is not allowed in pre-stage output", i)
+		default:
+			return fmt.Errorf("pre-stage output invalid at index %d: unknown role %q", i, m.Role)
+		}
+		if len(m.ToolCalls) > 0 {
+			return fmt.Errorf("pre-stage output invalid at index %d: tool_calls are not allowed in pre-stage output", i)
+		}
+		if m.ToolCallID != "" {
+			return fmt.Errorf("pre-stage output invalid at index %d: tool_call_id present but no tool calls are allowed in pre-stage output", i)
+		}
+	}
+	return nil
+}
