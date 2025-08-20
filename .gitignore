@@ -1,5 +1,6 @@
-agentcli
-agentcli.exe
+# Ignore built binaries at repo root only (do not ignore source under cmd/agentcli)
+/agentcli
+/agentcli.exe
 bin/
 logs/
 
