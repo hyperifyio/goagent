@@ -281,7 +281,9 @@ func TestCreateChatCompletion_RetryTimeoutThenSuccess(t *testing.T) {
 	}
 
 	// Verify audit log contains http_attempt and http_timing entries
-	auditDir := filepath.Join(".goagent", "audit")
+	// Audit logs are centralized under the repository root's .goagent/audit
+	root := findRepoRoot(t)
+	auditDir := filepath.Join(root, ".goagent", "audit")
 	// Allow a brief moment for file flush on slow FS
 	time.Sleep(10 * time.Millisecond)
 	entries, err := os.ReadDir(auditDir)

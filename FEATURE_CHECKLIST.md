@@ -1,18 +1,3 @@
-* [x] Maintenance: 2025-08-20 — merged PRs #56, #55, #54, #53, #52, #51, #50; verified no duplicates with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-20; verified OPEN PRs with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; confirmed no duplicates; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing OPEN PRs via gh; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs with `gh`; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to `main` via gh; ensured `./work/main` is hard-reset to `origin/main`; no new PRs to open this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; confirmed no duplicates; `./work/main` reset to `origin/main`; progress recorded in CURRENT_TASK.md.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs with `gh`; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs with `gh`; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to `main` via gh; ensured `./work/main` is hard-reset to `origin/main`; no new PRs to open this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; OPEN PRs acknowledged; `./work/main` at `origin/main`; no additional PRs this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; re-synced `./work/main` to `origin/main`; no new PRs needed this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs to open; `./work/main` pristine at `origin/main`.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; re-synced `./work/main` to `origin/main`; no additional feature PRs needed this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs with `gh pr list`, re-synced `./work/main` to `origin/main`; no new PRs created this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no duplicates; `./work/main` reset to `origin/main`.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; no new PRs created this pass.
@@ -36,8 +21,6 @@
 * [ ] State: versioned StateBundle schema (v1) — OPEN: https://github.com/hyperifyio/goagent/pull/50
 * [ ] State: atomic save/load with secure dir + quarantine + advisory lock — OPEN (draft): https://github.com/hyperifyio/goagent/pull/51
 * [ ] Sandbox: limits utilities — OPEN: https://github.com/hyperifyio/goagent/pull/52
-* [ ] Sandbox: JavaScript runner — OPEN: https://github.com/hyperifyio/goagent/pull/53
-* [ ] Sandbox: WebAssembly runner — OPEN: https://github.com/hyperifyio/goagent/pull/54
 * [ ] Slice PR #02 — minimal CLI entrypoint (compile-only, no HTTP/tools): `git switch -c pr/02-cli-main main && git restore --source develop --staged --worktree cmd/agentcli/main.go && git restore --source develop --staged --worktree cmd/agentcli/go.* || true && go build ./cmd/agentcli`; update README usage snippet minimally if referenced by main.go; commit/push/create PR; Definition of Done: `go build ./cmd/agentcli` succeeds on a clean checkout of the branch; PR contains only cmd/agentcli/* (and any edited README lines).
   - OPEN: https://github.com/hyperifyio/goagent/pull/4
 * [ ] Slice PR #03 — flags & help (no network): `git switch -c pr/03-flags-help main && git restore --source develop --staged --worktree cmd/agentcli/flags.go cmd/agentcli/usage_test.go docs/reference/cli-reference.md`; run `go test ./cmd/agentcli -run Help -v` (or the repo’s equivalent); commit/push/PR; Definition of Done: `agentcli --help` works locally (prints full usage), tests covering help/flags pass, only flags/help related files changed.
@@ -77,7 +60,6 @@
 * [ ] Slice PR — Makefile wiring (TOOLS list, build-tools/clean, Windows .exe): `git switch -c pr/makefile-tools main && git restore --source develop --staged --worktree Makefile && make build-tools && make clean`; commit/push/PR; Definition of Done: `make build-tools` deterministically builds all already-merged tools to tools/bin, `make clean` removes them, no code beyond Makefile changed. — OPEN: https://github.com/hyperifyio/goagent/pull/41
 * [ ] Slice PR — scripts and gh utilities (no external deps beyond gh): `git switch -c pr/scripts main && git restore --source develop --staged --worktree scripts/**/* .github/** || true`; keep only scripts that don’t assume features not yet merged; `bash -n scripts/*.sh || true`; commit/push/PR; Definition of Done: scripts shellcheck clean (if configured) and runnable where applicable; PR limited to scripts/ and CI YAML. — OPEN: https://github.com/hyperifyio/goagent/pull/42
 * [ ] Slice PR — security & runbooks: `git switch -c pr/security-runbooks main && git restore --source develop --staged --worktree docs/security/** docs/runbooks/** README.md`; commit/push/PR; Definition of Done: security posture and troubleshooting render with valid links, no code in PR. — OPEN: https://github.com/hyperifyio/goagent/pull/43
-* [ ] Docs: architecture module boundaries — OPEN: https://github.com/hyperifyio/goagent/pull/56
 * [ ] Slice PR — ADRs (one ADR per PR unless trivial): for each ADR file under docs/adr not yet in main, `git switch -c pr/adr-XXXX main && git restore --source develop --staged --worktree docs/adr/XXXX-*.md docs/README.md README.md && git commit -m "ADR-XXXX: <title>" && git push && gh pr create ...`; Definition of Done: ADR renders, is linked from docs index and README, no code changes. — OPEN: https://github.com/hyperifyio/goagent/pull/44
   - [ ] ADR-0011: State bundle schema — OPEN: https://github.com/hyperifyio/goagent/pull/48
   - [ ] ADR-0012: State dir persistence — OPEN: https://github.com/hyperifyio/goagent/pull/49
@@ -92,10 +74,3 @@
 * [ ] Post-migration cleanup (final PR): when all features are merged, remove docs/PR_PLAN.md (or mark as historical), ensure tools/bin/* are gitignored only (no binaries tracked), run a last `make clean && make build build-tools && go test ./... && make lint`; commit any final doc link fixes; Definition of Done: main contains the full feature set, no legacy artifacts remain, and local gates pass end-to-end.
 * [ ] Merge discipline and sequencing (applies continuously): once a PR is approved and CI (if present) is green, merge with “squash and merge” to keep history clean; after merge, `git switch main && git pull --ff-only && git branch -D <feature-branch> || true`; before opening the next PR, re-create branches from updated main; Definition of Done: main advances one minimal feature at a time, no open PR depends on another unmerged PR (or if unavoidable, clearly state `--base <dependent-branch>` and retarget to main immediately after the base merges).
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing PRs with gh; re-synced ./work/main to origin/main.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; no duplicates; ./work/main hard-reset to origin/main; status recorded in `logs/CURRENT_TASK.md`.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs; `./work/main` reset to `origin/main`; no new feature PRs to open this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to  via gh; ensured  is hard-reset to ; no new PRs to open this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified existing OPEN PRs via gh; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs to  via gh; ensured  is hard-reset to ; no new PRs to open this pass.
-
-* [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs with gh; re-synced ./work/main to origin/main; no new PRs this pass.
