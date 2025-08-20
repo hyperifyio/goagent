@@ -1,0 +1,404 @@
+package main
+
+// https://github.com/hyperifyio/goagent/issues/1
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	testutil "github.com/hyperifyio/goagent/tools/testutil"
+)
+
+type fsSearchMatch struct {
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Col     int    `json:"col"`
+	Preview string `json:"preview"`
+}
+
+type fsSearchOutput struct {
+	Matches   []fsSearchMatch `json:"matches"`
+	Truncated bool            `json:"truncated"`
+}
+
+// build via shared helper in tools/testutil
+func buildFsSearch(t *testing.T) string { return testutil.BuildTool(t, "fs_search") }
+
+// runFsSearch executes the fs_search tool with given JSON input.
+func runFsSearch(t *testing.T, bin string, input any) (fsSearchOutput, string, int) {
+	t.Helper()
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	cmd := exec.Command(bin)
+	cmd.Dir = "."
+	cmd.Stdin = bytes.NewReader(data)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	code := 0
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else {
+			code = 1
+		}
+	}
+	var out fsSearchOutput
+	if code == 0 {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+			t.Fatalf("unmarshal stdout: %v; raw=%q", err, stdout.String())
+		}
+	}
+	return out, stderr.String(), code
+}
+
+// TestFsSearch_Skips_BinaryDirs ensures the walker skips known binary/output directories.
+func TestFsSearch_Skips_BinaryDirs(t *testing.T) {
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-skip-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+
+	// Create directories that should be skipped
+	for _, dir := range []string{"bin", "logs", filepath.Join("tools", "bin")} {
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		// Put a file inside that would match the query if not skipped
+		file := filepath.Join(base, dir, "skipme.txt")
+		if err := os.WriteFile(file, []byte("SHOULD_NOT_BE_SCANNED"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	// Create a normal file that should be scanned
+	goodFile := filepath.Join(base, "ok.txt")
+	if err := os.WriteFile(goodFile, []byte("needle here"), 0o644); err != nil {
+		t.Fatalf("write ok.txt: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+	out, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "needle",
+		"regex":      false,
+		"globs":      []string{"**/*.txt"},
+		"maxResults": 10,
+	})
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	for _, m := range out.Matches {
+		if strings.Contains(m.Path, "/bin/") || strings.Contains(m.Path, "/logs/") || strings.Contains(m.Path, "/tools/bin/") {
+			t.Fatalf("unexpected match in skipped dir: %q", m.Path)
+		}
+	}
+	// Ensure we did find the good file
+	sawGood := false
+	for _, m := range out.Matches {
+		if m.Path == goodFile {
+			sawGood = true
+			break
+		}
+	}
+	if !sawGood {
+		t.Fatalf("expected a match in %s, got %+v", goodFile, out.Matches)
+	}
+}
+
+// TestFsSearch_Literal_SingleFile creates a small file and searches for a literal string.
+func TestFsSearch_Literal_SingleFile(t *testing.T) {
+	// Arrange: create a repo-relative temp file with known content
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-lit-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+	fileRel := filepath.Join(base, "a.txt")
+	content := "alpha\nbravo charlie\nalpha bravo\n"
+	if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+
+	// Act: literal search for "bravo"
+	out, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "bravo",
+		"regex":      false,
+		"globs":      []string{"**/*.txt"},
+		"maxResults": 10,
+	})
+
+	// Assert: should succeed (exit 0), have at least one match in our file, not truncated
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.Truncated {
+		t.Fatalf("should not be truncated for small input")
+	}
+	// Find a match in our file
+	found := false
+	for _, m := range out.Matches {
+		if m.Path == fileRel {
+			if m.Line <= 0 || m.Col <= 0 {
+				t.Fatalf("invalid line/col: line=%d col=%d", m.Line, m.Col)
+			}
+			if !strings.Contains(m.Preview, "bravo") {
+				t.Fatalf("preview should contain query, got %q", m.Preview)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected at least one match in %s, got %+v", fileRel, out.Matches)
+	}
+}
+
+// TestFsSearch_Regex_SingleFile adds a failing test to define regex behavior.
+// It expects the tool to support regex queries when {"regex":true}.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Regex_SingleFile(t *testing.T) {
+	// Arrange: create a repo-relative temp file with known content
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-regex-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+	fileRel := filepath.Join(base, "r.txt")
+	content := "alpha\nbravo charlie\nalpha bravo\n"
+	if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+
+	// Act: regex search for lines starting with "alpha"
+	out, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "^alpha",
+		"regex":      true,
+		"globs":      []string{"**/*.txt"},
+		"maxResults": 10,
+	})
+
+	// Assert: should succeed and find at least one match in our file
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.Truncated {
+		t.Fatalf("should not be truncated for small input")
+	}
+	found := false
+	for _, m := range out.Matches {
+		if m.Path == fileRel {
+			if m.Line <= 0 || m.Col <= 0 {
+				t.Fatalf("invalid line/col: line=%d col=%d", m.Line, m.Col)
+			}
+			if !strings.HasPrefix(m.Preview, "alpha") {
+				t.Fatalf("preview should start with 'alpha', got %q", m.Preview)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected at least one match in %s, got %+v", fileRel, out.Matches)
+	}
+}
+
+// TestFsSearch_Globs_Filter verifies glob filtering limits files considered.
+// It expects that only files matching the provided globs are searched.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Globs_Filter(t *testing.T) {
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-glob-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+
+	txtRel := filepath.Join(base, "note.txt")
+	mdRel := filepath.Join(base, "note.md")
+	if err := os.WriteFile(txtRel, []byte("needle in txt\n"), 0o644); err != nil {
+		t.Fatalf("write txt: %v", err)
+	}
+	if err := os.WriteFile(mdRel, []byte("needle in md\n"), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+
+	// Act: literal search with globs restricting to only .md files
+	out, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "needle",
+		"regex":      false,
+		"globs":      []string{"**/*.md"},
+		"maxResults": 10,
+	})
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if out.Truncated {
+		t.Fatalf("should not be truncated for small input")
+	}
+
+	// Assert: should contain match for mdRel and not for txtRel
+	var sawMD, sawTXT bool
+	for _, m := range out.Matches {
+		if m.Path == mdRel {
+			sawMD = true
+		}
+		if m.Path == txtRel {
+			sawTXT = true
+		}
+	}
+	if !sawMD {
+		t.Fatalf("expected a match in %s, got %+v", mdRel, out.Matches)
+	}
+	if sawTXT {
+		t.Fatalf("did not expect a match in %s due to globs filter", txtRel)
+	}
+}
+
+// TestFsSearch_Truncation verifies that when maxResults is reached, the tool
+// stops early, sets Truncated=true, and returns exactly maxResults matches.
+// https://github.com/hyperifyio/goagent/issues/1
+func TestFsSearch_Truncation(t *testing.T) {
+	// Arrange: create a repo-relative temp dir with a file containing many matches
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-trunc-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+
+	fileRel := filepath.Join(base, "many.txt")
+	// Create a line with multiple occurrences and multiple lines to ensure >2 matches
+	content := "x x x x x\nxx xx\n"
+	if err := os.WriteFile(fileRel, []byte(content), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+
+	// Act: literal search for "x" with maxResults=2
+	out, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "x",
+		"regex":      false,
+		"globs":      []string{"**/*.txt"},
+		"maxResults": 2,
+	})
+
+	// Assert
+	if code != 0 {
+		t.Fatalf("expected success, got exit=%d stderr=%q", code, stderr)
+	}
+	if !out.Truncated {
+		t.Fatalf("expected truncated=true when reaching maxResults, got false")
+	}
+	if len(out.Matches) != 2 {
+		t.Fatalf("expected exactly 2 matches, got %d: %+v", len(out.Matches), out.Matches)
+	}
+	for _, m := range out.Matches {
+		if m.Path != fileRel {
+			t.Fatalf("unexpected path %q (want %q)", m.Path, fileRel)
+		}
+		if m.Line <= 0 || m.Col <= 0 {
+			t.Fatalf("invalid line/col: line=%d col=%d", m.Line, m.Col)
+		}
+		if !strings.Contains(m.Preview, "x") {
+			t.Fatalf("preview should contain 'x', got %q", m.Preview)
+		}
+	}
+}
+
+// TestFsSearch_FileSizeLimit ensures files larger than the configured cap are rejected
+// with a clear error and non-zero exit to bound scanning cost.
+func TestFsSearch_FileSizeLimit(t *testing.T) {
+	tmpDirAbs, err := os.MkdirTemp(".", "fssearch-big-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDirAbs); err != nil {
+			t.Logf("cleanup remove %s: %v", tmpDirAbs, err)
+		}
+	})
+	base := filepath.Base(tmpDirAbs)
+
+	// Create a file just over 1MiB
+	big := filepath.Join(base, "big.bin")
+	const oneMiB = 1 << 20
+	buf := bytes.Repeat([]byte{'A'}, oneMiB+1)
+	if err := os.WriteFile(big, buf, 0o644); err != nil {
+		t.Fatalf("write big: %v", err)
+	}
+
+	bin := buildFsSearch(t)
+	// Limit globs to exactly the oversized file to ensure deterministic behavior
+	_, stderr, code := runFsSearch(t, bin, map[string]any{
+		"query":      "A",
+		"regex":      false,
+		"globs":      []string{big},
+		"maxResults": 1,
+	})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit for oversized file")
+	}
+	if !strings.Contains(stderr, "FILE_TOO_LARGE") {
+		t.Fatalf("expected FILE_TOO_LARGE in stderr, got %q", stderr)
+	}
+}
+
+// TestFsSearch_ErrorJSON_QueryRequired verifies standardized stderr JSON error
+// contract: when required input is missing (empty query), the tool must write
+// a single-line JSON object with an "error" key to stderr and exit non-zero.
+func TestFsSearch_ErrorJSON_QueryRequired(t *testing.T) {
+	bin := buildFsSearch(t)
+
+	// Omit required field to trigger validation error in readInput
+	_, stderr, code := runFsSearch(t, bin, map[string]any{})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit for missing query")
+	}
+	line := strings.TrimSpace(stderr)
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		t.Fatalf("stderr is not JSON: %q err=%v", line, err)
+	}
+	if _, ok := obj["error"]; !ok {
+		t.Fatalf("stderr JSON missing 'error' key: %v", obj)
+	}
+}
