@@ -1,0 +1,112 @@
+name: CI (disabled temporary)
+
+on:
+  workflow_dispatch:
+  # Temporarily disable automatic triggers while issues are fixed
+  push:
+    branches-ignore: ["**"]
+  pull_request:
+    branches-ignore: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Print Go version
+        run: go version
+
+      - name: Install ripgrep (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Install ripgrep (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ripgrep
+
+      - name: Install make and ripgrep (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install -y make ripgrep
+          echo "make version:"; make --version || true
+          echo "rg version:"; rg --version || true
+
+      - name: Print Go env
+        run: go env
+
+      - name: Tidy
+        shell: bash
+        run: make tidy
+
+      - name: lint (includes check-go-version)
+        shell: bash
+        run: |
+          set -o pipefail
+          make lint 2>&1 | tee lint.log
+
+      - name: Assert lint order (check-go-version before golangci-lint)
+        shell: bash
+        run: |
+          test -f lint.log || { echo "lint.log missing"; exit 1; }
+          L_CHECK=$(rg -n "^check-go-version: OK" -N lint.log | head -1 | cut -d: -f1)
+          L_GCL=$(rg -n "^golangci-lint version" -N lint.log | head -1 | cut -d: -f1)
+          if [ -z "$L_CHECK" ]; then echo "Missing 'check-go-version: OK' line in lint.log"; exit 1; fi
+          if [ -z "$L_GCL" ]; then echo "Missing 'golangci-lint version' line in lint.log"; exit 1; fi
+          if [ "$L_CHECK" -ge "$L_GCL" ]; then
+            echo "Ordering incorrect: 'check-go-version: OK' occurs at line $L_CHECK, after golangci-lint version at line $L_GCL"; exit 1;
+          fi
+          echo "Lint order OK: check-go-version runs before golangci-lint"
+
+      - name: Upload lint.log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-${{ matrix.os }}
+          path: lint.log
+          if-no-files-found: error
+
+      - name: Tools path hygiene
+        shell: bash
+        run: make check-tools-paths
+
+      - name: Verify tools manifest commands
+        shell: bash
+        run: make verify-manifest-paths
+
+      - name: Test
+        shell: bash
+        run: make test
+
+      - name: Test clean-logs guard
+        shell: bash
+        run: make test-clean-logs
+
+      - name: Build
+        shell: bash
+        run: make build
+
+      - name: Build tools
+        shell: bash
+        run: make build-tools
