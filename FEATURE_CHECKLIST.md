@@ -1,3 +1,4 @@
+* [x] Maintenance: 2025-08-20 — merged PRs #56, #55, #54, #53, #52, #51, #50; verified no duplicates with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-20; verified OPEN PRs with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; verified OPEN PRs with gh; re-synced `./work/main` to `origin/main`; no new PRs this pass.
 * [x] Maintenance: refreshed PR inventory on 2025-08-19; confirmed no duplicates; re-synced `./work/main` to `origin/main`; no new PRs created this pass.
