@@ -1,7 +1,7 @@
 package main
 
 import (
-    "github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/oai"
 )
 
 // applyTranscriptHygiene enforces transcript-size safeguards before requests.

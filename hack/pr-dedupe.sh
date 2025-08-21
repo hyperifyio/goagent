@@ -112,7 +112,7 @@ for pr in $pr_numbers; do
     DETAILS_JSON+=" , $j"
   fi
 done
-DETAILS_JSON+"]"
+DETAILS_JSON+="]"
 
 # 3) Detect duplicate clusters
 # Exact duplicates: same base AND same diff_hash
@@ -176,7 +176,7 @@ join_by_comma() { local IFS=","; echo "$*"; }
 # Collate clusters with 2+ PRs
 extract_clusters() {
   local kind="$1"; local jq_path="$2"
-  echo "$CLUSTERS" | jq -r "$jq_path | map(select(.prs|length>1)) | to_entries[] | (\"$kind\" + \"|\" + (.value.prs | join(",")))"
+  echo "$CLUSTERS" | jq -r "$jq_path | map(select(.prs|length>1)) | to_entries[] | (\"$kind\" + \"|\" + (.value.prs | join(\",\")))"
 }
 
 exact_clusters=$(extract_clusters "exact" '.exact')

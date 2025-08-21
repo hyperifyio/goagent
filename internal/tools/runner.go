@@ -1,12 +1,12 @@
 package tools
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "os"
-    "os/exec"
-    "time"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"time"
 )
 
 // RunToolWithJSON executes the tool command with args JSON provided on stdin.
@@ -108,11 +108,11 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 		}
 	}
 
-    // Read stdout and stderr fully
-    outCh := make(chan []byte, 1)
-    errCh := make(chan []byte, 1)
-    go func() { outCh <- safeReadAll(stdout) }()
-    go func() { errCh <- safeReadAll(stderr) }()
+	// Read stdout and stderr fully
+	outCh := make(chan []byte, 1)
+	errCh := make(chan []byte, 1)
+	go func() { outCh <- safeReadAll(stdout) }()
+	go func() { errCh <- safeReadAll(stderr) }()
 
 	err = cmd.Wait()
 	out := <-outCh
@@ -128,8 +128,8 @@ func RunToolWithJSON(parentCtx context.Context, spec ToolSpec, jsonInput []byte,
 			exitCode = -1
 		}
 	}
-    // Best-effort audit (failures do not affect tool result)
-    writeAudit(spec, start, exitCode, len(out), len(serr), passedKeys)
+	// Best-effort audit (failures do not affect tool result)
+	writeAudit(spec, start, exitCode, len(out), len(serr), passedKeys)
 
 	if normErr := normalizeWaitError(ctx, err, string(serr)); normErr != nil {
 		return nil, normErr

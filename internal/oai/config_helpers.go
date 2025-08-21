@@ -20,10 +20,10 @@ type ImageConfig struct {
 }
 
 // ResolveImageConfig resolves Image API BaseURL and API Key using the following precedence:
-// - If explicit imageBaseURL/imageAPIKey are provided (non-empty), use them (source: "flag").
-// - Else if environment variables are set, prefer OAI_IMAGE_BASE_URL and OAI_IMAGE_API_KEY (source: "env").
-//   For the API key, also allow OPENAI_API_KEY as a fallback environment variable.
-// - Else inherit from baseURL/apiKey (source: "inherit"). When the inherited key is empty, the source is "empty".
+//   - If explicit imageBaseURL/imageAPIKey are provided (non-empty), use them (source: "flag").
+//   - Else if environment variables are set, prefer OAI_IMAGE_BASE_URL and OAI_IMAGE_API_KEY (source: "env").
+//     For the API key, also allow OPENAI_API_KEY as a fallback environment variable.
+//   - Else inherit from baseURL/apiKey (source: "inherit"). When the inherited key is empty, the source is "empty".
 func ResolveImageConfig(imageBaseURL, imageAPIKey, baseURL, apiKey string) (ImageConfig, string, string) {
 	var cfg ImageConfig
 	var baseSrc, keySrc string
@@ -135,21 +135,21 @@ func ResolveDuration(flagSet bool, flagVal time.Duration, envStr string, inherit
 // - general | creative | reasoning => 1.0
 // - unknown/empty => (0, false)
 func MapProfileToTemperature(model string, profile PromptProfile) (float64, bool) {
-    p := strings.ToLower(strings.TrimSpace(string(profile)))
-    if p == "" {
-        return 0, false
-    }
-    var temp float64
-    switch p {
-    case "deterministic":
-        temp = 0.1
-    case "general", "creative", "reasoning":
-        temp = 1.0
-    default:
-        return 0, false
-    }
-    if !SupportsTemperature(model) {
-        return 0, false
-    }
-    return clampTemperature(temp), true
+	p := strings.ToLower(strings.TrimSpace(string(profile)))
+	if p == "" {
+		return 0, false
+	}
+	var temp float64
+	switch p {
+	case "deterministic":
+		temp = 0.1
+	case "general", "creative", "reasoning":
+		temp = 1.0
+	default:
+		return 0, false
+	}
+	if !SupportsTemperature(model) {
+		return 0, false
+	}
+	return clampTemperature(temp), true
 }
