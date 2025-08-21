@@ -1,12 +1,21 @@
 package main
 
 import (
+<<<<<<< HEAD
     "encoding/json"
     "fmt"
     "os"
     "path/filepath"
     "strings"
     "time"
+=======
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+>>>>>>> cmd/agentcli: restore CLI behaviors and fix tests by reintroducing missing helpers and stubs
 
     "github.com/hyperifyio/goagent/internal/oai"
 )

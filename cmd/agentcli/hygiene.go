@@ -1,7 +1,11 @@
 package main
 
 import (
+<<<<<<< HEAD
     "github.com/hyperifyio/goagent/internal/oai"
+=======
+	"github.com/hyperifyio/goagent/internal/oai"
+>>>>>>> cmd/agentcli: restore CLI behaviors and fix tests by reintroducing missing helpers and stubs
 )
 
 // applyTranscriptHygiene enforces transcript-size safeguards before requests.
