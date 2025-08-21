@@ -1,13 +1,14 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+    "encoding/json"
+    "fmt"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
 
-	"github.com/hyperifyio/goagent/internal/oai"
+    "github.com/hyperifyio/goagent/internal/oai"
 )
 
 // tryReadPrepCache attempts to load cached pre-stage output messages.

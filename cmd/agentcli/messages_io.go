@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
+    "encoding/json"
+    "strings"
 
-	"github.com/hyperifyio/goagent/internal/oai"
+    "github.com/hyperifyio/goagent/internal/oai"
 )
 
 // parseSavedMessages accepts either a JSON array of oai.Message (legacy format)
@@ -33,10 +32,9 @@ func parseSavedMessages(data []byte) ([]oai.Message, string, error) {
 // buildMessagesWrapper constructs the saved/printed JSON wrapper including
 // the Harmony messages, optional image prompt, and pre-stage metadata.
 func buildMessagesWrapper(messages []oai.Message, imagePrompt string) any {
-	// Determine pre-stage prompt source and size using resolver.
-	// Flags for pre-stage prompt are not yet implemented; this will resolve to
-	// the embedded default for now, which is acceptable and deterministic.
-	src, text := oai.ResolvePrepPrompt(nil, "")
+    // Pre-stage prompt resolver is not available on this branch; record a
+    // deterministic placeholder so downstream consumers can rely on shape.
+    src, text := "default", ""
 	type prestageMeta struct {
 		Source string `json:"source"`
 		Bytes  int    `json:"bytes"`

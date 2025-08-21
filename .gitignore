@@ -28,3 +28,5 @@ go.work
 .vscode/
 # Editor swap files
 *.swp
+work/
+.cursor
