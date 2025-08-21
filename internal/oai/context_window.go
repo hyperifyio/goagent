@@ -8,7 +8,7 @@ const DefaultContextWindow = 128000
 // modelToContextWindow holds known model context window sizes.
 // Keys should be lower-case exact model identifiers.
 var modelToContextWindow = map[string]int{
-	"oss-gpt-20b": 8192,
+	"oss-gpt-20b": 131072,
 }
 
 // ContextWindowForModel returns the total token window for a given model.
