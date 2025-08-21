@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"strconv"
-	"strings"
-	"time"
+    "encoding/json"
+    "io"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/hyperifyio/goagent/internal/oai"
+    "github.com/hyperifyio/goagent/internal/oai"
 )
 
 // printResolvedConfig writes a JSON object describing resolved configuration and returns exit code 0.
