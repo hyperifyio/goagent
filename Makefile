@@ -89,6 +89,9 @@ build-tool:
 test:
 	$(GO) test ./...
 
+smoke-test:
+	for pkg in $$($(GO) list ./...); do $(GO) test -failfast -count=1 "$$pkg" || exit $$?; done
+
 # Smoke test for image flow: run CLI with a deterministic prompt and require non-empty output
 .PHONY: smoke-image
 smoke-image: build build-tools
