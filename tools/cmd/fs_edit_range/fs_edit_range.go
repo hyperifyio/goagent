@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+    "time"
 )
 
 type editInput struct {
@@ -84,13 +85,34 @@ func validatePath(p string) error {
 }
 
 func applyEdit(in editInput) (editOutput, error) {
-	muIface, _ := editLocks.LoadOrStore(in.Path, &sync.Mutex{})
-	mu, ok := muIface.(*sync.Mutex)
-	if !ok {
-		return editOutput{}, errors.New("internal lock type assertion failed")
-	}
-	mu.Lock()
-	defer mu.Unlock()
+    // Inter-process lock using a lockfile to serialize edits across separate tool processes.
+    // Fallback to in-process mutex to prevent races within a single process.
+    muIface, _ := editLocks.LoadOrStore(in.Path, &sync.Mutex{})
+    mu, ok := muIface.(*sync.Mutex)
+    if !ok {
+        return editOutput{}, errors.New("internal lock type assertion failed")
+    }
+    mu.Lock()
+    defer mu.Unlock()
+
+    lockPath := in.Path + ".lock"
+    // Best-effort acquisition with small backoff loops
+    acquired := false
+    for i := 0; i < 200; i++ { // ~2s max with 10ms sleeps
+        f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+        if err == nil {
+            // Write pid for debugging; ignore error
+            _, _ = fmt.Fprintf(f, "%d", os.Getpid())
+            _ = f.Close()
+            acquired = true
+            break
+        }
+        time.Sleep(10 * time.Millisecond)
+    }
+    if !acquired {
+        return editOutput{}, errors.New("LOCK_TIMEOUT")
+    }
+    defer func() { _ = os.Remove(lockPath) }()
 
 	data, err := os.ReadFile(in.Path)
 	if err != nil {

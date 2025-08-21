@@ -1,12 +1,12 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
-    "time"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
     "github.com/hyperifyio/goagent/internal/oai"
 )
@@ -81,7 +81,7 @@ func computePrepCacheKey(model, base string, temp *float64, topP *float64, retri
 		ToolSpec: toolSpec,
 		Messages: normalizeMessagesForHash(inMessages),
 	}
-	b, err := json.Marshal(payload)
+    b, err := json.Marshal(payload)
 	if err != nil {
 		// Fallback: return hash of string rendering to preserve behavior
 		return sha256SumHex([]byte(fmt.Sprintf("%+v", payload)))
