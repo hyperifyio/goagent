@@ -9,7 +9,7 @@ import (
 // replaced with a compact JSON marker to prevent huge payloads from being sent
 // upstream. Under -debug, no truncation occurs to preserve full visibility.
 func applyTranscriptHygiene(in []oai.Message, debug bool) []oai.Message {
-	if debug || len(in) == 0 {
+    if debug || len(in) == 0 {
 		// Preserve exact transcript under -debug or when empty
 		return in
 	}

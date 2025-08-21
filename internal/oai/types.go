@@ -1,9 +1,9 @@
 package oai
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
+    "encoding/json"
+    "fmt"
+    "strings"
 )
 
 // Message roles
@@ -186,4 +186,76 @@ type StreamChunk struct {
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+// ValidateMessageSequence verifies that the message array follows OpenAI sequencing
+// constraints for tool calls: tool messages must be preceded by an assistant
+// message with a matching tool_call_id. This is a minimal validator sufficient
+// for CLI pre-flight checks and tests.
+func ValidateMessageSequence(in []Message) error {
+    // Track the most recent assistant tool_call ids
+    lastToolIDs := map[string]bool{}
+    for _, m := range in {
+        switch m.Role {
+        case RoleAssistant:
+            // Reset and record any tool calls present on this assistant message
+            lastToolIDs = map[string]bool{}
+            for _, tc := range m.ToolCalls {
+                if strings.TrimSpace(tc.ID) != "" {
+                    lastToolIDs[strings.TrimSpace(tc.ID)] = true
+                }
+            }
+        case RoleTool:
+            // Tool messages must reference a recently-advertised tool_call_id
+            id := strings.TrimSpace(m.ToolCallID)
+            if id == "" || !lastToolIDs[id] {
+                return fmt.Errorf("invalid tool message ordering: tool_call_id %q not preceded by assistant tool_calls", m.ToolCallID)
+            }
+        }
+    }
+    return nil
+}
+
+// ContextWindowForModel returns a conservative context window for the given model.
+// Values are approximate and used only for length backoff heuristics in tests.
+func ContextWindowForModel(model string) int {
+    s := strings.ToLower(strings.TrimSpace(model))
+    switch {
+    case strings.HasPrefix(s, "gpt-5"):
+        return 128000
+    case strings.HasPrefix(s, "oss-gpt-"):
+        return 32768
+    default:
+        return 32768
+    }
+}
+
+// EstimateTokens returns a rough token estimate based on character count.
+// This is a fast heuristic adequate for length backoff tests and logging.
+func EstimateTokens(messages []Message) int {
+    var chars int
+    for _, m := range messages {
+        chars += len(m.Content)
+    }
+    if chars <= 0 {
+        return 0
+    }
+    // Approximate 4 chars per token
+    return (chars + 3) / 4
+}
+
+// ClampCompletionCap ensures the completion cap does not exceed the remaining window.
+func ClampCompletionCap(messages []Message, cap, window int) int {
+    if cap <= 0 || window <= 0 {
+        return cap
+    }
+    used := EstimateTokens(messages)
+    remaining := window - used
+    if remaining <= 0 {
+        return cap
+    }
+    if cap > remaining {
+        return remaining
+    }
+    return cap
 }
