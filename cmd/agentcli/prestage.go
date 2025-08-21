@@ -8,8 +8,13 @@ import (
     "io"
     "os"
     "os/exec"
+<<<<<<< HEAD
     "runtime"
     "strings"
+=======
+    "strings"
+    "runtime"
+>>>>>>> feat(agentcli): add focused unit tests and restore minimal oai helpers to green the suite
 
     "github.com/hyperifyio/goagent/internal/oai"
     "github.com/hyperifyio/goagent/internal/tools"
@@ -264,49 +269,49 @@ func appendPreStageBuiltinToolOutputs(messages []oai.Message, assistantMsg oai.M
     if len(assistantMsg.ToolCalls) == 0 {
         return messages
     }
-    // Execute a minimal, safe subset inline without spawning processes.
-    // Supported names: fs.read_file, os.info. Others are ignored.
+    // Execute a minimal set of deterministic, read-only tools:
+    // - fs.read_file: {"path": string} -> {"path": string, "content": string}
+    // - os.info: {} -> {"goos": string, "goarch": string}
+    type fsReadArgs struct {
+        Path string `json:"path"`
+    }
     for _, tc := range assistantMsg.ToolCalls {
         name := strings.TrimSpace(tc.Function.Name)
         switch name {
         case "fs.read_file":
-            // Parse {"path":"..."}
-            var args struct{ Path string `json:"path"` }
-            // Best-effort JSON decode; ignore on error
+            var args fsReadArgs
             _ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
-            var content string
+            content := ""
             if s := strings.TrimSpace(args.Path); s != "" {
                 if b, err := os.ReadFile(s); err == nil {
                     content = string(b)
+                } else {
+                    // Encode a structured error as content when read fails
+                    if enc, mErr := json.Marshal(map[string]any{"error": oneLine(err.Error())}); mErr == nil {
+                        content = string(enc)
+                    }
                 }
             }
-            // Build deterministic one-line JSON
-            payload, _ := json.Marshal(map[string]any{
-                "path":    strings.TrimSpace(args.Path),
-                "content": content,
-            })
+            // Build JSON content deterministically
+            payload := map[string]any{"path": args.Path, "content": content}
+            b, _ := json.Marshal(payload)
             messages = append(messages, oai.Message{
                 Role:       oai.RoleTool,
-                ToolCallID: strings.TrimSpace(tc.ID),
                 Name:       name,
-                Content:    oneLine(string(payload)),
+                ToolCallID: tc.ID,
+                Content:    oneLine(string(b)),
             })
         case "os.info":
-            // Emit GOOS/GOARCH and process pid
-            info := map[string]any{
-                "goos":   runtime.GOOS,
-                "goarch": runtime.GOARCH,
-                "pid":    os.Getpid(),
-            }
-            payload, _ := json.Marshal(info)
+            payload := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH}
+            b, _ := json.Marshal(payload)
             messages = append(messages, oai.Message{
                 Role:       oai.RoleTool,
-                ToolCallID: strings.TrimSpace(tc.ID),
                 Name:       name,
-                Content:    oneLine(string(payload)),
+                ToolCallID: tc.ID,
+                Content:    oneLine(string(b)),
             })
         default:
-            // Ignore unsupported built-ins for now
+            // Ignore unknown built-in tools to keep behavior deterministic
         }
     }
     return messages
