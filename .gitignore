@@ -29,4 +29,4 @@ go.work
 # Editor swap files
 *.swp
 work/
-.cursor
+.cursor/

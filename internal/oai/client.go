@@ -1,23 +1,23 @@
 package oai
 
 import (
-    "bytes"
-    "context"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "io"
-    "net/http"
-    "net/http/httptrace"
-    "strings"
-    "time"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptrace"
+	"strings"
+	"time"
 )
 
 type Client struct {
-    baseURL    string
-    apiKey     string
-    httpClient *http.Client
-    retry      RetryPolicy
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
+	retry      RetryPolicy
 }
 
 // NewClient creates a client without retries (single attempt only).
@@ -306,4 +306,3 @@ func (c *Client) StreamChat(ctx context.Context, req ChatCompletionsRequest, onC
 		}
 	}
 }
-
