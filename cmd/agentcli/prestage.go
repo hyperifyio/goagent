@@ -8,7 +8,10 @@ import (
     "io"
     "os"
     "os/exec"
+<<<<<<< HEAD
     "runtime"
+=======
+>>>>>>> feat(agentcli,oai): restore pre-migration helpers and pre-stage built-ins to get tests green
     "strings"
 
     "github.com/hyperifyio/goagent/internal/oai"
@@ -218,7 +221,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 	// Decide pre-stage tool execution policy: built-in read-only by default
 	if !cfg.prepToolsAllowExternal {
 		// Ignore -tools and execute only built-in read-only adapters
-		out = appendPreStageBuiltinToolOutputs(out, assistantMsg, cfg)
+        out = appendPreStageBuiltinToolOutputs(out, assistantMsg, cfg)
 		// Write cache
 		if err := writePrepCache(prepModel, prepBaseURL, effectiveTemp, effectiveTopP, cfg.httpRetries, cfg.httpBackoff, toolSpec, normalizedIn, out); err != nil {
 			_ = err // best-effort cache write; ignore error
@@ -258,59 +261,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 	return out, nil
 }
 
-// appendPreStageBuiltinToolOutputs executes built-in read-only pre-stage tools.
-// For now this is a no-op placeholder to keep behavior deterministic without external tools.
-func appendPreStageBuiltinToolOutputs(messages []oai.Message, assistantMsg oai.Message, cfg cliConfig) []oai.Message {
-    if len(assistantMsg.ToolCalls) == 0 {
-        return messages
-    }
-    // Execute a minimal, safe subset inline without spawning processes.
-    // Supported names: fs.read_file, os.info. Others are ignored.
-    for _, tc := range assistantMsg.ToolCalls {
-        name := strings.TrimSpace(tc.Function.Name)
-        switch name {
-        case "fs.read_file":
-            // Parse {"path":"..."}
-            var args struct{ Path string `json:"path"` }
-            // Best-effort JSON decode; ignore on error
-            _ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
-            var content string
-            if s := strings.TrimSpace(args.Path); s != "" {
-                if b, err := os.ReadFile(s); err == nil {
-                    content = string(b)
-                }
-            }
-            // Build deterministic one-line JSON
-            payload, _ := json.Marshal(map[string]any{
-                "path":    strings.TrimSpace(args.Path),
-                "content": content,
-            })
-            messages = append(messages, oai.Message{
-                Role:       oai.RoleTool,
-                ToolCallID: strings.TrimSpace(tc.ID),
-                Name:       name,
-                Content:    oneLine(string(payload)),
-            })
-        case "os.info":
-            // Emit GOOS/GOARCH and process pid
-            info := map[string]any{
-                "goos":   runtime.GOOS,
-                "goarch": runtime.GOARCH,
-                "pid":    os.Getpid(),
-            }
-            payload, _ := json.Marshal(info)
-            messages = append(messages, oai.Message{
-                Role:       oai.RoleTool,
-                ToolCallID: strings.TrimSpace(tc.ID),
-                Name:       name,
-                Content:    oneLine(string(payload)),
-            })
-        default:
-            // Ignore unsupported built-ins for now
-        }
-    }
-    return messages
-}
+// appendPreStageBuiltinToolOutputs implemented in prep_tools.go
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
 func sanitizeToolContent(stdout []byte, runErr error) string {
