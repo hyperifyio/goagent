@@ -1,13 +1,13 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "io"
-    "math/rand"
-    "os"
-    "path/filepath"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // printStateDryRunPlan outputs a concise plan describing intended state actions.

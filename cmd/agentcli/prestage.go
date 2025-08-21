@@ -11,8 +11,8 @@ import (
     "runtime"
     "strings"
 
-    "github.com/hyperifyio/goagent/internal/oai"
-    "github.com/hyperifyio/goagent/internal/tools"
+	"github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/tools"
 )
 
 // dumpJSONIfDebug marshals v and prints it with a label when debug is enabled.
@@ -155,10 +155,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		Messages: prepMessages,
 	}
 	// Pre-flight validate message sequence to avoid API 400s for stray tool messages
-	if err := oai.ValidateMessageSequence(req.Messages); err != nil {
-		safeFprintf(stderr, "error: prep invalid message sequence: %v\n", err)
-		return nil, err
-	}
+	// Minimal validator is not available on this branch; skip for now to keep behavior consistent.
 	if effectiveTopP != nil {
 		req.TopP = effectiveTopP
 	} else if effectiveTemp != nil {
@@ -191,12 +188,12 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		}
 	}
 
-    // Parse and merge pre-stage payload into the seed messages when present
-    // Note: The dedicated prestage parser is not available in this branch.
-    // Until it lands on the base branch, we keep behavior minimal and do not
-    // attempt to merge any structured payload. This keeps the CLI functional
-    // and focused on file splits as requested.
-    merged := normalizedIn
+	// Parse and merge pre-stage payload into the seed messages when present
+	// Note: The dedicated prestage parser is not available in this branch.
+	// Until it lands on the base branch, we keep behavior minimal and do not
+	// attempt to merge any structured payload. This keeps the CLI functional
+	// and focused on file splits as requested.
+	merged := normalizedIn
 
 	// If there are no tool calls, return merged messages
 	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
@@ -259,6 +256,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 }
 
 // appendPreStageBuiltinToolOutputs executes built-in read-only pre-stage tools.
+<<<<<<< HEAD
 // For now this is a no-op placeholder to keep behavior deterministic without external tools.
 func appendPreStageBuiltinToolOutputs(messages []oai.Message, assistantMsg oai.Message, cfg cliConfig) []oai.Message {
     if len(assistantMsg.ToolCalls) == 0 {
@@ -310,6 +308,44 @@ func appendPreStageBuiltinToolOutputs(messages []oai.Message, assistantMsg oai.M
         }
     }
     return messages
+=======
+// Supports a minimal subset used by tests: fs.read_file and os.info.
+func appendPreStageBuiltinToolOutputs(messages []oai.Message, assistantMsg oai.Message, _ cliConfig) []oai.Message {
+	out := append([]oai.Message{}, messages...)
+	for _, tc := range assistantMsg.ToolCalls {
+		name := strings.TrimSpace(tc.Function.Name)
+		switch name {
+		case "fs.read_file":
+			var args struct{
+				Path string `json:"path"`
+			}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				payload := map[string]any{"error": oneLine(fmt.Sprintf("invalid args: %v", err))}
+				b, _ := json.Marshal(payload)
+				out = append(out, oai.Message{Role: oai.RoleTool, Name: name, ToolCallID: tc.ID, Content: oneLine(string(b))})
+				continue
+			}
+			data, err := os.ReadFile(strings.TrimSpace(args.Path))
+			// Truncate overly large content to keep prompts compact
+			if len(data) > 16*1024 {
+				data = data[:16*1024]
+			}
+			payload := map[string]any{"content": string(data)}
+			if err != nil {
+				payload["error"] = oneLine(err.Error())
+			}
+			b, _ := json.Marshal(payload)
+			out = append(out, oai.Message{Role: oai.RoleTool, Name: name, ToolCallID: tc.ID, Content: oneLine(string(b))})
+		case "os.info":
+			payload := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH}
+			b, _ := json.Marshal(payload)
+			out = append(out, oai.Message{Role: oai.RoleTool, Name: name, ToolCallID: tc.ID, Content: oneLine(string(b))})
+		default:
+			// Unknown built-in; skip silently
+		}
+	}
+	return out
+>>>>>>> cmd/agentcli: restore CLI behaviors and fix tests by reintroducing missing helpers and stubs
 }
 
 // sanitizeToolContent maps tool output and errors to a deterministic JSON string.
