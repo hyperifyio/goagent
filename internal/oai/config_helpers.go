@@ -101,14 +101,14 @@ func ResolveInt(flagSet bool, flagVal int, envStr string, inherit *int, defaultV
 }
 
 // ResolveDuration resolves a time.Duration from flag/env/inherit/default sources and returns the value and source label.
-// - If flagSet is true and flagVal > 0, flagVal is returned with source "flag".
+// - If flagSet is true, flagVal is returned with source "flag" (including 0 to allow explicit disable).
 // - Else if envStr parses via time.ParseDuration() or as an integer seconds value, return that with source "env".
 // - Else if inherit is non-nil, *inherit is returned with source "inherit".
 // - Else defaultVal is returned with source "default".
 func ResolveDuration(flagSet bool, flagVal time.Duration, envStr string, inherit *time.Duration, defaultVal time.Duration) (time.Duration, string) {
-	if flagSet && flagVal > 0 {
-		return flagVal, "flag"
-	}
+    if flagSet {
+        return flagVal, "flag"
+    }
 	if v := strings.TrimSpace(envStr); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d, "env"
