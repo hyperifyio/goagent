@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/hyperifyio/goagent/internal/oai"
+	"github.com/hyperifyio/goagent/internal/oai/prestage"
 	"github.com/hyperifyio/goagent/internal/tools"
 )
 
@@ -191,12 +192,16 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		}
 	}
 
-	// Parse and merge pre-stage payload into the seed messages when present
-	// Note: The dedicated prestage parser is not available in this branch.
-	// Until it lands on the base branch, we keep behavior minimal and do not
-	// attempt to merge any structured payload. This keeps the CLI functional
-	// and focused on file splits as requested.
-	merged := normalizedIn
+    // Parse and merge pre-stage payload into the seed messages when present
+    merged := normalizedIn
+    if len(resp.Choices) > 0 {
+        payload := strings.TrimSpace(resp.Choices[0].Message.Content)
+        if payload != "" {
+            if parsed, pErr := prestage.ParsePrestagePayload(payload); pErr == nil {
+                merged = prestage.MergePrestageIntoMessages(normalizedIn, parsed)
+            }
+        }
+    }
 
 	// If there are no tool calls, return merged messages
 	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
