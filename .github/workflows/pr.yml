@@ -8,17 +8,19 @@ permissions:
   contents: read
   pull-requests: read
 
-env:
-  TARGET_REPOSITORY: hyperifyio/goagent
-
 concurrency:
   group: pr-${{ github.event.pull_request.number }}-dispatch
   cancel-in-progress: true
 
 jobs:
   dispatch:
-    if: ${{ !github.event.pull_request.head.repo.fork && github.repository == env.TARGET_REPOSITORY }}
+    # Require: internal actor, not a fork, and PR targets main (tweak branch if needed)
+    if: ${{ !github.event.pull_request.head.repo.fork
+           && contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.actor_association)
+           && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
       - name: Build payload
         id: payload
@@ -36,37 +38,40 @@ jobs:
                               head_repo:$head_repo,head_ref:$head_ref,base_ref:$base_ref}}' \
             > payload.json
 
-      - name: Send repository_dispatch to aibuddy
+      - name: Preflight (token & target repo access)
         env:
           GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
         run: |
           set -euo pipefail
 
-          # Secret present?
+          TARGET="hyperifyio/aibuddy"
+
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
             exit 1
           fi
 
-          # Payload present?
-          if [[ ! -s payload.json ]]; then
-            echo "::error title=Missing payload::payload.json was not created."
+          # Verify token can see the private repo; prints a helpful error otherwise
+          if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
+            echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
+            cat err.txt || true
             exit 1
           fi
 
-          # Validate JSON if jq exists
-          if command -v jq >/dev/null 2>&1; then
-            jq -e . payload.json >/dev/null || {
-              echo "::error title=Invalid JSON payload::payload.json is not valid JSON"
-              cat payload.json
-              exit 1
-            }
+          # Validate payload JSON
+          if [[ ! -s payload.json ]] || ! jq -e . payload.json >/dev/null; then
+            echo "::error title=Invalid payload::payload.json missing or not valid JSON"
+            [[ -f payload.json ]] && cat payload.json || true
+            exit 1
           fi
 
-          # Dispatch (GitHub returns 204 No Content on success)
+      - name: Send repository_dispatch to aibuddy (gh api)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
           gh api repos/hyperifyio/aibuddy/dispatches \
             --method POST \
             -H "Accept: application/vnd.github+json" \
             --input payload.json
-
           echo "repository_dispatch sent successfully."
