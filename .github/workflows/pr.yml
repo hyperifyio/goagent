@@ -1,29 +1,45 @@
-name: PR updated → dispatch to coding agent
+name: PR/Issue updated or commented → dispatch to coding agent
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review, edited]
+  issue_comment:
+    types: [created]                 # Issue comments + PR Conversation tab comments
+  pull_request_review_comment:
+    types: [created]                 # Inline PR code comments
+  pull_request_review:
+    types: [submitted]               # PR review submitted (approve/request-changes/comment)
 
 permissions:
   contents: read
   pull-requests: read
+  issues: read
+
+# Set these as Repository Variables (Settings → Variables)
+# ADMIN_HANDLE        = thejhh
+# CODING_AGENT_HANDLE = heusalagroupbot
+env:
+  ADMIN_HANDLE:        ${{ vars.ADMIN_HANDLE }}
+  CODING_AGENT_HANDLE: ${{ vars.CODING_AGENT_HANDLE }}
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}-dispatch
+  group: dispatch-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  dispatch:
-    # Require: internal actor, not a fork, and PR targets main (tweak branch if needed)
-    if: ${{ !github.event.pull_request.head.repo.fork
-           && contains(fromJSON('["thejhh","heusalagroupbot"]'), github.actor)
+
+  # ---------------------------
+  # PR lifecycle triggers
+  # ---------------------------
+  dispatch_pr:
+    if: ${{ github.event_name == 'pull_request'
+           && !github.event.pull_request.head.repo.fork
+           && (github.actor == env.ADMIN_HANDLE)
            && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
-      - name: Build payload
-        id: payload
+      - name: Build payload (PR event)
         run: |
           jq -n \
             --arg repo "${{ github.repository }}" \
@@ -33,35 +49,104 @@ jobs:
             --arg head_repo "${{ github.event.pull_request.head.repo.full_name }}" \
             --arg head_ref "${{ github.event.pull_request.head.ref }}" \
             --arg base_ref "${{ github.event.pull_request.base.ref }}" \
+            --arg actor "${{ github.actor }}" \
             '{event_type:"coding_agent_dispatch",
-              client_payload:{repo:$repo,pr:$pr,pr_head_sha:$sha,pr_html_url:$url,
-                              head_repo:$head_repo,head_ref:$head_ref,base_ref:$base_ref}}' \
-            > payload.json
+              client_payload:{
+                trigger:"pull_request",
+                repo:$repo,
+                pr:$pr,
+                pr_head_sha:$sha,
+                pr_html_url:$url,
+                head_repo:$head_repo,
+                head_ref:$head_ref,
+                base_ref:$base_ref,
+                actor:$actor
+              }}' \
+          > payload.json
 
       - name: Preflight (token & target repo access)
         env:
           GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
         run: |
           set -euo pipefail
-
           TARGET="hyperifyio/aibuddy"
-
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
             exit 1
           fi
-
-          # Verify token can see the private repo; prints a helpful error otherwise
           if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
             echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
             cat err.txt || true
             exit 1
           fi
+          jq -e . payload.json >/dev/null
 
-          # Validate payload JSON
-          if [[ ! -s payload.json ]] || ! jq -e . payload.json >/dev/null; then
-            echo "::error title=Invalid payload::payload.json missing or not valid JSON"
-            [[ -f payload.json ]] && cat payload.json || true
+      - name: Send repository_dispatch to aibuddy (gh api)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input payload.json
+          echo "repository_dispatch sent successfully (PR event)."
+
+  # ---------------------------
+  # Issue/PR conversation comments (issue_comment)
+  # ---------------------------
+  dispatch_issue_comment:
+    if: ${{ github.event_name == 'issue_comment'
+           && (github.actor == env.ADMIN_HANDLE)
+           && github.actor != env.CODING_AGENT_HANDLE }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Build payload (issue_comment)
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          IS_PR=$(jq -r 'has("issue") and (.issue.pull_request != null)' "$GITHUB_EVENT_PATH")
+          COMMENT_ID=$(jq -r '.comment.id' "$GITHUB_EVENT_PATH")
+          COMMENT_URL=$(jq -r '.comment.html_url' "$GITHUB_EVENT_PATH")
+          COMMENT_BODY=$(jq -r '.comment.body | if length > 500 then (.[:500] + "…") else . end' "$GITHUB_EVENT_PATH")
+
+          jq -n \
+            --arg repo        "${{ github.repository }}" \
+            --argjson issue   ${{ github.event.issue.number }} \
+            --arg is_pr       "$IS_PR" \
+            --arg actor       "${{ github.actor }}" \
+            --arg comment_id  "$COMMENT_ID" \
+            --arg comment_url "$COMMENT_URL" \
+            --arg body        "$COMMENT_BODY" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{
+                trigger:"issue_comment",
+                repo:$repo,
+                issue:$issue,
+                is_pr:($is_pr == "true"),
+                comment_actor:$actor,
+                comment_id:$comment_id,
+                comment_html_url:$comment_url,
+                comment_body:$body
+              }}' \
+          > payload.json
+          jq -e . payload.json >/dev/null
+
+      - name: Preflight (token & target repo access)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          TARGET="hyperifyio/aibuddy"
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+          if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
+            echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
+            cat err.txt || true
             exit 1
           fi
 
@@ -74,4 +159,124 @@ jobs:
             --method POST \
             -H "Accept: application/vnd.github+json" \
             --input payload.json
-          echo "repository_dispatch sent successfully."
+          echo "repository_dispatch sent successfully (issue_comment)."
+
+  # ---------------------------
+  # Inline PR review comments (pull_request_review_comment)
+  # ---------------------------
+  dispatch_pr_review_comment:
+    if: ${{ github.event_name == 'pull_request_review_comment'
+           && (github.actor == env.ADMIN_HANDLE)
+           && github.actor != env.CODING_AGENT_HANDLE }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Build payload (pull_request_review_comment)
+        run: |
+          jq -n \
+            --arg repo        "${{ github.repository }}" \
+            --argjson pr      ${{ github.event.pull_request.number }} \
+            --arg actor       "${{ github.actor }}" \
+            --arg comment_id  "${{ github.event.comment.id }}" \
+            --arg comment_url "${{ github.event.comment.html_url }}" \
+            --arg body        "${{ github.event.comment.body }}" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{
+                trigger:"pull_request_review_comment",
+                repo:$repo,
+                pr:$pr,
+                comment_actor:$actor,
+                comment_id:$comment_id,
+                comment_html_url:$comment_url,
+                comment_body:$body
+              }}' \
+          > payload.json
+          jq -e . payload.json >/dev/null
+
+      - name: Preflight (token & target repo access)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          TARGET="hyperifyio/aibuddy"
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+          if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
+            echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
+            cat err.txt || true
+            exit 1
+          fi
+
+      - name: Send repository_dispatch to aibuddy (gh api)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input payload.json
+          echo "repository_dispatch sent successfully (pull_request_review_comment)."
+
+  # ---------------------------
+  # PR review submissions (pull_request_review)
+  # ---------------------------
+  dispatch_pr_review:
+    if: ${{ github.event_name == 'pull_request_review'
+           && (github.actor == env.ADMIN_HANDLE)
+           && github.actor != env.CODING_AGENT_HANDLE }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Build payload (pull_request_review)
+        run: |
+          jq -n \
+            --arg repo        "${{ github.repository }}" \
+            --argjson pr      ${{ github.event.pull_request.number }} \
+            --arg actor       "${{ github.actor }}" \
+            --arg review_id   "${{ github.event.review.id }}" \
+            --arg review_url  "${{ github.event.review.html_url }}" \
+            --arg state       "${{ github.event.review.state }}" \
+            --arg body        "${{ github.event.review.body }}" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{
+                trigger:"pull_request_review",
+                repo:$repo,
+                pr:$pr,
+                review_actor:$actor,
+                review_id:$review_id,
+                review_html_url:$review_url,
+                review_state:$state,
+                review_body:$body
+              }}' \
+          > payload.json
+          jq -e . payload.json >/dev/null
+
+      - name: Preflight (token & target repo access)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          TARGET="hyperifyio/aibuddy"
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+          if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
+            echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
+            cat err.txt || true
+            exit 1
+          fi
+
+      - name: Send repository_dispatch to aibuddy (gh api)
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input payload.json
+          echo "repository_dispatch sent successfully (pull_request_review)."
