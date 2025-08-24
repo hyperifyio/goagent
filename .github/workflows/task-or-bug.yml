@@ -25,7 +25,7 @@ concurrency:
 jobs:
   dispatch:
     # Only members/maintainers/collaborators can trigger runs from a public repo
-    if: ${{ contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.issue.author_association) }}
+    if: ${{ contains(fromJSON('["thejhh","heusalagroupbot"]'), github.actor) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
