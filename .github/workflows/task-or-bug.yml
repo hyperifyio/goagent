@@ -6,8 +6,6 @@ on:
       - opened
       - edited
       - reopened
-      - labeled
-      - unlabeled
       - assigned
       - unassigned
 
@@ -26,12 +24,16 @@ concurrency:
 
 jobs:
   dispatch:
+    # Only members/maintainers/collaborators can trigger runs from a public repo
+    if: ${{ contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.actor_association) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - name: Determine issue type and assignment (GraphQL, with label fallback)
+      - name: Determine issue type and assignment (Issue Types only)
         id: meta
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}          # gh uses GH_TOKEN
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # gh uses GH_TOKEN
           CODING_AGENT_USER: ${{ env.CODING_AGENT_USER }}
         run: |
           set -euo pipefail
@@ -40,7 +42,7 @@ jobs:
           REPO="${GITHUB_REPOSITORY#*/}"
           NUMBER="${{ github.event.issue.number }}"
 
-          # Query: issue type, labels, assignees
+          # Query: issue type + assignees (no labels)
           RESP="$(gh api graphql \
             -H 'GraphQL-Features: issue_types' \
             -f owner="$OWNER" \
@@ -53,7 +55,6 @@ jobs:
                     number
                     title
                     issueType { name }
-                    labels(first: 50) { nodes { name } }
                     assignees(first: 100) { nodes { login } }
                   }
                 }
@@ -61,17 +62,6 @@ jobs:
           )"
 
           TYPE="$(jq -r '.data.repository.issue.issueType.name // empty' <<< "$RESP")"
-
-          if [[ -z "$TYPE" ]]; then
-            # Fallback: infer from labels if Issue Types are not enabled
-            TYPE="$(jq -r '
-              [.data.repository.issue.labels.nodes[].name // empty
-               | ascii_downcase] as $L
-              | if ($L | index("bug")) then "Bug"
-                elif ($L | index("task")) then "Task"
-                else "" end
-            ' <<< "$RESP")"
-          fi
 
           # Optional assignee filter
           RAW_AGENT="${CODING_AGENT_USER:-}"
@@ -88,7 +78,7 @@ jobs:
             )"
           fi
 
-          # Type filter
+          # Type filter: only "Task" or "Bug"
           case "$(tr '[:upper:]' '[:lower:]' <<< "${TYPE}")" in
             bug|task) TYPE_OK="true" ;;
             *)        TYPE_OK="false" ;;
@@ -108,8 +98,9 @@ jobs:
         if: ${{ steps.meta.outputs.should_dispatch != 'true' }}
         run: |
           echo "Issue #${{ github.event.issue.number }} not eligible for dispatch."
-          echo "  Detected type: '${{ steps.meta.outputs.issue_type }}' (type_ok=${{ steps.meta.outputs.type_ok }})"
-          echo "  CODING_AGENT_USER='${{ steps.meta.outputs.agent_user }}' assigned_ok=${{ steps.meta.outputs.assigned_ok }}"
+          echo "  issue_type='${{ steps.meta.outputs.issue_type }}' (type_ok=${{ steps.meta.outputs.type_ok }})"
+          echo "  assigned_ok=${{ steps.meta.outputs.assigned_ok }} agent='${{ steps.meta.outputs.agent_user }}'"
+          echo "  Note: This workflow requires GitHub Issue Types ('Task' or 'Bug')."
 
       - name: Build payload
         if: ${{ steps.meta.outputs.should_dispatch == 'true' }}
@@ -142,7 +133,33 @@ jobs:
                 assigned_ok:$assigned_ok
               }}' \
           > payload.json
-          echo "payload=$(cat payload.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Preflight (token & target repo access)
+        if: ${{ steps.meta.outputs.should_dispatch == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          TARGET="hyperifyio/aibuddy"
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+
+          # Verify token can access the private repo
+          if ! gh api "repos/$TARGET" >/dev/null 2>err.txt; then
+            echo "::error title=Token cannot access target repo::$TARGET not accessible with provided token."
+            cat err.txt || true
+            exit 1
+          fi
+
+          # Validate payload JSON
+          jq -e . payload.json >/dev/null || {
+            echo "::error title=Invalid payload::payload.json is not valid JSON"
+            cat payload.json
+            exit 1
+          }
 
       - name: Send repository_dispatch to aibuddy (gh api)
         if: ${{ steps.meta.outputs.should_dispatch == 'true' }}
@@ -150,28 +167,9 @@ jobs:
           GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
-            exit 1
-          fi
-
-          if [[ ! -s payload.json ]]; then
-            echo "::error title=Missing payload::payload.json was not created."
-            exit 1
-          fi
-
-          if command -v jq >/dev/null 2>&1; then
-            jq -e . payload.json >/dev/null || {
-              echo "::error title=Invalid JSON payload::payload.json is not valid JSON"
-              cat payload.json
-              exit 1
-            }
-          fi
-
           gh api repos/hyperifyio/aibuddy/dispatches \
             --method POST \
             -H "Accept: application/vnd.github+json" \
             --input payload.json
-
           echo "repository_dispatch sent for issue #${{ github.event.issue.number }} (type=${{ steps.meta.outputs.issue_type }}, agent='${{ steps.meta.outputs.agent_user }}')"
+
