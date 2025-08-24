@@ -154,7 +154,7 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 		}
 	}
 	prepMessages = append(prepMessages, applyTranscriptHygiene(normalizedIn, cfg.debug)...)
-	req := oai.ChatCompletionsRequest{
+    req := oai.ChatCompletionsRequest{
 		Model:    prepModel,
 		Messages: prepMessages,
 	}
@@ -168,7 +168,14 @@ func runPreStage(cfg cliConfig, messages []oai.Message, stderr io.Writer) ([]oai
 	} else if effectiveTemp != nil {
 		req.Temperature = effectiveTemp
 	}
-	// Create a dedicated client honoring pre-stage timeout and normal retry policy
+    // Enforce prompt to fit context window for pre-stage as well
+    window := oai.ContextWindowForModel(prepModel)
+    promptBudget := oai.PromptTokenBudget(window, 0)
+    if oai.EstimateTokens(req.Messages) > promptBudget {
+        req.Messages = oai.TrimMessagesToFit(req.Messages, promptBudget)
+    }
+
+    // Create a dedicated client honoring pre-stage timeout and normal retry policy
 	httpClient := oai.NewClientWithRetry(prepBaseURL, prepAPIKey, cfg.prepHTTPTimeout, oai.RetryPolicy{MaxRetries: retries, Backoff: backoff})
 	dumpJSONIfDebug(stderr, "prep.request", req, cfg.debug)
 	// Tag context with audit stage so HTTP audit lines include stage: "prep"
