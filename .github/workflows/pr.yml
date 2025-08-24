@@ -176,13 +176,15 @@ jobs:
     steps:
       - name: Build payload (pull_request_review_comment)
         run: |
+          # Truncate comment body to 65000 characters to avoid payload/argument limits
+          TRUNC_BODY="$(echo "${{ github.event.comment.body }}" | head -c 65000)"
           jq -n \
             --arg repo        "${{ github.repository }}" \
             --argjson pr      ${{ github.event.pull_request.number }} \
             --arg actor       "${{ github.actor }}" \
             --arg comment_id  "${{ github.event.comment.id }}" \
             --arg comment_url "${{ github.event.comment.html_url }}" \
-            --arg body        "${{ github.event.comment.body }}" \
+            --arg body        "$TRUNC_BODY" \
             '{event_type:"coding_agent_dispatch",
               client_payload:{
                 trigger:"pull_request_review_comment",
