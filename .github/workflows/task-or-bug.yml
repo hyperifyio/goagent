@@ -1,0 +1,181 @@
+name: Issue updated → dispatch to coding agent
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+      - labeled
+      - unlabeled
+      - assigned
+      - unassigned
+
+permissions:
+  contents: read
+  issues: read
+
+env:
+  TARGET_REPOSITORY: hyperifyio/goagent
+  CODING_AGENT_USER: ${{ vars.CODING_AGENT_USER }}
+
+concurrency:
+  group: coding-agent
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: ${{ github.repository == env.TARGET_REPOSITORY }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine issue type and assignment (GraphQL, with label fallback)
+        id: meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODING_AGENT_USER: ${{ env.CODING_AGENT_USER }}
+        run: |
+          set -euo pipefail
+
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          NUMBER="${{ github.event.issue.number }}"
+
+          # Query metadata, including Issue Types, labels, and assignees
+          RESP="$(gh api graphql \
+            -H 'GraphQL-Features: issue_types' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$NUMBER" \
+            -f query='
+              query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner, name:$repo) {
+                  issue(number:$number) {
+                    number
+                    title
+                    issueType { name }
+                    labels(first: 50) { nodes { name } }
+                    assignees(first: 100) { nodes { login } }
+                  }
+                }
+              }'
+          )"
+
+          TYPE="$(jq -r '.data.repository.issue.issueType.name // empty' <<< "$RESP")"
+
+          if [[ -z "$TYPE" ]]; then
+            # Fallback to labels if Issue Types are not enabled/used
+            TYPE="$(jq -r '
+              [.data.repository.issue.labels.nodes[].name // empty
+               | ascii_downcase] as $L
+              | if ($L | index("bug")) then "Bug"
+                elif ($L | index("task")) then "Task"
+                else "" end
+            ' <<< "$RESP")"
+          fi
+
+          # Assignment filter
+          RAW_AGENT="${CODING_AGENT_USER:-}"
+          # Strip leading @ and lowercase
+          AGENT_CLEAN="$(tr -d '\n' <<< "${RAW_AGENT#@}" | tr '[:upper:]' '[:lower:]')"
+
+          if [[ -z "$AGENT_CLEAN" ]]; then
+            ASSIGNED_OK="true"  # no filter requested
+          else
+            ASSIGNED_OK="$(
+              jq -r --arg agent "$AGENT_CLEAN" '
+                [.data.repository.issue.assignees.nodes[].login // empty
+                 | ascii_downcase] | index($agent) | if .==null then "false" else "true" end
+              ' <<< "$RESP"
+            )"
+          fi
+
+          # Type filter
+          LOWER_TYPE="$(tr '[:upper:]' '[:lower:]' <<< "${TYPE}")"
+          case "$LOWER_TYPE" in
+            bug|task) TYPE_OK="true" ;;
+            *)        TYPE_OK="false" ;;
+          esac
+
+          # Final decision
+          if [[ "$TYPE_OK" == "true" && "$ASSIGNED_OK" == "true" ]]; then
+            SHOULD="true"
+          else
+            SHOULD="false"
+          fi
+
+          echo "issue_type=${TYPE}"            >> "$GITHUB_OUTPUT"
+          echo "assigned_ok=${ASSIGNED_OK}"    >> "$GITHUB_OUTPUT"
+          echo "type_ok=${TYPE_OK}"            >> "$GITHUB_OUTPUT"
+          echo "should_dispatch=${SHOULD}"     >> "$GITHUB_OUTPUT"
+          echo "agent_user=${AGENT_CLEAN}"     >> "$GITHUB_OUTPUT"
+
+      - name: Log & skip if not eligible
+        if: ${{ steps.meta.outputs.should_dispatch != 'true' }}
+        run: |
+          echo "Issue #${{ github.event.issue.number }} not eligible for dispatch."
+          echo "  Detected type: '${{ steps.meta.outputs.issue_type }}' (type_ok=${{ steps.meta.outputs.type_ok }})"
+          echo "  CODING_AGENT_USER='${{ steps.meta.outputs.agent_user }}' assigned_ok=${{ steps.meta.outputs.assigned_ok }}"
+
+      - name: Build payload
+        if: ${{ steps.meta.outputs.should_dispatch == 'true' }}
+        id: payload
+        env:
+          ISSUE_TYPE:         ${{ steps.meta.outputs.issue_type }}
+          AGENT_USER:         ${{ steps.meta.outputs.agent_user }}
+          ASSIGNED_OK:        ${{ steps.meta.outputs.assigned_ok }}
+        run: |
+          jq -n \
+            --arg repo        "${{ github.repository }}" \
+            --argjson issue   ${{ github.event.issue.number }} \
+            --arg url         "${{ github.event.issue.html_url }}" \
+            --arg title       "${{ github.event.issue.title }}" \
+            --arg actor       "${{ github.actor }}" \
+            --arg action      "${{ github.event.action }}" \
+            --arg issue_type  "${ISSUE_TYPE:-}" \
+            --arg agent_user  "${AGENT_USER:-}" \
+            --arg assigned_ok "${ASSIGNED_OK:-}" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{
+                repo:$repo,
+                issue:$issue,
+                issue_html_url:$url,
+                issue_title:$title,
+                issue_actor:$actor,
+                issue_action:$action,
+                issue_type:$issue_type,
+                agent_user:$agent_user,
+                assigned_ok:$assigned_ok
+              }}' \
+          > payload.json
+          echo "payload=$(cat payload.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Send repository_dispatch to aibuddy (gh api)
+        if: ${{ steps.meta.outputs.should_dispatch == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+
+            echo "::error title=Missing payload::payload.json was not created or is empty."
+            exit 1
+          fi
+
+          if command -v jq >/dev/null 2>&1; then
+            jq -e . payload.json >/dev/null || {
+              echo "::error title=Invalid JSON payload::payload.json is not valid JSON"
+              cat payload.json
+              exit 1
+            }
+          fi
+
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input payload.json
+
+          echo "repository_dispatch sent for issue #${{ github.event.issue.number }} (type=${{ steps.meta.outputs.issue_type }}, agent='${{ steps.meta.outputs.agent_user }}')"
