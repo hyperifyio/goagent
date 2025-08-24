@@ -105,12 +105,15 @@ jobs:
       - name: Build payload (issue_comment)
         env:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
+          # Configurable limit for comment body truncation (default: 500)
+          COMMENT_BODY_TRUNCATE_LIMIT: ${{ env.COMMENT_BODY_TRUNCATE_LIMIT || 500 }}
         run: |
           set -euo pipefail
           IS_PR=$(jq -r 'has("issue") and (.issue.pull_request != null)' "$GITHUB_EVENT_PATH")
           COMMENT_ID=$(jq -r '.comment.id' "$GITHUB_EVENT_PATH")
           COMMENT_URL=$(jq -r '.comment.html_url' "$GITHUB_EVENT_PATH")
-          COMMENT_BODY=$(jq -r '.comment.body | if length > 500 then (.[:500] + "…") else . end' "$GITHUB_EVENT_PATH")
+          # Truncate comment body to configurable limit
+          COMMENT_BODY=$(jq -r --argjson limit "$COMMENT_BODY_TRUNCATE_LIMIT" '.comment.body | if length > $limit then (.[0:$limit] + "…") else . end' "$GITHUB_EVENT_PATH")
 
           jq -n \
             --arg repo        "${{ github.repository }}" \
