@@ -90,14 +90,21 @@ func TrimMessagesToFit(in []Message, limit int) []Message {
         if targetPinned < 2 { // ensure at least 1 per pinned
             targetPinned = 2
         }
-        targetSys := (sysTok * targetPinned) / totalPinned
-        if targetSys < 1 {
-            targetSys = 1
+        // Allocate at least 1 token to each, distribute remainder proportionally
+        minPerPinned := 1
+        remaining := targetPinned - 2*minPerPinned
+        if remaining < 0 {
+            remaining = 0
         }
-        targetDev := targetPinned - targetSys
-        if targetDev < 1 {
-            targetDev = 1
+        var extraSys, extraDev int
+        if sysTok+devTok > 0 && remaining > 0 {
+            extraSys = (sysTok * remaining) / (sysTok + devTok)
+            extraDev = remaining - extraSys
+        } else {
+            extraSys, extraDev = 0, 0
         }
+        targetSys := minPerPinned + extraSys
+        targetDev := minPerPinned + extraDev
         out[sysIdx] = truncateMessageToBudget(out[sysIdx], targetSys)
         out[devIdx] = truncateMessageToBudget(out[devIdx], targetDev)
     } else if sysIdx != -1 { // only system pinned
