@@ -1,0 +1,72 @@
+name: PR updated → dispatch to coding agent
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  TARGET_REPOSITORY: hyperifyio/goagent
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-dispatch
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    if: ${{ !github.event.pull_request.head.repo.fork && github.repository == env.TARGET_REPOSITORY }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build payload
+        id: payload
+        run: |
+          jq -n \
+            --arg repo "${{ github.repository }}" \
+            --argjson pr ${{ github.event.pull_request.number }} \
+            --arg sha "${{ github.event.pull_request.head.sha }}" \
+            --arg url "${{ github.event.pull_request.html_url }}" \
+            --arg head_repo "${{ github.event.pull_request.head.repo.full_name }}" \
+            --arg head_ref "${{ github.event.pull_request.head.ref }}" \
+            --arg base_ref "${{ github.event.pull_request.base.ref }}" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{repo:$repo,pr:$pr,pr_head_sha:$sha,pr_html_url:$url,
+                              head_repo:$head_repo,head_ref:$head_ref,base_ref:$base_ref}}' \
+            > payload.json
+
+      - name: Send repository_dispatch to aibuddy
+        env:
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          # Secret present?
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+
+          # Payload present?
+          if [[ ! -s payload.json ]]; then
+            echo "::error title=Missing payload::payload.json was not created."
+            exit 1
+          fi
+
+          # Validate JSON if jq exists
+          if command -v jq >/dev/null 2>&1; then
+            jq -e . payload.json >/dev/null || {
+              echo "::error title=Invalid JSON payload::payload.json is not valid JSON"
+              cat payload.json
+              exit 1
+            }
+          fi
+
+          # Dispatch (GitHub returns 204 No Content on success)
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input payload.json
+
+          echo "repository_dispatch sent successfully."
