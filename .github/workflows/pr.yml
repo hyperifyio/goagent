@@ -34,7 +34,7 @@ jobs:
   dispatch_pr:
     if: ${{ github.event_name == 'pull_request'
            && !github.event.pull_request.head.repo.fork
-           && (github.actor == var.ADMIN_HANDLE)
+           && (github.actor == vars.ADMIN_HANDLE)
            && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -97,8 +97,8 @@ jobs:
   # ---------------------------
   dispatch_issue_comment:
     if: ${{ github.event_name == 'issue_comment'
-           && (github.actor == var.ADMIN_HANDLE)
-           && github.actor != var.CODING_AGENT_HANDLE }}
+           && (github.actor == vars.ADMIN_HANDLE)
+           && github.actor != vars.CODING_AGENT_HANDLE }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -166,8 +166,8 @@ jobs:
   # ---------------------------
   dispatch_pr_review_comment:
     if: ${{ github.event_name == 'pull_request_review_comment'
-           && (github.actor == var.ADMIN_HANDLE)
-           && github.actor != var.CODING_AGENT_HANDLE }}
+           && (github.actor == vars.ADMIN_HANDLE)
+           && github.actor != vars.CODING_AGENT_HANDLE }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -225,8 +225,8 @@ jobs:
   # ---------------------------
   dispatch_pr_review:
     if: ${{ github.event_name == 'pull_request_review'
-           && (github.actor == var.ADMIN_HANDLE)
-           && github.actor != var.CODING_AGENT_HANDLE }}
+           && (github.actor == vars.ADMIN_HANDLE)
+           && github.actor != vars.CODING_AGENT_HANDLE }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
