@@ -8,16 +8,12 @@ permissions:
   contents: read
   pull-requests: read
 
-env:
-  TARGET_REPOSITORY: hyperifyio/goagent
-
 concurrency:
   group: pr-${{ github.event.pull_request.number }}-dispatch
   cancel-in-progress: true
 
 jobs:
   dispatch:
-    if: ${{ !github.event.pull_request.head.repo.fork && github.repository == env.TARGET_REPOSITORY }}
     runs-on: ubuntu-latest
     steps:
       - name: Build payload
