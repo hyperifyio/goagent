@@ -16,7 +16,7 @@ jobs:
   dispatch:
     # Require: internal actor, not a fork, and PR targets main (tweak branch if needed)
     if: ${{ !github.event.pull_request.head.repo.fork
-           && contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.actor_association)
+           && contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association)
            && github.event.pull_request.base.ref == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
