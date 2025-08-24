@@ -1,4 +1,5 @@
-name: PR updated → dispatch tocoding agent
+name: PR updated → dispatch to coding agent
+
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review, edited]
@@ -34,10 +35,35 @@ jobs:
 
       - name: Send repository_dispatch to aibuddy
         env:
-          DISPATCH_PAT: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+          GH_TOKEN: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
         run: |
-          curl -sSf -X POST \
+          set -euo pipefail
+
+          # Secret present?
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error title=Missing secret::AIBUDDY_DISPATCH_PAT is not set."
+            exit 1
+          fi
+
+          # Payload present?
+          if [[ ! -s payload.json ]]; then
+            echo "::error title=Missing payload::payload.json was not created."
+            exit 1
+          fi
+
+          # Validate JSON if jq exists
+          if command -v jq >/dev/null 2>&1; then
+            jq -e . payload.json >/dev/null || {
+              echo "::error title=Invalid JSON payload::payload.json is not valid JSON"
+              cat payload.json
+              exit 1
+            }
+          fi
+
+          # Dispatch (GitHub returns 204 No Content on success)
+          gh api repos/hyperifyio/aibuddy/dispatches \
+            --method POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${DISPATCH_PAT}" \
-            https://api.github.com/repos/hyperifyio/aibuddy/dispatches \
-            --data @payload.json
+            --input payload.json
+
+          echo "repository_dispatch sent successfully."
