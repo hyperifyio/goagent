@@ -1,0 +1,43 @@
+name: PR updated → dispatch tocoding agent
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-dispatch
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    if: ${{ !github.event.pull_request.head.repo.fork && github.repository == 'hyperifyio/goagent' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build payload
+        id: payload
+        run: |
+          jq -n \
+            --arg repo "${{ github.repository }}" \
+            --argjson pr ${{ github.event.pull_request.number }} \
+            --arg sha "${{ github.event.pull_request.head.sha }}" \
+            --arg url "${{ github.event.pull_request.html_url }}" \
+            --arg head_repo "${{ github.event.pull_request.head.repo.full_name }}" \
+            --arg head_ref "${{ github.event.pull_request.head.ref }}" \
+            --arg base_ref "${{ github.event.pull_request.base.ref }}" \
+            '{event_type:"coding_agent_dispatch",
+              client_payload:{repo:$repo,pr:$pr,pr_head_sha:$sha,pr_html_url:$url,
+                              head_repo:$head_repo,head_ref:$head_ref,base_ref:$base_ref}}' \
+            > payload.json
+
+      - name: Send repository_dispatch to aibuddy
+        env:
+          DISPATCH_PAT: ${{ secrets.AIBUDDY_DISPATCH_PAT }}
+        run: |
+          curl -sSf -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${DISPATCH_PAT}" \
+            https://api.github.com/repos/hyperifyio/aibuddy/dispatches \
+            --data @payload.json
