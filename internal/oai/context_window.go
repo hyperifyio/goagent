@@ -45,3 +45,14 @@ func ClampCompletionCap(messages []Message, requestedCap int, window int) int {
 	}
 	return requestedCap
 }
+
+// PromptTokenBudget returns a safe token budget for the prompt given a
+// model context window and a desired completion cap. A small safety margin
+// of 32 tokens is reserved for reply/control tokens.
+func PromptTokenBudget(window int, completionCap int) int {
+    budget := window - completionCap - 32
+    if budget < 1 {
+        return 1
+    }
+    return budget
+}

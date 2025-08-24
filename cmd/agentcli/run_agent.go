@@ -179,7 +179,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 		for {
 			// Apply transcript hygiene before sending to the API when -debug is off
 			hygienic := applyTranscriptHygiene(messages, cfg.debug)
-			req := oai.ChatCompletionsRequest{
+            req := oai.ChatCompletionsRequest{
 				Model:    cfg.model,
 				Messages: hygienic,
 			}
@@ -203,10 +203,18 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 				req.ToolChoice = "auto"
 			}
 
-			// Include MaxTokens only when a positive completionCap is set.
+            // Include MaxTokens only when a positive completionCap is set.
 			if completionCap > 0 {
 				req.MaxTokens = completionCap
 			}
+
+            // Enforce prompt to fit the context window, leaving room for completionCap
+            // Compute prompt budget and trim deterministically when needed
+            window := oai.ContextWindowForModel(cfg.model)
+            promptBudget := oai.PromptTokenBudget(window, req.MaxTokens)
+            if oai.EstimateTokens(req.Messages) > promptBudget {
+                req.Messages = oai.TrimMessagesToFit(req.Messages, promptBudget)
+            }
 
 			// Pre-flight validate message sequence to avoid API 400s for stray tool messages
 			if err := oai.ValidateMessageSequence(req.Messages); err != nil {
@@ -276,7 +284,7 @@ func runAgent(cfg cliConfig, stdout io.Writer, stderr io.Writer) int {
 				callCtx, cancel = context.WithTimeout(context.Background(), cfg.httpTimeout)
 			}
 
-			// Fallback: non-streaming request
+            // Fallback: non-streaming request
 			resp, err := httpClient.CreateChatCompletion(callCtx, req)
 			cancel()
 			if err != nil {
